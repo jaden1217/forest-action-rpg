@@ -251,7 +251,7 @@ const World = {
       } else {
         sprite = Util.choice(SPRITES.tree); solid = [6, 5, 8];
       }
-      this.addProp(sprite, x, y, { solid: solid });
+      this.addProp(sprite, x, y, { solid: solid }).tree = true;   // 미니맵에 숲으로 표시된다
     };
 
     // 맵 가장자리는 나무로 둘러 벽처럼 막는다

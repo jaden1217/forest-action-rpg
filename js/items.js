@@ -30,14 +30,14 @@ const Items = {
   },
 
   /* 무기 드랍 규칙
-     - 떨굴 확률: 슬라임 레벨과 무관하게 모두 같다
-     - 종류: 단검/검/도끼의 성능이 같으므로 균등하게 고른다
-     - 레벨: 잡은 슬라임의 레벨과 같다 (센 슬라임을 잡아야 좋은 무기가 나온다) */
-  dropWeaponFor(slime) {
+     - 떨굴 확률: 몬스터 종류·레벨과 무관하게 모두 같다
+     - 종류: 몬스터마다 정해져 있다 (슬라임=단검, 늑대=검, 버섯=도끼)
+     - 레벨: 잡은 몬스터의 레벨과 같다 (센 몬스터를 잡아야 좋은 무기가 나온다)
+     세 무기의 성능은 같으므로, 이 표는 "원하는 무기를 얻으려면 누구를 노릴지"를 정해줄 뿐이다. */
+  dropWeaponFor(enemy) {
     if (Math.random() >= CONFIG.equipment.dropChance) return;
-    const order = CONFIG.weapons.order;
-    const id = order[Math.floor(Math.random() * order.length)];
-    this.spawnWeapon(slime.x, slime.y, id, slime.level);
+    const id = CONFIG.equipment.weaponByType[enemy.TYPE] || CONFIG.equipment.startWeapon;
+    this.spawnWeapon(enemy.x, enemy.y, id, enemy.level);
   },
 
   // 나무 안에 박혀서 못 줍는 일이 없도록 빈 자리를 점점 넓게 찾는다

@@ -257,8 +257,58 @@ const POTION = [
   '..oooooo..',
 ];
 
-// 슬라임 레벨별 색 (1레벨 초록 -> 5레벨 붉은색)
-const SLIME_PALETTES = [
+// 버섯 몬스터 (16x16) — 갓은 레벨 색, 기둥은 밝은 살구색
+const ENEMY_MUSHROOM = [
+  '................',
+  '.....oooooo.....',
+  '...oonnnnnnoo...',
+  '..onnnnnnnnnno..',
+  '.onnnnMMMMnnnno.',
+  'onnMMMMMMMMMMnno',
+  'oMMMMMMMMMMMMMMo',
+  'oMMMMMMMMMMMMMMo',
+  '.oooooooooooooo.',
+  '...oSSkSSkSSo...',
+  '...oSSSSSSSSo...',
+  '...oSSSSSSSSo...',
+  '...oSSsSSsSSo...',
+  '...oSSSSSSSSo...',
+  '..ooSSSSSSSSoo..',
+  '..oooooooooooo..',
+];
+
+// 늑대 (20x14, 오른쪽을 본다). 몸통 0~9줄 + 다리 10~13줄을 갈아 끼운다
+// g = 등쪽 밝은 털, G = 몸통, d = 배쪽 그늘, D = 발, S = 주둥이
+const WOLF_BODY = [
+  '...............oo...',
+  '..............ogGo..',
+  '.o............ogGGo.',
+  'ogo..........oggGGGo',
+  '.ogo........oggGGGGo',
+  '..ogggggggggggkGGGGo',
+  '.oGGGGGGGGGGGGGGGGSo',
+  'oGGGGGGGGGGGGGGGGGo.',
+  'oddGGGGGGGGGGGGGdo..',
+  '.oddddddddddddddo...',
+];
+
+const WOLF_LEGS = [
+  ['..oGo.oGo..oGo.oGo..', '..odo.odo..odo.odo..', '..oDo.oDo..oDo.oDo..', '..ooo.ooo..ooo.ooo..'],
+  ['.oGo..oGo..oGo..oGo.', '.odo..odo..odo..odo.', '.oDo..oDo..oDo..oDo.', '.ooo..ooo..ooo..ooo.'],
+];
+
+// 포자 (5x5) — 버섯이 쏘는 탄
+const SPORE = [
+  '.ooo.',
+  'onMno',
+  'oMMMo',
+  'onMno',
+  '.ooo.',
+];
+
+// 몬스터 레벨별 색 (1레벨 초록 -> 5레벨 붉은색).
+// 종류가 달라도 같은 색 규칙을 쓰므로 색만 보고 레벨을 알 수 있다.
+const LEVEL_PALETTES = [
   { m: '#1f5f28', M: '#3fa347', n: '#8fe098' },  // Lv1 초록
   { m: '#1a5560', M: '#35a0b0', n: '#8fe6f0' },  // Lv2 청록
   { m: '#1e3a72', M: '#3f6ec9', n: '#93b7ff' },  // Lv3 파랑
@@ -347,6 +397,16 @@ function makeFlower(color) {
   ctx.fillRect(1, 1, 3, 2); ctx.fillRect(2, 0, 1, 1);
   ctx.fillStyle = '#ffe9a8'; ctx.fillRect(2, 1, 1, 1);
   return cv;
+}
+
+// 휘두르는 궤적을 몇 방향으로 나눠 만들어 둘지
+const SLASH_DIRS = 16;
+
+// 각도를 미리 만들어 둔 궤적 번호로 바꾼다
+function slashIndex(angle) {
+  let i = Math.round(angle / (Math.PI * 2) * SLASH_DIRS) % SLASH_DIRS;
+  if (i < 0) i += SLASH_DIRS;
+  return i;
 }
 
 // 무기를 휘두를 때 남는 궤적 (방향별 3프레임)
@@ -622,9 +682,29 @@ function buildSprites() {
   }
   SPRITES.potion = makeSprite('potion', POTION);
 
-  // 슬라임: 레벨별 색상 5종 + 피격용 흰 실루엣
-  SPRITES.slime = SLIME_PALETTES.map((pal, i) => makeSprite('slime_lv' + (i + 1), SLIME, pal));
+  // 몬스터: 레벨별 색상 5종 + 피격용 흰 실루엣
+  SPRITES.slime = LEVEL_PALETTES.map((pal, i) => makeSprite('slime_lv' + (i + 1), SLIME, pal));
   SPRITES.slimeFlash = SPRITES.slime.map(s => makeSilhouette(s, '#ffffff'));
+
+  // 버섯 — 갓은 레벨 색, 기둥은 공통
+  const STALK = { S: '#e8dcc0', s: '#c9bb9c' };
+  SPRITES.mushroomEnemy = LEVEL_PALETTES.map(
+    (pal, i) => makeSprite('mushroom_lv' + (i + 1), ENEMY_MUSHROOM, Object.assign({}, pal, STALK))
+  );
+  SPRITES.mushroomEnemyFlash = SPRITES.mushroomEnemy.map(s => makeSilhouette(s, '#ffffff'));
+
+  // 늑대 — 털색은 레벨 색을 조금 어둡게 쓴다. [레벨][다리프레임], 왼쪽은 좌우 반전
+  SPRITES.wolf = LEVEL_PALETTES.map((pal, i) => {
+    const fur = { G: pal.M, g: pal.n, d: pal.m, D: '#7a6a55', S: '#4a3d32' };
+    return WOLF_LEGS.map(
+      (legs, f) => makeSprite('wolf_lv' + (i + 1) + '_' + f, WOLF_BODY.concat(legs), fur)
+    );
+  });
+  SPRITES.wolfLeft = SPRITES.wolf.map(frames => frames.map(flipX));
+  SPRITES.wolfFlash = SPRITES.wolf.map(frames => frames.map(s => makeSilhouette(s, '#ffffff')));
+  SPRITES.wolfLeftFlash = SPRITES.wolfLeft.map(frames => frames.map(s => makeSilhouette(s, '#ffffff')));
+
+  SPRITES.spore = LEVEL_PALETTES.map((pal, i) => makeSprite('spore_lv' + (i + 1), SPORE, pal));
   SPRITES.playerFlash = {};
   for (const dir in SPRITES.player) {
     SPRITES.playerFlash[dir] = SPRITES.player[dir].map(s => makeSilhouette(s, '#ff9a9a'));
@@ -668,10 +748,11 @@ function buildSprites() {
     return cv;
   });
 
-  // 4방향 x 3프레임 궤적
-  const angles = { right: 0, down: Math.PI / 2, left: Math.PI, up: -Math.PI / 2 };
-  SPRITES.slash = {};
-  for (const dir in angles) {
-    SPRITES.slash[dir] = [0, 0.5, 1].map(t => makeSlashFrame(angles[dir], t));
+  // 마우스로 아무 방향이나 겨눌 수 있으므로 16방향 x 3프레임을 미리 만들어 둔다.
+  // 캔버스 회전을 쓰면 도트가 뭉개지므로, 각도별로 따로 찍는 편이 깔끔하다.
+  SPRITES.slash = [];
+  for (let i = 0; i < SLASH_DIRS; i++) {
+    const a = (i / SLASH_DIRS) * Math.PI * 2;
+    SPRITES.slash.push([0, 0.5, 1].map(t => makeSlashFrame(a, t)));
   }
 }

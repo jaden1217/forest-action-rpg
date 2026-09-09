@@ -38,6 +38,54 @@ class Player {
     this.deadTimer = 0;
     this.potionQueued = false;
     this.stepTimer = 0;        // 발밑 먼지를 일정 간격으로 피우기 위한 타이머
+
+    // 겨냥 — 마우스를 쓰면 마우스 쪽, 아니면 마지막으로 걸어간 쪽을 본다
+    this.aim = Math.PI / 2;    // 처음엔 아래를 본다
+    this.swingAngle = this.aim; // 휘두르기 시작한 순간의 겨냥을 고정해 쓴다
+
+    // 대시 (충전식)
+    this.dashCharges = CONFIG.dash.charges;
+    this.dashRecharge = CONFIG.dash.recharge;
+    this.dashTimer = 0;        // 0보다 크면 대시 중
+    this.dashGap = 0;          // 연속 대시 사이 최소 간격
+    this.dashDir = 0;
+    this.dashQueued = 0;       // 대시 입력 버퍼
+    this.dashIFrames = 0;      // 대시 무적 (피격 무적과 달리 깜빡이지 않는다)
+    this.trail = [];           // 대시 잔상
+  }
+
+  /* 대시 — 충전을 하나 쓰고 짧게 미끄러진다.
+     충전은 시간이 지나면 한 칸씩 다시 차고, 최대 2칸까지 모인다. */
+  updateDash(dt, ix, iy) {
+    const d = CONFIG.dash;
+    this.dashQueued = Math.max(0, this.dashQueued - dt);
+    this.dashGap = Math.max(0, this.dashGap - dt);
+    this.dashIFrames = Math.max(0, this.dashIFrames - dt);
+    if (this.dashTimer > 0) this.dashTimer -= dt;
+
+    if (this.dashCharges < d.charges) {
+      this.dashRecharge -= dt;
+      if (this.dashRecharge <= 0) {
+        this.dashCharges++;
+        this.dashRecharge = d.recharge;
+      }
+    } else {
+      this.dashRecharge = d.recharge;
+    }
+
+    if (this.dashQueued <= 0 || this.dashCharges <= 0) return;
+    if (this.dashTimer > 0 || this.dashGap > 0) return;
+
+    // 이동키를 누르고 있으면 그쪽으로, 아니면 겨냥한 쪽으로 구른다
+    this.dashDir = (ix || iy) ? Math.atan2(iy, ix) : this.aim;
+    this.dashCharges--;
+    this.dashTimer = d.time;
+    this.dashGap = d.gap;
+    this.dashQueued = 0;
+    this.dashIFrames = d.invuln;
+    this.attackTimer = 0;      // 대시하면 휘두르던 동작은 끊긴다
+    this.kx = this.ky = 0;
+    FX.burst(this.x, this.y + 4, 10, ['#cbd8e8', '#ffffff'], { speed: 42, life: 0.3, gravity: 18, size: 1 });
   }
 
   /* 히트스톱이나 인벤토리로 게임이 멈춘 프레임에도 키 입력은 사라지면 안 되므로,
@@ -46,6 +94,31 @@ class Player {
     if (this.dead) return;
     if (Input.attackPressed()) this.attackBuffer = CONFIG.player.attackBuffer;
     if (Input.potionPressed()) this.potionQueued = true;
+    if (Input.dashPressed()) this.dashQueued = CONFIG.dash.buffer;
+  }
+
+  // 마우스가 가리키는 곳을 향한 각도. 마우스를 안 쓰면 걸어간 방향을 유지한다.
+  updateAim(ix, iy) {
+    if (Input.mouse.used) {
+      const t = Input.aimWorld(Game.cam);
+      const dx = t.x - this.x, dy = t.y - this.y;
+      // 마우스가 발밑에 겹치면 각도가 튀므로 직전 겨냥을 유지한다
+      if (dx * dx + dy * dy > CONFIG.player.aimDeadzone * CONFIG.player.aimDeadzone) {
+        this.aim = Math.atan2(dy, dx);
+      }
+    } else if (ix || iy) {
+      this.aim = Math.atan2(iy, ix);
+    }
+    this.facing = Player.facingFromAngle(this.aim);
+  }
+
+  // 각도 -> 4방향 스프라이트 이름
+  static facingFromAngle(a) {
+    const deg = a * 180 / Math.PI;
+    if (deg >= -45 && deg < 45) return 'right';
+    if (deg >= 45 && deg < 135) return 'down';
+    if (deg >= -135 && deg < -45) return 'up';
+    return 'left';
   }
 
   get hurtBox() {
@@ -54,10 +127,6 @@ class Player {
 
   get feetBox() {
     return { x: this.x - 5, y: this.y + 1, w: 10, h: 6 };
-  }
-
-  facingAngle() {
-    return { right: 0, down: Math.PI / 2, left: Math.PI, up: -Math.PI / 2 }[this.facing];
   }
 
   // 장착 중인 무기 스펙 (CONFIG.weapons 참조)
@@ -81,7 +150,7 @@ class Player {
     return this.weaponSpec().name + ' L' + this.weaponLevel;
   }
 
-  update(dt, slimes) {
+  update(dt, enemies) {
     if (this.dead) {
       this.deadTimer -= dt;
       if (this.deadTimer <= 0) this.respawn();
@@ -98,18 +167,28 @@ class Player {
     if (ix && iy) { const inv = Math.SQRT1_2; ix *= inv; iy *= inv; }
     this.moving = (ix !== 0 || iy !== 0);
 
-    // 휘두르는 동안은 방향이 고정된다
-    if (this.attackTimer <= 0 && this.moving) {
-      if (Math.abs(ix) > Math.abs(iy)) this.facing = ix > 0 ? 'right' : 'left';
-      else this.facing = iy > 0 ? 'down' : 'up';
+    // 겨냥은 마우스를 따라 늘 갱신된다 (휘두르는 중에는 시작할 때 고정한 각도를 쓴다)
+    this.updateAim(ix, iy);
+    this.updateDash(dt, ix, iy);
+
+    if (this.dashTimer > 0) {
+      // 대시 중에는 이동 입력과 넉백을 무시하고 정해진 방향으로만 미끄러진다
+      const d = CONFIG.dash;
+      this.moveWithCollision(Math.cos(this.dashDir) * d.speed * dt, Math.sin(this.dashDir) * d.speed * dt);
+      this.trail.push({ x: this.x, y: this.y, life: 0.2, facing: this.facing });
+    } else {
+      // 공격 중에는 속도가 크게 줄어든다
+      const speedScale = this.attackTimer > 0 ? 0.35 : 1;
+      const vx = ix * c.speed * speedScale + this.kx;
+      const vy = iy * c.speed * speedScale + this.ky;
+      this.moveWithCollision(vx * dt, vy * dt);
     }
 
-    // 공격 중에는 속도가 크게 줄어든다
-    const speedScale = this.attackTimer > 0 ? 0.35 : 1;
-    let vx = ix * c.speed * speedScale + this.kx;
-    let vy = iy * c.speed * speedScale + this.ky;
-
-    this.moveWithCollision(vx * dt, vy * dt);
+    // 잔상은 대시가 끝난 뒤에도 잠깐 남는다
+    for (let i = this.trail.length - 1; i >= 0; i--) {
+      this.trail[i].life -= dt;
+      if (this.trail[i].life <= 0) this.trail.splice(i, 1);
+    }
 
     // 넉백 감쇠
     this.kx *= Math.pow(0.0025, dt);
@@ -139,17 +218,18 @@ class Player {
     this.attackBuffer = Math.max(0, this.attackBuffer - dt);
     // 버퍼에 남은 입력이 있거나 공격키를 계속 누르고 있으면 쿨다운이 풀리는 즉시 이어서 휘두른다
     const wantsAttack = this.attackBuffer > 0 || Input.attackHeld();
-    if (wantsAttack && this.cooldown <= 0 && this.attackTimer <= 0) {
+    if (wantsAttack && this.cooldown <= 0 && this.attackTimer <= 0 && this.dashTimer <= 0) {
       this.attackTimer = w.duration;
       this.cooldown = w.cooldown;
       this.hitIds = new Set();
       this.attackBuffer = 0;
+      this.swingAngle = this.aim;   // 휘두르는 동안에는 이 각도로 고정된다
     }
 
     if (this.attackTimer > 0) {
       const elapsed = w.duration - this.attackTimer;
       if (elapsed >= w.hitWindow[0] && elapsed <= w.hitWindow[1]) {
-        this.resolveHits(slimes);
+        this.resolveHits(enemies);
       }
       this.attackTimer -= dt;
     }
@@ -179,12 +259,12 @@ class Player {
     }
   }
 
-  // 무기 사거리 안, 바라보는 부채꼴 안에 들어온 슬라임을 때린다
-  resolveHits(slimes) {
+  // 무기 사거리 안, 바라보는 부채꼴 안에 들어온 몬스터를 때린다
+  resolveHits(enemies) {
     const c = CONFIG.player;
     const w = this.weaponSpec();
-    const base = this.facingAngle();
-    for (const s of slimes) {
+    const base = this.swingAngle;   // 휘두르기 시작할 때 고정한 마우스 방향
+    for (const s of enemies) {
       if (s.dead || this.hitIds.has(s.id)) continue;
       const dx = s.x - this.x, dy = s.y - this.y;
       const d = Math.sqrt(dx * dx + dy * dy);
@@ -203,7 +283,7 @@ class Player {
   }
 
   takeDamage(amount, fromX, fromY) {
-    if (this.invuln > 0 || this.dead) return;
+    if (this.invuln > 0 || this.dashIFrames > 0 || this.dead) return;
     const c = CONFIG.player;
     this.hp -= amount;
     this.invuln = c.invulnTime;
@@ -298,10 +378,19 @@ class Player {
 
   draw(ctx, cam) {
     if (this.dead) return;
+    const sx = Math.round(this.x - cam.x), sy = Math.round(this.y - cam.y);
+
+    // 대시 잔상 — 지나온 자리에 흐릿하게 남는다
+    if (this.trail.length) {
+      for (const t of this.trail) {
+        ctx.globalAlpha = Util.clamp(t.life / 0.2, 0, 1) * 0.34;
+        ctx.drawImage(SPRITES.player[t.facing][0], Math.round(t.x - cam.x) - 8, Math.round(t.y - cam.y) - 8);
+      }
+      ctx.globalAlpha = 1;
+    }
+
     // 무적 시간에는 한 프레임 걸러 그려서 깜빡이게 한다
     if (this.invuln > 0 && Math.floor(this.invuln * 20) % 2 === 0) return;
-
-    const sx = Math.round(this.x - cam.x), sy = Math.round(this.y - cam.y);
 
     // 그림자
     fillCircle(ctx, sx, sy + 7, 5, 'rgba(0,0,0,0.28)');
@@ -318,11 +407,11 @@ class Player {
   drawSwing(ctx, sx, sy) {
     const w = this.weaponSpec();
     const p = 1 - this.attackTimer / w.duration;   // 0 -> 1
-    const base = this.facingAngle();
+    const base = this.swingAngle;
 
-    // 궤적
+    // 궤적 — 16방향 중 겨냥과 가장 가까운 것을 쓴다
     const fi = Util.clamp(Math.floor(p * 3), 0, 2);
-    const arc = SPRITES.slash[this.facing][fi];
+    const arc = SPRITES.slash[slashIndex(base)][fi];
     ctx.drawImage(arc, sx - arc.width / 2, sy - arc.height / 2);
 
     // 무기를 부채꼴을 따라 휘두른다

@@ -41,6 +41,12 @@ html, body {
   letter-spacing: .2px;
 }
 
+#savenote {
+  margin: -6px 0 0;
+  font-size: 11px;
+  color: #5f7159;
+}
+
 #controls b {
   color: #d8e6cf;
   background: #232a1f;

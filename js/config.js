@@ -45,6 +45,20 @@ const CONFIG = {
     // 쿨다운이 끝나기 직전에 누른 공격을 이 시간만큼 기억했다가 바로 이어서 낸다.
     // 없으면 정확한 타이밍에 눌러야만 연속 공격이 되어 손맛이 나쁘다.
     attackBuffer: 0.18,
+    // 마우스가 이 거리보다 가까우면 겨냥이 흔들리므로 직전 방향을 유지한다
+    aimDeadzone: 7,
+  },
+
+  /* 대시 — 충전식. 최대 2회까지 모아뒀다가 연달아 쓸 수 있다.
+     짧은 무적이 붙어 있어 늑대의 돌진이나 포자를 통과해 피하는 용도로 쓴다. */
+  dash: {
+    charges: 2,
+    speed: 265,
+    time: 0.16,          // 대시가 이어지는 시간
+    invuln: 0.22,        // 대시하는 동안 붙는 무적 (대시 시간보다 살짝 길게)
+    recharge: 1.7,       // 충전 하나가 다시 차기까지 (초)
+    gap: 0.18,           // 연속으로 쓸 때 최소 간격
+    buffer: 0.18,        // 대시 입력도 잠깐 기억해둔다
   },
 
   /* 무기 3종. 세 무기의 성능은 서로 같다.
@@ -68,10 +82,16 @@ const CONFIG = {
   equipment: {
     startWeapon: 'sword',    // 게임 시작 장착 무기
     startWeaponLevel: 1,
-    // 슬라임 레벨과 무관하게 모두 같은 확률로 무기를 떨군다
+    // 몬스터 종류·레벨과 무관하게 모두 같은 확률로 무기를 떨군다
     dropChance: 0.10,
-    // 떨어지는 무기의 레벨은 잡은 슬라임의 레벨과 같다.
-    // 종류(단검/검/도끼)는 성능이 같으므로 똑같은 확률로 고른다.
+    // 몬스터 종류마다 떨구는 무기가 정해져 있다. 성능은 셋 다 같으므로
+    // "어떤 무기를 쓸지"는 취향이고, 원하는 무기를 얻으려면 그 몬스터를 노리면 된다.
+    weaponByType: {
+      slime: 'dagger',
+      wolf: 'sword',
+      mushroom: 'axe',
+    },
+    // 떨어지는 무기의 레벨은 잡은 몬스터의 레벨과 같다.
     weaponLifetime: 60,      // 바닥 무기가 사라지기까지 (초)
   },
 
@@ -82,13 +102,21 @@ const CONFIG = {
     damageGain: 2,
   },
 
-  slime: {
-    maxAlive: 20,           // 맵에 동시에 존재하는 슬라임 수 (맵이 넓어져 함께 늘림)
-    respawnMin: 2.5,        // 죽은 뒤 다시 스폰되기까지 (초)
+  /* 몬스터 등장 규칙 — 종류가 늘어나도 여기만 고치면 된다.
+     레벨 색(초록/청록/파랑/보라/빨강)은 종류가 달라도 같은 규칙이라,
+     색만 보고 "저건 4레벨이구나"를 바로 알 수 있다. */
+  spawn: {
+    maxAlive: 22,           // 맵에 동시에 존재하는 몬스터 수
+    respawnMin: 2.5,        // 죽은 뒤 다시 등장하기까지 (초)
     respawnMax: 6.0,
     minDistFromPlayer: 78,  // 플레이어 코앞에 튀어나오지 않도록
     // 레벨 1~5가 뽑힐 상대 확률 (낮은 레벨이 흔하다)
     levelWeights: [34, 26, 20, 13, 7],
+    // 종류가 뽑힐 상대 확률
+    typeWeights: { slime: 50, mushroom: 26, wolf: 24 },
+  },
+
+  slime: {
     // 레벨별 능력치 — 레벨이 오를수록 단단하고 아프고 빠르고 커진다
     levels: [
       { hp: 14, atk: 3,  speed: 21, detect: 62,  scale: 0.78, xp: 6,  knockback: 62 },
@@ -100,6 +128,40 @@ const CONFIG = {
     hopCycle: 0.85,         // 한 번 통통 튀는 주기 (초)
     hopMoveRatio: 0.45,     // 주기 중 실제로 이동하는 비율
     contactCooldown: 0.9,   // 같은 슬라임에게 연속으로 맞지 않게
+  },
+
+  /* 버섯 — 제자리에 뿌리내린 포탑. 쫓아오지 않는 대신 포자를 쏜다.
+     "다가가서 빨리 없앨까 / 피해서 지나갈까"를 고르게 만드는 몬스터. */
+  mushroom: {
+    levels: [
+      { hp: 20,  atk: 4,  detect: 82,  scale: 0.85, xp: 8,  knockback: 26, interval: 2.6, shots: 1 },
+      { hp: 34,  atk: 6,  detect: 92,  scale: 0.95, xp: 14, knockback: 22, interval: 2.4, shots: 1 },
+      { hp: 52,  atk: 9,  detect: 104, scale: 1.05, xp: 22, knockback: 18, interval: 2.2, shots: 3 },
+      { hp: 76,  atk: 13, detect: 116, scale: 1.15, xp: 34, knockback: 15, interval: 2.0, shots: 3 },
+      { hp: 104, atk: 18, detect: 130, scale: 1.28, xp: 50, knockback: 12, interval: 1.8, shots: 5 },
+    ],
+    windup: 0.55,           // 쏘기 전 부풀어오르는 예고 시간 — 이때 피할 수 있다
+    spread: 0.34,           // 여러 발일 때 퍼지는 각도 (라디안)
+    sporeSpeed: 62,
+    sporeLife: 2.6,         // 포자가 날아가는 최대 시간 (초)
+    contactCooldown: 1.1,
+  },
+
+  /* 늑대 — 빠르게 접근했다가 잠깐 웅크린 뒤 직선으로 돌진한다.
+     예고 동작을 보고 피하는 재미를 담당한다. */
+  wolf: {
+    levels: [
+      { hp: 12, atk: 5,  speed: 34, detect: 96,  scale: 0.92, xp: 7,  knockback: 70, lunge: 150 },
+      { hp: 20, atk: 8,  speed: 40, detect: 110, scale: 0.98, xp: 13, knockback: 62, lunge: 165 },
+      { hp: 32, atk: 12, speed: 46, detect: 124, scale: 1.04, xp: 21, knockback: 54, lunge: 180 },
+      { hp: 46, atk: 17, speed: 52, detect: 138, scale: 1.10, xp: 32, knockback: 46, lunge: 195 },
+      { hp: 64, atk: 23, speed: 60, detect: 152, scale: 1.18, xp: 48, knockback: 38, lunge: 212 },
+    ],
+    lungeRange: 52,         // 이 거리 안에 들어오면 돌진 준비
+    windup: 0.42,           // 웅크리는 예고 시간
+    lungeTime: 0.30,        // 돌진이 이어지는 시간
+    recover: 0.55,          // 돌진 뒤 빈틈 — 이때가 때리기 좋다
+    contactCooldown: 0.9,
   },
 
   fx: {

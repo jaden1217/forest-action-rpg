@@ -46,6 +46,7 @@ const FONT = {
   '.': ['   ', '   ', '   ', '   ', ' # '],
   ':': ['   ', ' # ', '   ', ' # ', '   '],
   '!': [' # ', ' # ', ' # ', '   ', ' # '],
+  '?': ['## ', '  #', ' ##', '   ', ' # '],
   ' ': ['   ', '   ', '   ', '   ', '   '],
 };
 
@@ -101,6 +102,30 @@ const UI = {
     // ── 처치 수
     const kills = 'KILLS ' + player.kills;
     this.drawText(ctx, kills, CONFIG.VIEW_W - 8 - this.textWidth(kills), 8, '#f0d9b5');
+
+    // ── 대시 충전 — 남은 칸은 밝게, 채워지는 중인 칸은 게이지로 보여준다
+    if (player.dashCharges !== undefined) {
+      const d = CONFIG.dash;
+      for (let i = 0; i < d.charges; i++) {
+        const x = 8 + i * 12, y = 76;
+        ctx.fillStyle = '#17110d';
+        ctx.fillRect(x - 1, y - 1, 11, 5);
+        if (i < player.dashCharges) {
+          ctx.fillStyle = '#7ec8ff';
+          ctx.fillRect(x, y, 9, 3);
+        } else {
+          ctx.fillStyle = '#20303a';
+          ctx.fillRect(x, y, 9, 3);
+          // 지금 차오르는 칸 하나만 진행도를 보여준다
+          if (i === player.dashCharges) {
+            const ratio = 1 - player.dashRecharge / d.recharge;
+            ctx.fillStyle = '#3f6f8f';
+            ctx.fillRect(x, y, Math.round(9 * Util.clamp(ratio, 0, 1)), 3);
+          }
+        }
+      }
+      this.drawText(ctx, 'DASH', 8 + d.charges * 12 + 2, 76, '#7ec8ff');
+    }
 
     // ── 공격 쿨다운 (짧아서 눈에 잘 안 띄지만 리듬 파악에 도움이 된다)
     if (player.cooldown > 0) {
@@ -168,9 +193,30 @@ const UI = {
       const dps = Math.round(player.attackDamage() / spec.cooldown);
       this.drawText(ctx, 'SPD ' + this.speedWord(spec.cooldown) + ' DPS ' + dps, x + 14, y + 70, '#7fa86a');
     }
-    this.drawText(ctx, 'E/Q DRINK POTION', x + 14, y + 82, '#f0d9b5');
+    this.drawText(ctx, 'E DRINK POTION', x + 14, y + 82, '#f0d9b5');
     this.drawText(ctx, 'F ON WEAPON TO SWAP', x + 14, y + 91, '#7fa86a');
     this.drawText(ctx, 'PAUSED - I TO CLOSE', x + 14, y + 100, '#7fa86a');
+  },
+
+  // 자동 저장 직후 잠깐 뜨는 표시
+  drawSaved(ctx) {
+    this.drawText(ctx, 'SAVED', CONFIG.VIEW_W - 8 - this.textWidth('SAVED'), 16, '#9be564');
+  },
+
+  // 새 게임 확인 — 저장을 지우는 되돌릴 수 없는 동작이라 한 번 묻는다
+  drawConfirm(ctx) {
+    const w = 148, h = 52;
+    const x = Math.round((CONFIG.VIEW_W - w) / 2), y = Math.round((CONFIG.VIEW_H - h) / 2);
+    ctx.fillStyle = 'rgba(10,12,10,0.85)';
+    ctx.fillRect(0, 0, CONFIG.VIEW_W, CONFIG.VIEW_H);
+    ctx.fillStyle = 'rgba(16,20,16,0.96)';
+    ctx.fillRect(x, y, w, h);
+    ctx.strokeStyle = '#6b4a26';
+    ctx.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1);
+
+    this.drawText(ctx, 'START NEW GAME?', x + w / 2, y + 10, '#ffd93d', true);
+    this.drawText(ctx, 'SAVED PROGRESS IS LOST', x + w / 2, y + 22, '#c9a0a0', true);
+    this.drawText(ctx, 'Y  YES        N  NO', x + w / 2, y + 36, '#f0d9b5', true);
   },
 
   // 쿨다운(초)을 단어로 — 0.28 단검 FAST, 0.40 검 NORMAL, 0.62 도끼 SLOW
