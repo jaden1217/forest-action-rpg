@@ -371,6 +371,220 @@ function makeSlashFrame(angle, t) {
   return cv;
 }
 
+/* ── 지형 타일 ─────────────────────────────────────────────── */
+
+// 잡티를 뿌려 단조로움을 없애는 공통 타일 생성기
+function makeNoiseTile(seed, base, dark, light) {
+  const cv = makeCanvas(16, 16), ctx = cv.getContext('2d');
+  const rng = Util.makeRng(seed);
+  ctx.fillStyle = base;
+  ctx.fillRect(0, 0, 16, 16);
+  for (let i = 0; i < 24; i++) {
+    ctx.fillStyle = rng() < 0.5 ? dark : light;
+    ctx.fillRect(Math.floor(rng() * 16), Math.floor(rng() * 16), 1, 1);
+  }
+  return cv;
+}
+
+function makeDirtTile(seed) {
+  const cv = makeNoiseTile(seed, '#7d5f3c', '#6b5032', '#8f6f47');
+  const ctx = cv.getContext('2d');
+  const rng = Util.makeRng(seed + 7);
+  for (let i = 0; i < 3; i++) {   // 작은 자갈
+    ctx.fillStyle = '#9a8a6a';
+    ctx.fillRect(Math.floor(rng() * 15), Math.floor(rng() * 15), 2, 1);
+  }
+  return cv;
+}
+
+function makeSandTile(seed) {
+  return makeNoiseTile(seed, '#c2a877', '#ad9366', '#d6bd8c');
+}
+
+function makeWaterTile(seed) {
+  const cv = makeNoiseTile(seed, '#2f6f9e', '#27618c', '#3a80b0');
+  const ctx = cv.getContext('2d');
+  const rng = Util.makeRng(seed + 13);
+  for (let i = 0; i < 2; i++) {   // 잔물결
+    const x = Math.floor(rng() * 10), y = Math.floor(rng() * 16);
+    ctx.fillStyle = '#5aa3cc';
+    ctx.fillRect(x, y, 3, 1);
+    ctx.fillRect(x + 3, y + 1, 2, 1);
+  }
+  return cv;
+}
+
+/* ── 숲 소품 ───────────────────────────────────────────────── */
+
+function makePine(seed) {
+  const cv = makeCanvas(30, 46), ctx = cv.getContext('2d');
+  const rng = Util.makeRng(seed);
+  const OUT = '#0c2a17', DARK = '#17452a', MID = '#20603a', LIT = '#2d7d4a';
+  ctx.fillStyle = '#4a3018'; ctx.fillRect(13, 34, 5, 11);
+  ctx.fillStyle = '#664226'; ctx.fillRect(14, 34, 3, 10);
+  // 아래에서 위로 좁아지는 삼각 층 3개
+  const layers = [[38, 14], [28, 12], [18, 9], [9, 6]];
+  for (let li = 0; li < layers.length; li++) {
+    const baseY = layers[li][0], half = layers[li][1];
+    for (let r = 0; r < half + 3; r++) {
+      const y = baseY - r;
+      const wHalf = Math.round(half * (1 - r / (half + 3)));
+      ctx.fillStyle = OUT;
+      ctx.fillRect(15 - wHalf - 1, y, wHalf * 2 + 3, 1);
+      ctx.fillStyle = r > half * 0.55 ? LIT : (r > half * 0.25 ? MID : DARK);
+      ctx.fillRect(15 - wHalf, y, wHalf * 2 + 1, 1);
+    }
+  }
+  for (let i = 0; i < 40; i++) {  // 잎 질감
+    const x = 4 + Math.floor(rng() * 22), y = 8 + Math.floor(rng() * 32);
+    const px = ctx.getImageData(x, y, 1, 1).data;
+    if (px[3] === 0) continue;
+    ctx.fillStyle = rng() < 0.5 ? '#3a9558' : '#134026';
+    ctx.fillRect(x, y, 1, 1);
+  }
+  return cv;
+}
+
+function makeDeadTree(seed) {
+  const cv = makeCanvas(26, 40), ctx = cv.getContext('2d');
+  const rng = Util.makeRng(seed);
+  const BARK = '#5b4a35', DARK = '#3a2e20', LIT = '#7a6549';
+  ctx.fillStyle = DARK; ctx.fillRect(11, 14, 6, 25);
+  ctx.fillStyle = BARK; ctx.fillRect(12, 14, 4, 24);
+  ctx.fillStyle = LIT;  ctx.fillRect(13, 15, 1, 22);
+  // 가지 — 위로 벌어지게
+  const branches = [[13, 20, -1, -1, 7], [15, 17, 1, -1, 8], [13, 26, -1, -1, 5], [15, 24, 1, -1, 5]];
+  for (const b of branches) {
+    let x = b[0], y = b[1];
+    for (let i = 0; i < b[4]; i++) {
+      x += b[2]; y += b[3] * (rng() < 0.4 ? 0 : 1);
+      ctx.fillStyle = DARK; ctx.fillRect(x, y, 2, 2);
+      ctx.fillStyle = BARK; ctx.fillRect(x, y, 1, 1);
+    }
+  }
+  return cv;
+}
+
+function makeStump(seed) {
+  const cv = makeCanvas(15, 13), ctx = cv.getContext('2d');
+  ctx.fillStyle = '#2e2114'; ctx.fillRect(2, 6, 11, 6);
+  ctx.fillStyle = '#573a1e'; ctx.fillRect(3, 6, 9, 5);
+  fillCircle(ctx, 7.5, 5.5, 5.5, '#2e2114');
+  fillCircle(ctx, 7.5, 5.5, 4.5, '#8a6334');
+  fillCircle(ctx, 7.5, 5.5, 3.0, '#6b4a26');
+  fillCircle(ctx, 7.5, 5.5, 1.5, '#8a6334');
+  return cv;
+}
+
+function makeLog(seed) {
+  const cv = makeCanvas(22, 11), ctx = cv.getContext('2d');
+  ctx.fillStyle = '#2e2114'; ctx.fillRect(2, 2, 18, 8);
+  ctx.fillStyle = '#5f411f'; ctx.fillRect(2, 3, 18, 6);
+  ctx.fillStyle = '#7c5729'; ctx.fillRect(3, 3, 16, 2);
+  fillCircle(ctx, 3.5, 5.5, 3.5, '#2e2114');
+  fillCircle(ctx, 3.5, 5.5, 2.6, '#8a6334');
+  fillCircle(ctx, 3.5, 5.5, 1.1, '#6b4a26');
+  const rng = Util.makeRng(seed);
+  for (let i = 0; i < 6; i++) {   // 나뭇결
+    ctx.fillStyle = '#4a3218';
+    ctx.fillRect(6 + Math.floor(rng() * 12), 4 + Math.floor(rng() * 4), 2, 1);
+  }
+  return cv;
+}
+
+function makeBoulder(seed) {
+  const cv = makeCanvas(22, 17), ctx = cv.getContext('2d');
+  fillCircle(ctx, 11, 10, 8.5, '#1e1f1d');
+  fillCircle(ctx, 11, 10, 7.5, '#5f625b');
+  fillCircle(ctx, 9, 8, 5.0, '#7d8079');
+  fillCircle(ctx, 8, 6.5, 2.6, '#9aa093');
+  const rng = Util.makeRng(seed);
+  for (let i = 0; i < 8; i++) {   // 이끼
+    ctx.fillStyle = '#3f7d43';
+    ctx.fillRect(5 + Math.floor(rng() * 12), 11 + Math.floor(rng() * 4), 1, 1);
+  }
+  return cv;
+}
+
+// 버섯 (9x10) — 색만 바꿔 여러 종류를 만든다
+const MUSHROOM = [
+  '..ooooo..',
+  '.oNNNNNo.',
+  'oNNDNNDNo',
+  'oMMMDMMMo',
+  'oMMMMMMMo',
+  '.ooSSSoo.',
+  '..oSSSo..',
+  '..oSSSo..',
+  '..osSso..',
+  '..ooooo..',
+];
+
+function makeCattail(seed) {
+  const cv = makeCanvas(9, 18), ctx = cv.getContext('2d');
+  const rng = Util.makeRng(seed);
+  for (let i = 0; i < 3; i++) {
+    const x = 2 + i * 2, top = 3 + Math.floor(rng() * 4);
+    ctx.fillStyle = '#2f6b34';
+    ctx.fillRect(x, top, 1, 17 - top);
+    if (i === 1) {   // 가운데만 갈색 이삭
+      ctx.fillStyle = '#5a3a1c';
+      ctx.fillRect(x - 1, top - 1, 3, 5);
+      ctx.fillStyle = '#7a5228';
+      ctx.fillRect(x, top - 1, 1, 4);
+    }
+  }
+  return cv;
+}
+
+// 흔들리는 풀 — 같은 시드로 3프레임을 만들어 기울기만 바꾼다
+function makeGrassTuft(seed, lean) {
+  const cv = makeCanvas(13, 13), ctx = cv.getContext('2d');
+  const rng = Util.makeRng(seed);
+  for (let i = 0; i < 7; i++) {
+    const bx = 2 + Math.floor(rng() * 9);
+    const h = 5 + Math.floor(rng() * 6);
+    const dark = rng() < 0.5;
+    for (let k = 0; k < h; k++) {
+      const t = k / h;
+      const x = bx + Math.round(lean * t * 2);
+      ctx.fillStyle = k > h - 3 ? '#63c065' : (dark ? '#357936' : '#469a48');
+      ctx.fillRect(x, 12 - k, 1, 1);
+    }
+  }
+  return cv;
+}
+
+function makeLilyPad(seed) {
+  const cv = makeCanvas(11, 9), ctx = cv.getContext('2d');
+  fillCircle(ctx, 5.5, 4.5, 4.5, '#1d5a2c');
+  fillCircle(ctx, 5.5, 4.0, 3.6, '#2f8040');
+  fillCircle(ctx, 4.5, 3.2, 1.8, '#3f9950');
+  ctx.clearRect(5, 4, 3, 5);     // 잎의 갈라진 틈
+  return cv;
+}
+
+// 화면 가장자리를 어둡게 — 격자 디더링으로 도트 느낌을 유지한다
+function makeVignette(w, h, strength) {
+  const cv = makeCanvas(w, h), ctx = cv.getContext('2d');
+  const BAYER = [[0, 8, 2, 10], [12, 4, 14, 6], [3, 11, 1, 9], [15, 7, 13, 5]];
+  const img = ctx.createImageData(w, h);
+  const cx = w / 2, cy = h / 2;
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const dx = (x - cx) / cx, dy = (y - cy) / cy;
+      const d = Math.sqrt(dx * dx + dy * dy);
+      const a = Util.clamp((d - 0.60) / 0.75, 0, 1);
+      if (a <= BAYER[y & 3][x & 3] / 16) continue;
+      const i4 = (y * w + x) * 4;
+      img.data[i4] = 10; img.data[i4 + 1] = 16; img.data[i4 + 2] = 14;
+      img.data[i4 + 3] = Math.round(Math.min(1, a) * 255 * strength);
+    }
+  }
+  ctx.putImageData(img, 0, 0);
+  return cv;
+}
+
 /* ── 전부 만들어서 SPRITES 에 담기 ─────────────────────────── */
 
 const SPRITES = {};
@@ -390,12 +604,22 @@ function buildSprites() {
   SPRITES.player.left = SPRITES.player.right.map(flipX);
 
   SPRITES.sword = makeSprite('sword', SWORD);
-  // 3주차: 무기 3종. 휘두르기 코드는 손잡이가 아래·날이 위라는 방향만 가정한다
-  SPRITES.weapons = {
-    sword: SPRITES.sword,
-    dagger: makeSprite('dagger', DAGGER),
-    axe: makeSprite('axe', AXE),
-  };
+  // 무기 3종 x 레벨 1~5. 휘두르기 코드는 손잡이가 아래·날이 위라는 방향만 가정한다.
+  // 레벨은 칼날 색으로 구분해서 바닥에 떨어진 무기도 한눈에 알아볼 수 있다.
+  const WEAPON_SHAPES = { dagger: DAGGER, sword: SWORD, axe: AXE };
+  const BLADE_BY_LEVEL = [
+    { w: '#8f9aa8', W: '#e9f1f7' },   // Lv1 무쇠
+    { w: '#4f9a68', W: '#b8f0c8' },   // Lv2 초록
+    { w: '#4a80b8', W: '#bfe0ff' },   // Lv3 파랑
+    { w: '#8055ae', W: '#dfc0f5' },   // Lv4 보라
+    { w: '#b8763a', W: '#ffd9a0' },   // Lv5 황금
+  ];
+  SPRITES.weapons = {};
+  for (const id in WEAPON_SHAPES) {
+    SPRITES.weapons[id] = BLADE_BY_LEVEL.map(
+      (pal, i) => makeSprite(id + '_lv' + (i + 1), WEAPON_SHAPES[id], pal)
+    );
+  }
   SPRITES.potion = makeSprite('potion', POTION);
 
   // 슬라임: 레벨별 색상 5종 + 피격용 흰 실루엣
@@ -406,11 +630,43 @@ function buildSprites() {
     SPRITES.playerFlash[dir] = SPRITES.player[dir].map(s => makeSilhouette(s, '#ff9a9a'));
   }
 
+  // 지형 타일
   SPRITES.grass = [0, 1, 2, 3, 4, 5].map(i => makeGrassTile(1000 + i * 977));
+  SPRITES.dirt = [0, 1, 2, 3].map(i => makeDirtTile(2000 + i * 811));
+  SPRITES.sand = [0, 1, 2].map(i => makeSandTile(3000 + i * 733));
+  SPRITES.water = [0, 1, 2, 3].map(i => makeWaterTile(4000 + i * 659));
+
+  // 나무 — 활엽수 / 침엽수 / 고사목
   SPRITES.tree = [0, 1, 2, 3].map(i => makeTree(31 + i * 613));
+  SPRITES.pine = [0, 1].map(i => makePine(101 + i * 547));
+  SPRITES.deadTree = [0, 1].map(i => makeDeadTree(211 + i * 379));
+
+  // 바닥 소품
   SPRITES.bush = [0, 1, 2].map(i => makeBush(77 + i * 431));
   SPRITES.rock = [makeRock()];
+  SPRITES.boulder = [0, 1].map(i => makeBoulder(307 + i * 281));
+  SPRITES.stump = [makeStump(401)];
+  SPRITES.log = [0, 1].map(i => makeLog(503 + i * 197));
+  SPRITES.cattail = [0, 1].map(i => makeCattail(601 + i * 173));
+  SPRITES.lilyPad = [0, 1].map(i => makeLilyPad(701 + i * 149));
   SPRITES.flower = ['#e8d15a', '#e56b7a', '#c79ce8', '#f0f0f0'].map(makeFlower);
+
+  // 버섯 3색
+  SPRITES.mushroom = [
+    { M: '#b83a3a', N: '#d95c5c', D: '#f6ece0', S: '#e8dcc0', s: '#c9bb9c' },
+    { M: '#7a4fae', N: '#9a6fce', D: '#f6ece0', S: '#e8dcc0', s: '#c9bb9c' },
+    { M: '#a8762c', N: '#c99446', D: '#f6ece0', S: '#e8dcc0', s: '#c9bb9c' },
+  ].map((pal, i) => makeSprite('mushroom' + i, MUSHROOM, pal));
+
+  // 흔들리는 풀 — [왼쪽, 가운데, 오른쪽] 3프레임 x 3종
+  SPRITES.tuft = [0, 1, 2].map(k => [-1, 0, 1].map(lean => makeGrassTuft(811 + k * 127, lean)));
+
+  SPRITES.vignette = makeVignette(CONFIG.VIEW_W, CONFIG.VIEW_H, CONFIG.ambient.vignette);
+  SPRITES.leaf = ['#4f9a3f', '#7fae3a', '#b8933a', '#c07a35'].map(c => {
+    const cv = makeCanvas(3, 2), ctx = cv.getContext('2d');
+    ctx.fillStyle = c; ctx.fillRect(0, 0, 3, 1); ctx.fillRect(1, 1, 1, 1);
+    return cv;
+  });
 
   // 4방향 x 3프레임 궤적
   const angles = { right: 0, down: Math.PI / 2, left: Math.PI, up: -Math.PI / 2 };

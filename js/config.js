@@ -7,13 +7,32 @@ const CONFIG = {
   VIEW_H: 216,
 
   TILE: 16,
-  MAP_W: 64,   // 타일 단위 -> 1024px
-  MAP_H: 48,   // 타일 단위 -> 768px
+  MAP_W: 80,   // 타일 단위 -> 1280px
+  MAP_H: 60,   // 타일 단위 -> 960px
+
+  // 지형 생성 기준값. 노이즈가 이 값을 넘으면 해당 지형이 된다 (0~1)
+  world: {
+    waterLevel: 0.86,      // 연못 — 너무 낮추면 맵이 물로 갈라진다
+    shoreLevel: 0.80,      // 연못 둘레 모래사장
+    clearingLevel: 0.24,   // 흙바닥 공터
+    meadowLevel: 0.71,     // 꽃밭
+    treeLevel: 0.42,       // 이 값을 넘는 곳부터 나무가 자란다 (낮출수록 숲이 빽빽해진다)
+    startClearTiles: 8,    // 시작 지점 주변은 물·나무 없이 비운다 (타일)
+    pathWidth: 1,          // 흙길 반폭 (타일)
+  },
+
+  // 분위기 연출 — 떠다니는 꽃가루, 떨어지는 나뭇잎, 화면 가장자리 어둡게
+  ambient: {
+    motes: 30,
+    leaves: 14,
+    vignette: 0.5,
+    swaySpeed: 1.6,        // 풀이 흔들리는 속도
+  },
 
   player: {
     speed: 66,             // px/초
     maxHp: 60,
-    attackDamage: 7,       // 맨손 기본값 — 실제 데미지 = 이 값 + 장착 무기 damageBonus
+    attackDamage: 7,       // 기본 공격력 — 실제 데미지 = 이 값 x 무기 종류 배수 x 무기 레벨 배수
     attackCooldown: 0.40,  // 초
     attackDuration: 0.26,  // 휘두르는 데 걸리는 시간
     hitWindow: [0.04, 0.20], // 이 구간에만 판정이 살아있다
@@ -23,29 +42,37 @@ const CONFIG = {
     knockbackTaken: 95,
     critChance: 0.12,
     critMult: 1.8,
+    // 쿨다운이 끝나기 직전에 누른 공격을 이 시간만큼 기억했다가 바로 이어서 낸다.
+    // 없으면 정확한 타이밍에 눌러야만 연속 공격이 되어 손맛이 나쁘다.
+    attackBuffer: 0.18,
   },
 
-  // 3주차: 무기 3종. 단검은 빠르고 짧고 약하게, 도끼는 느리고 길고 세게.
+  /* 무기 3종. 세 무기의 성능은 서로 같다.
+     damageMult / cooldown 이 셋 다 정확히 2.5 라서 초당 데미지가 동일하고,
+     차이는 "한 방이 무거운가 / 자주 때리는가" 뿐이다.
+     (데미지를 고정값이 아니라 배수로 둔 이유: 고정값이면 플레이어 레벨이 오를수록
+      보너스 비중이 줄어 빠른 무기가 일방적으로 유리해진다.)
+     사거리와 판정 각도도 어느 하나가 확실히 낫지 않도록 차이를 좁게 잡았다. */
   weapons: {
     order: ['dagger', 'sword', 'axe'],
-    dagger: { name: 'DAGGER', damageBonus: -2, reach: 17, arc: 0.80, cooldown: 0.28, duration: 0.22, hitWindow: [0.03, 0.16], critBonus: 0.10, knockMult: 0.8, color: '#9be564' },
-    sword:  { name: 'SWORD',  damageBonus: 0,  reach: 21, arc: 0.95, cooldown: 0.40, duration: 0.26, hitWindow: [0.04, 0.20], critBonus: 0.00, knockMult: 1.0, color: '#7ec8ff' },
-    axe:    { name: 'AXE',    damageBonus: 5,  reach: 25, arc: 1.15, cooldown: 0.62, duration: 0.36, hitWindow: [0.06, 0.28], critBonus: -0.04, knockMult: 1.6, color: '#ffb35c' },
+    dagger: { name: 'DAGGER', damageMult: 0.70, cooldown: 0.28, duration: 0.22, hitWindow: [0.03, 0.16], reach: 19, arc: 0.86, knockMult: 0.70 },
+    sword:  { name: 'SWORD',  damageMult: 1.00, cooldown: 0.40, duration: 0.26, hitWindow: [0.04, 0.20], reach: 21, arc: 0.95, knockMult: 1.00 },
+    axe:    { name: 'AXE',    damageMult: 1.55, cooldown: 0.62, duration: 0.36, hitWindow: [0.06, 0.28], reach: 23, arc: 1.04, knockMult: 1.55 },
+
+    // 무기 레벨 1~5 — 무기의 위력은 종류가 아니라 오직 이 레벨이 정한다
+    levelMult: [1.00, 1.35, 1.70, 2.05, 2.40],
+    // 레벨별 색 (칼날 색과 이름표에 함께 쓴다)
+    levelColor: ['#c8d0d8', '#8fe0a8', '#7ec8ff', '#c79ce8', '#ffb35c'],
   },
 
   equipment: {
-    startWeapon: 'sword',   // 게임 시작 장착 무기
-    // 슬라임 레벨별 무기 드랍 확률
-    weaponDropChance: [0.04, 0.06, 0.09, 0.13, 0.18],
-    // 슬라임 레벨별 [단검, 검, 도끼] 가중치 — 센 슬라임이 좋은 무기를 떨군다
-    weaponTable: [
-      [80, 20, 0],
-      [60, 35, 5],
-      [35, 50, 15],
-      [20, 50, 30],
-      [10, 45, 45],
-    ],
-    weaponLifetime: 60,     // 바닥 무기가 사라지기까지 (초)
+    startWeapon: 'sword',    // 게임 시작 장착 무기
+    startWeaponLevel: 1,
+    // 슬라임 레벨과 무관하게 모두 같은 확률로 무기를 떨군다
+    dropChance: 0.10,
+    // 떨어지는 무기의 레벨은 잡은 슬라임의 레벨과 같다.
+    // 종류(단검/검/도끼)는 성능이 같으므로 똑같은 확률로 고른다.
+    weaponLifetime: 60,      // 바닥 무기가 사라지기까지 (초)
   },
 
   levelUp: {
@@ -56,7 +83,7 @@ const CONFIG = {
   },
 
   slime: {
-    maxAlive: 16,           // 맵에 동시에 존재하는 슬라임 수
+    maxAlive: 20,           // 맵에 동시에 존재하는 슬라임 수 (맵이 넓어져 함께 늘림)
     respawnMin: 2.5,        // 죽은 뒤 다시 스폰되기까지 (초)
     respawnMax: 6.0,
     minDistFromPlayer: 78,  // 플레이어 코앞에 튀어나오지 않도록

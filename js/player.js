@@ -22,11 +22,13 @@ class Player {
     this.maxPotions = CONFIG.items.potionMax;
     this.potionCooldown = 0;
 
-    // 3주차 장비 — 한 번에 하나의 무기만 든다. 바닥 무기를 밟으면 교체한다
+    // 장비 — 한 번에 하나의 무기만 든다. 종류는 성능이 같고, 위력은 무기 레벨이 정한다
     this.weapon = CONFIG.equipment.startWeapon;
+    this.weaponLevel = CONFIG.equipment.startWeaponLevel;
 
     this.attackTimer = 0;      // 휘두르는 중이면 0보다 큼
     this.cooldown = 0;
+    this.attackBuffer = 0;     // 쿨다운 중에 누른 공격을 잠깐 기억해둔다
     this.hitIds = new Set();   // 한 번 휘둘렀을 때 같은 적을 여러 번 때리지 않도록
     this.invuln = 0;
     this.kx = 0; this.ky = 0;  // 넉백 속도
@@ -34,6 +36,16 @@ class Player {
     this.moving = false;
     this.dead = false;
     this.deadTimer = 0;
+    this.potionQueued = false;
+    this.stepTimer = 0;        // 발밑 먼지를 일정 간격으로 피우기 위한 타이머
+  }
+
+  /* 히트스톱이나 인벤토리로 게임이 멈춘 프레임에도 키 입력은 사라지면 안 되므로,
+     매 프레임 가장 먼저 눌림을 받아 기억해둔다. (Game.frame 에서 호출) */
+  bufferInput() {
+    if (this.dead) return;
+    if (Input.attackPressed()) this.attackBuffer = CONFIG.player.attackBuffer;
+    if (Input.potionPressed()) this.potionQueued = true;
   }
 
   get hurtBox() {
@@ -53,9 +65,20 @@ class Player {
     return CONFIG.weapons[this.weapon] || CONFIG.weapons.sword;
   }
 
-  // 실제 공격력 = 레벨업으로 쌓인 기본값 + 무기 보너스
+  // 실제 공격력 = 레벨업으로 쌓인 기본값 x 무기 종류 배수 x 무기 레벨 배수.
+  // 종류 배수는 쿨다운에 비례하므로 어떤 무기를 들어도 초당 데미지는 같다.
   attackDamage() {
-    return this.damage + this.weaponSpec().damageBonus;
+    const lv = CONFIG.weapons.levelMult[this.weaponLevel - 1] || 1;
+    return Math.max(1, Math.round(this.damage * this.weaponSpec().damageMult * lv));
+  }
+
+  // 무기 레벨 색 — HUD·바닥 이름표에 함께 쓴다
+  weaponColor() {
+    return CONFIG.weapons.levelColor[this.weaponLevel - 1] || '#ffffff';
+  }
+
+  weaponLabel() {
+    return this.weaponSpec().name + ' L' + this.weaponLevel;
   }
 
   update(dt, slimes) {
@@ -96,12 +119,31 @@ class Player {
 
     if (this.moving) this.walkTime += dt; else this.walkTime = 0;
 
+    // 걸을 때 발밑에서 흙먼지가 인다 — 밟고 있는 지형에 따라 색이 다르다
+    if (this.moving) {
+      this.stepTimer -= dt;
+      if (this.stepTimer <= 0) {
+        this.stepTimer = 0.24;
+        const t = World.tileAt(this.x, this.y + 6);
+        const colors = (t === TILE_DIRT) ? ['#b39a72', '#8f7854']
+          : (t === TILE_SAND) ? ['#dcc79a', '#bda578']
+            : ['#6fa762', '#4e8a4a'];
+        FX.burst(this.x, this.y + 6, 2, colors, { speed: 12, life: 0.26, gravity: 8, size: 1 });
+      }
+    } else {
+      this.stepTimer = 0;
+    }
+
     // ── 공격 (사거리/속도/판정은 장착 무기 기준)
     const w = this.weaponSpec();
-    if (Input.attackPressed() && this.cooldown <= 0 && this.attackTimer <= 0) {
+    this.attackBuffer = Math.max(0, this.attackBuffer - dt);
+    // 버퍼에 남은 입력이 있거나 공격키를 계속 누르고 있으면 쿨다운이 풀리는 즉시 이어서 휘두른다
+    const wantsAttack = this.attackBuffer > 0 || Input.attackHeld();
+    if (wantsAttack && this.cooldown <= 0 && this.attackTimer <= 0) {
       this.attackTimer = w.duration;
       this.cooldown = w.cooldown;
       this.hitIds = new Set();
+      this.attackBuffer = 0;
     }
 
     if (this.attackTimer > 0) {
@@ -113,7 +155,7 @@ class Player {
     }
 
     // ── 포션 마시기 (E / Q / H)
-    if (Input.potionPressed()) this.usePotion();
+    if (this.potionQueued) { this.potionQueued = false; this.usePotion(); }
   }
 
   // x축과 y축을 따로 밀어서 벽에 붙어도 미끄러지듯 움직이게 한다
@@ -150,7 +192,7 @@ class Player {
       if (d > 3 && Math.abs(Util.angleDiff(Math.atan2(dy, dx), base)) > w.arc) continue;
 
       this.hitIds.add(s.id);
-      const crit = Math.random() < Math.max(0, c.critChance + w.critBonus);
+      const crit = Math.random() < c.critChance;   // 치명타율은 무기와 무관하게 동일
       let dmg = this.attackDamage() + Util.randInt(-1, 1);
       if (crit) dmg = Math.round(dmg * c.critMult);
       dmg = Math.max(1, dmg);
@@ -206,12 +248,14 @@ class Player {
     }
   }
 
-  // 가방에 자리가 있으면 담고 true, 꽉 찼으면 false (그대로 바닥에 둔다)
+  // 가방에 들어갈 만큼만 담고 실제로 담은 개수를 돌려준다.
+  // 2개짜리 드랍인데 한 칸만 남았으면 1개만 담고 나머지는 바닥에 남는다.
   addPotion(amount) {
-    if (this.potions >= this.maxPotions) return false;
-    if (this.potions + amount > this.maxPotions) return false;
-    this.potions += amount;
-    return true;
+    const room = this.maxPotions - this.potions;
+    if (room <= 0) return 0;
+    const taken = Math.min(room, amount);
+    this.potions += taken;
+    return taken;
   }
 
   usePotion() {
@@ -235,15 +279,17 @@ class Player {
     FX.burst(this.x, this.y, 14, ['#7dff8a', '#ffffff', '#e5484d'], { speed: 45, life: 0.5, gravity: 30 });
   }
 
-  // 무기 교체. 같은 무기면 'same', 죽어있으면 false, 교체되면 true
-  equipWeapon(id) {
+  // 무기 교체. 종류와 레벨이 모두 같으면 'same', 죽어있으면 false, 교체되면 true
+  equipWeapon(id, level) {
     if (this.dead) return false;
-    if (this.weapon === id) return 'same';
     if (!CONFIG.weapons[id]) return false;
+    level = Util.clamp(Math.round(level || 1), 1, CONFIG.weapons.levelMult.length);
+    if (this.weapon === id && this.weaponLevel === level) return 'same';
     this.weapon = id;
-    const w = this.weaponSpec();
-    FX.number(this.x, this.y - 22, w.name + '!', w.color);
-    FX.burst(this.x, this.y, 12, [w.color, '#ffffff'], { speed: 50, life: 0.45, gravity: 60 });
+    this.weaponLevel = level;
+    const color = this.weaponColor();
+    FX.number(this.x, this.y - 22, this.weaponLabel() + '!', color);
+    FX.burst(this.x, this.y, 12, [color, '#ffffff'], { speed: 50, life: 0.45, gravity: 60 });
     // 휘두르는 도중에 바뀌면 판정이 꼬이므로 자세를 리셋한다
     this.attackTimer = 0;
     this.hitIds = new Set();
@@ -281,7 +327,8 @@ class Player {
 
     // 무기를 부채꼴을 따라 휘두른다
     const a = base - 1.15 + p * 2.3;
-    const sw = (SPRITES.weapons && SPRITES.weapons[this.weapon]) || SPRITES.sword;
+    const set = SPRITES.weapons && SPRITES.weapons[this.weapon];
+    const sw = (set && set[this.weaponLevel - 1]) || SPRITES.sword;
     ctx.save();
     ctx.translate(sx, sy - 1);
     ctx.rotate(a + Math.PI / 2);

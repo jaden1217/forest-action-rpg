@@ -115,12 +115,12 @@ const UI = {
     }
     this.drawText(ctx, 'X' + player.potions + '/' + player.maxPotions + ' E', 21, 48, '#ffd93d');
 
-    // ── 3주차: 장착 무기 HUD
+    // ── 장착 무기 HUD (종류 + 레벨)
     if (player.weaponSpec) {
-      const w = player.weaponSpec();
-      const icon = typeof SPRITES !== 'undefined' && SPRITES.weapons && SPRITES.weapons[player.weapon];
+      const set = typeof SPRITES !== 'undefined' && SPRITES.weapons && SPRITES.weapons[player.weapon];
+      const icon = set && set[player.weaponLevel - 1];
       if (icon) ctx.drawImage(icon, 8, 58);
-      this.drawText(ctx, w.name, 23, 62, w.color);
+      this.drawText(ctx, player.weaponLabel(), 23, 62, player.weaponColor());
     }
 
     // 체력이 낮고 포션이 있으면 깜빡이며 마시라고 알린다
@@ -156,18 +156,21 @@ const UI = {
     this.drawText(ctx, 'POTION X' + player.potions + '/' + player.maxPotions, x + 30, y + 24, '#ffd93d');
     this.drawText(ctx, 'HEALS ' + CONFIG.items.potionHeal + ' HP', x + 30, y + 33, '#7fa86a');
 
-    // ── 3주차: 장착 무기. 숫자는 픽셀 폰트에 맞춰 단어로 보여준다
+    // ── 장착 무기. 숫자는 픽셀 폰트에 맞춰 단어로 보여준다.
+    //    DPS 를 같이 띄우는 이유: 세 무기의 초당 데미지가 같다는 걸 직접 확인할 수 있다
     if (player.weaponSpec) {
       const spec = player.weaponSpec();
-      const icon = typeof SPRITES !== 'undefined' && SPRITES.weapons && SPRITES.weapons[player.weapon];
+      const set = typeof SPRITES !== 'undefined' && SPRITES.weapons && SPRITES.weapons[player.weapon];
+      const icon = set && set[player.weaponLevel - 1];
       if (icon) ctx.drawImage(icon, x + 14, y + 46);
-      this.drawText(ctx, spec.name, x + 30, y + 48, spec.color);
+      this.drawText(ctx, player.weaponLabel(), x + 30, y + 48, player.weaponColor());
       this.drawText(ctx, 'DMG ' + player.attackDamage() + ' RNG ' + spec.reach, x + 30, y + 57, '#f0d9b5');
-      this.drawText(ctx, 'SPD ' + this.speedWord(spec.cooldown) + ' ARC ' + this.arcWord(spec.arc), x + 14, y + 70, '#7fa86a');
+      const dps = Math.round(player.attackDamage() / spec.cooldown);
+      this.drawText(ctx, 'SPD ' + this.speedWord(spec.cooldown) + ' DPS ' + dps, x + 14, y + 70, '#7fa86a');
     }
-    this.drawText(ctx, 'E/Q DRINK', x + 14, y + 82, '#f0d9b5');
-    this.drawText(ctx, 'WALK OVER WEAPON', x + 14, y + 91, '#7fa86a');
-    this.drawText(ctx, 'TO SWAP', x + 14, y + 100, '#7fa86a');
+    this.drawText(ctx, 'E/Q DRINK POTION', x + 14, y + 82, '#f0d9b5');
+    this.drawText(ctx, 'F ON WEAPON TO SWAP', x + 14, y + 91, '#7fa86a');
+    this.drawText(ctx, 'PAUSED - I TO CLOSE', x + 14, y + 100, '#7fa86a');
   },
 
   // 쿨다운(초)을 단어로 — 0.28 단검 FAST, 0.40 검 NORMAL, 0.62 도끼 SLOW
@@ -177,9 +180,4 @@ const UI = {
     return 'SLOW';
   },
 
-  arcWord(arc) {
-    if (arc < 0.88) return 'NARROW';
-    if (arc < 1.05) return 'NORMAL';
-    return 'WIDE';
-  },
 };

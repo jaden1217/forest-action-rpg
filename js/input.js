@@ -45,6 +45,16 @@ const Input = {
     return !!(this.pressed.Space || this.pressed.KeyJ || this.pressed.Mouse);
   },
 
+  // 누르고 있는 동안 계속 휘두르게 하려면 눌린 상태 자체를 봐야 한다
+  attackHeld() {
+    return !!(this.down.Space || this.down.KeyJ || this.down.Mouse);
+  },
+
+  // 3주차: 바닥 무기를 F 로 집어서 교체 (실수로 바뀌지 않도록 직접 눌러야 한다)
+  pickupPressed() {
+    return !!this.pressed.KeyF;
+  },
+
   // 2주차: E / Q / H 로 포션 마시기, I / Tab 으로 인벤토리 열기
   potionPressed() {
     return !!(this.pressed.KeyE || this.pressed.KeyQ || this.pressed.KeyH);
