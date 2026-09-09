@@ -27,6 +27,10 @@ const PAL = {
   'M': '#3fa347',     // 슬라임 본체
   'n': '#8fe098',     // 슬라임 하이라이트
   'k': '#12100e',     // 슬라임 눈
+  'c': '#8d5726',     // 포션 코르크
+  'G': '#d8ecff',     // 포션 유리
+  'r': '#8e2a2a',     // 포션 액체 어두운면
+  'R': '#e5484d',     // 포션 액체
 };
 
 function makeCanvas(w, h) {
@@ -157,7 +161,7 @@ const P_LEGS_SIDE = [
   ['..opppo.oppo....', '..opppo.oppo....', '..oBBBo.oBBo....'],
 ];
 
-// 무기 (8x16, 칼끝이 위를 향한다)
+// 무기 (8x16, 칼끝이 위를 향한다) — 기본 검
 const SWORD = [
   '...WW...',
   '..oWWo..',
@@ -175,6 +179,46 @@ const SWORD = [
   '..obbo..',
   '..obbo..',
   '...oo...',
+];
+
+// 단검 (8x16) — 짧고 빠르다. 검보다 칼날이 3줄 짧다.
+const DAGGER = [
+  '...WW...',
+  '..oWWo..',
+  '..oWwo..',
+  '..oWwo..',
+  '..oWwo..',
+  '..oWwo..',
+  '..oWwo..',
+  '.obbbbo.',
+  'obbbbbbo',
+  '..obbo..',
+  '..obbo..',
+  '..obbo..',
+  '..obbo..',
+  '..obbo..',
+  '..obbo..',
+  '...oo...',
+];
+
+// 전투 도끼 (12x16) — 자루는 가운데 2칸, 날은 위쪽에 좌우로 벌린다
+const AXE = [
+  '..ooWWWWoo..',
+  '.oWWWWWWWWo.',
+  '.oWwWWWWwWo.',
+  '.oWwWWWWwWo.',
+  '.oWWWWWWWWo.',
+  '..ooWWWWoo..',
+  '.....bb.....',
+  '.....bb.....',
+  '.....bb.....',
+  '.....bb.....',
+  '.....bb.....',
+  '.....bb.....',
+  '.....bb.....',
+  '....obbo....',
+  '....obbo....',
+  '.....oo.....',
 ];
 
 // 슬라임 (16x16)
@@ -195,6 +239,22 @@ const SLIME = [
   'ommMMMMMMMMMMmmo',
   '.ommmmmmmmmmmmo.',
   '..oooooooooooo..',
+];
+
+// 회복 포션 (10x12) — 2주차 아이템. 빨간 물약.
+const POTION = [
+  '....cc....',
+  '....cc....',
+  '...oGGo...',
+  '...oGGo...',
+  '.oGGGGGGo.',
+  '.oGGGGGGo.',
+  '.orRRRRRo.',
+  '.orRRRRRo.',
+  '.oRrRRRRo.',
+  '.orRRRRRo.',
+  '.orRRRRRo.',
+  '..oooooo..',
 ];
 
 // 슬라임 레벨별 색 (1레벨 초록 -> 5레벨 붉은색)
@@ -330,6 +390,13 @@ function buildSprites() {
   SPRITES.player.left = SPRITES.player.right.map(flipX);
 
   SPRITES.sword = makeSprite('sword', SWORD);
+  // 3주차: 무기 3종. 휘두르기 코드는 손잡이가 아래·날이 위라는 방향만 가정한다
+  SPRITES.weapons = {
+    sword: SPRITES.sword,
+    dagger: makeSprite('dagger', DAGGER),
+    axe: makeSprite('axe', AXE),
+  };
+  SPRITES.potion = makeSprite('potion', POTION);
 
   // 슬라임: 레벨별 색상 5종 + 피격용 흰 실루엣
   SPRITES.slime = SLIME_PALETTES.map((pal, i) => makeSprite('slime_lv' + (i + 1), SLIME, pal));

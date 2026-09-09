@@ -13,7 +13,7 @@ const CONFIG = {
   player: {
     speed: 66,             // px/초
     maxHp: 60,
-    attackDamage: 7,
+    attackDamage: 7,       // 맨손 기본값 — 실제 데미지 = 이 값 + 장착 무기 damageBonus
     attackCooldown: 0.40,  // 초
     attackDuration: 0.26,  // 휘두르는 데 걸리는 시간
     hitWindow: [0.04, 0.20], // 이 구간에만 판정이 살아있다
@@ -23,6 +23,29 @@ const CONFIG = {
     knockbackTaken: 95,
     critChance: 0.12,
     critMult: 1.8,
+  },
+
+  // 3주차: 무기 3종. 단검은 빠르고 짧고 약하게, 도끼는 느리고 길고 세게.
+  weapons: {
+    order: ['dagger', 'sword', 'axe'],
+    dagger: { name: 'DAGGER', damageBonus: -2, reach: 17, arc: 0.80, cooldown: 0.28, duration: 0.22, hitWindow: [0.03, 0.16], critBonus: 0.10, knockMult: 0.8, color: '#9be564' },
+    sword:  { name: 'SWORD',  damageBonus: 0,  reach: 21, arc: 0.95, cooldown: 0.40, duration: 0.26, hitWindow: [0.04, 0.20], critBonus: 0.00, knockMult: 1.0, color: '#7ec8ff' },
+    axe:    { name: 'AXE',    damageBonus: 5,  reach: 25, arc: 1.15, cooldown: 0.62, duration: 0.36, hitWindow: [0.06, 0.28], critBonus: -0.04, knockMult: 1.6, color: '#ffb35c' },
+  },
+
+  equipment: {
+    startWeapon: 'sword',   // 게임 시작 장착 무기
+    // 슬라임 레벨별 무기 드랍 확률
+    weaponDropChance: [0.04, 0.06, 0.09, 0.13, 0.18],
+    // 슬라임 레벨별 [단검, 검, 도끼] 가중치 — 센 슬라임이 좋은 무기를 떨군다
+    weaponTable: [
+      [80, 20, 0],
+      [60, 35, 5],
+      [35, 50, 15],
+      [20, 50, 30],
+      [10, 45, 45],
+    ],
+    weaponLifetime: 60,     // 바닥 무기가 사라지기까지 (초)
   },
 
   levelUp: {
@@ -55,5 +78,18 @@ const CONFIG = {
   fx: {
     hitStop: 0.045,         // 타격 시 화면이 멈추는 시간 (타격감)
     shakeOnHurt: 3.2,
+  },
+
+  items: {
+    // 2주차: 슬라임이 떨구는 건 회복 포션 한 종류. 레벨이 높을수록 잘 나온다
+    potionDropChance: [0.10, 0.13, 0.17, 0.22, 0.30], // 슬라임 레벨별 드랍 확률
+    potionDoubleChance: 0.25, // Lv5가 2개를 떨굴 확률
+    potionHeal: 25,           // 포션 1개 회복량
+    potionMax: 5,             // 최대 소지 수 (인벤토리)
+    potionStart: 1,           // 게임 시작 지급 수
+    potionCooldown: 0.5,      // 연속 마시기 방지
+    pickupRadius: 11,         // 이 거리 안이면 자동 줍기
+    magnetRadius: 30,         // 이 거리 안이면 포션이 끌려온다
+    lifetime: 40,             // 바닥에 남아있는 시간 (초)
   },
 };

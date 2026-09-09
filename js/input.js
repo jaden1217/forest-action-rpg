@@ -28,7 +28,7 @@ const Input = {
 
   // 스크롤 등 브라우저 기본 동작을 막을 키
   CAPTURED: {
-    ArrowUp: 1, ArrowDown: 1, ArrowLeft: 1, ArrowRight: 1, Space: 1,
+    ArrowUp: 1, ArrowDown: 1, ArrowLeft: 1, ArrowRight: 1, Space: 1, Tab: 1,
   },
 
   // -1 / 0 / 1 형태의 이동 입력
@@ -43,6 +43,15 @@ const Input = {
 
   attackPressed() {
     return !!(this.pressed.Space || this.pressed.KeyJ || this.pressed.Mouse);
+  },
+
+  // 2주차: E / Q / H 로 포션 마시기, I / Tab 으로 인벤토리 열기
+  potionPressed() {
+    return !!(this.pressed.KeyE || this.pressed.KeyQ || this.pressed.KeyH);
+  },
+
+  inventoryPressed() {
+    return !!(this.pressed.KeyI || this.pressed.Tab);
   },
 
   // 매 프레임 끝에서 호출 — pressed 는 한 프레임만 살아있다

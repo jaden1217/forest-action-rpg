@@ -10,6 +10,7 @@ const Game = {
   respawnQueue: [],   // 죽은 슬라임이 다시 나올 시각까지 남은 시간
   cam: { x: 0, y: 0 },
   lastTime: 0,
+  showInventory: false,
 
   init() {
     this.canvas = document.getElementById('game');
@@ -20,6 +21,8 @@ const Game = {
     Input.init(this.canvas);
     World.init(Math.floor(Math.random() * 100000));
     FX.reset();
+    Items.reset();
+    this.showInventory = false;
 
     this.player = new Player(World.w / 2, World.h / 2);
     this.slimes = [];
@@ -58,6 +61,7 @@ const Game = {
     // 죽은 슬라임은 목록에서 빼고 재등장 타이머에 넣는다
     for (let i = this.slimes.length - 1; i >= 0; i--) {
       if (this.slimes[i].dead) {
+        Items.dropFor(this.slimes[i]);
         this.slimes.splice(i, 1);
         this.respawnQueue.push(Util.rand(CONFIG.slime.respawnMin, CONFIG.slime.respawnMax));
       }
@@ -96,8 +100,10 @@ const Game = {
       if (FX.hitStop > 0) {
         FX.hitStop -= dt;
       } else {
+        if (Input.inventoryPressed()) this.showInventory = !this.showInventory;
         this.player.update(dt, this.slimes);
         this.updateSlimes(dt);
+        Items.update(dt, this.player);
         this.updateCamera(false);
       }
       FX.update(dt);
@@ -120,6 +126,7 @@ const Game = {
 
     ctx.clearRect(0, 0, CONFIG.VIEW_W, CONFIG.VIEW_H);
     World.drawGround(ctx, cam);
+    Items.draw(ctx, cam);
 
     // ── 화면에 보이는 것만 모아서 y좌표 순으로 그린다 (아래쪽이 앞)
     const drawables = [];
@@ -148,7 +155,7 @@ const Game = {
 
     FX.drawParticles(ctx, cam);
     FX.drawNumbers(ctx, cam);
-    UI.draw(ctx, this.player);
+    UI.draw(ctx, this.player, this.showInventory);
   },
 };
 

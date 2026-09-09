@@ -17,6 +17,14 @@ class Player {
     this.kills = 0;
     this.deaths = 0;
 
+    // 2주차 인벤토리 — 지금은 포션 한 종류만 든다
+    this.potions = CONFIG.items.potionStart;
+    this.maxPotions = CONFIG.items.potionMax;
+    this.potionCooldown = 0;
+
+    // 3주차 장비 — 한 번에 하나의 무기만 든다. 바닥 무기를 밟으면 교체한다
+    this.weapon = CONFIG.equipment.startWeapon;
+
     this.attackTimer = 0;      // 휘두르는 중이면 0보다 큼
     this.cooldown = 0;
     this.hitIds = new Set();   // 한 번 휘둘렀을 때 같은 적을 여러 번 때리지 않도록
@@ -40,6 +48,16 @@ class Player {
     return { right: 0, down: Math.PI / 2, left: Math.PI, up: -Math.PI / 2 }[this.facing];
   }
 
+  // 장착 중인 무기 스펙 (CONFIG.weapons 참조)
+  weaponSpec() {
+    return CONFIG.weapons[this.weapon] || CONFIG.weapons.sword;
+  }
+
+  // 실제 공격력 = 레벨업으로 쌓인 기본값 + 무기 보너스
+  attackDamage() {
+    return this.damage + this.weaponSpec().damageBonus;
+  }
+
   update(dt, slimes) {
     if (this.dead) {
       this.deadTimer -= dt;
@@ -50,6 +68,7 @@ class Player {
     const c = CONFIG.player;
     this.cooldown = Math.max(0, this.cooldown - dt);
     this.invuln = Math.max(0, this.invuln - dt);
+    this.potionCooldown = Math.max(0, this.potionCooldown - dt);
 
     // ── 이동 입력
     let ix = Input.axisX(), iy = Input.axisY();
@@ -77,20 +96,24 @@ class Player {
 
     if (this.moving) this.walkTime += dt; else this.walkTime = 0;
 
-    // ── 공격
+    // ── 공격 (사거리/속도/판정은 장착 무기 기준)
+    const w = this.weaponSpec();
     if (Input.attackPressed() && this.cooldown <= 0 && this.attackTimer <= 0) {
-      this.attackTimer = c.attackDuration;
-      this.cooldown = c.attackCooldown;
+      this.attackTimer = w.duration;
+      this.cooldown = w.cooldown;
       this.hitIds = new Set();
     }
 
     if (this.attackTimer > 0) {
-      const elapsed = c.attackDuration - this.attackTimer;
-      if (elapsed >= c.hitWindow[0] && elapsed <= c.hitWindow[1]) {
+      const elapsed = w.duration - this.attackTimer;
+      if (elapsed >= w.hitWindow[0] && elapsed <= w.hitWindow[1]) {
         this.resolveHits(slimes);
       }
       this.attackTimer -= dt;
     }
+
+    // ── 포션 마시기 (E / Q / H)
+    if (Input.potionPressed()) this.usePotion();
   }
 
   // x축과 y축을 따로 밀어서 벽에 붙어도 미끄러지듯 움직이게 한다
@@ -117,17 +140,18 @@ class Player {
   // 무기 사거리 안, 바라보는 부채꼴 안에 들어온 슬라임을 때린다
   resolveHits(slimes) {
     const c = CONFIG.player;
+    const w = this.weaponSpec();
     const base = this.facingAngle();
     for (const s of slimes) {
       if (s.dead || this.hitIds.has(s.id)) continue;
       const dx = s.x - this.x, dy = s.y - this.y;
       const d = Math.sqrt(dx * dx + dy * dy);
-      if (d > c.reach + s.radius) continue;
-      if (d > 3 && Math.abs(Util.angleDiff(Math.atan2(dy, dx), base)) > c.arcHalfWidth) continue;
+      if (d > w.reach + s.radius) continue;
+      if (d > 3 && Math.abs(Util.angleDiff(Math.atan2(dy, dx), base)) > w.arc) continue;
 
       this.hitIds.add(s.id);
-      const crit = Math.random() < c.critChance;
-      let dmg = this.damage + Util.randInt(-1, 1);
+      const crit = Math.random() < Math.max(0, c.critChance + w.critBonus);
+      let dmg = this.attackDamage() + Util.randInt(-1, 1);
       if (crit) dmg = Math.round(dmg * c.critMult);
       dmg = Math.max(1, dmg);
       s.takeHit(dmg, base, crit, this);
@@ -182,6 +206,50 @@ class Player {
     }
   }
 
+  // 가방에 자리가 있으면 담고 true, 꽉 찼으면 false (그대로 바닥에 둔다)
+  addPotion(amount) {
+    if (this.potions >= this.maxPotions) return false;
+    if (this.potions + amount > this.maxPotions) return false;
+    this.potions += amount;
+    return true;
+  }
+
+  usePotion() {
+    if (this.dead || this.potionCooldown > 0) return;
+    const cfg = CONFIG.items;
+    if (this.potions <= 0) {
+      FX.number(this.x, this.y - 20, 'EMPTY', '#8f9aa8');
+      this.potionCooldown = cfg.potionCooldown;
+      return;
+    }
+    if (this.hp >= this.maxHp) {
+      FX.number(this.x, this.y - 20, 'FULL HP', '#8f9aa8');
+      this.potionCooldown = cfg.potionCooldown;
+      return;
+    }
+    this.potions--;
+    this.potionCooldown = cfg.potionCooldown;
+    const healed = Math.min(cfg.potionHeal, this.maxHp - this.hp);
+    this.hp += healed;
+    FX.number(this.x, this.y - 20, '+' + healed, '#7dff8a');
+    FX.burst(this.x, this.y, 14, ['#7dff8a', '#ffffff', '#e5484d'], { speed: 45, life: 0.5, gravity: 30 });
+  }
+
+  // 무기 교체. 같은 무기면 'same', 죽어있으면 false, 교체되면 true
+  equipWeapon(id) {
+    if (this.dead) return false;
+    if (this.weapon === id) return 'same';
+    if (!CONFIG.weapons[id]) return false;
+    this.weapon = id;
+    const w = this.weaponSpec();
+    FX.number(this.x, this.y - 22, w.name + '!', w.color);
+    FX.burst(this.x, this.y, 12, [w.color, '#ffffff'], { speed: 50, life: 0.45, gravity: 60 });
+    // 휘두르는 도중에 바뀌면 판정이 꼬이므로 자세를 리셋한다
+    this.attackTimer = 0;
+    this.hitIds = new Set();
+    return true;
+  }
+
   draw(ctx, cam) {
     if (this.dead) return;
     // 무적 시간에는 한 프레임 걸러 그려서 깜빡이게 한다
@@ -202,8 +270,8 @@ class Player {
   }
 
   drawSwing(ctx, sx, sy) {
-    const c = CONFIG.player;
-    const p = 1 - this.attackTimer / c.attackDuration;   // 0 -> 1
+    const w = this.weaponSpec();
+    const p = 1 - this.attackTimer / w.duration;   // 0 -> 1
     const base = this.facingAngle();
 
     // 궤적
@@ -213,7 +281,7 @@ class Player {
 
     // 무기를 부채꼴을 따라 휘두른다
     const a = base - 1.15 + p * 2.3;
-    const sw = SPRITES.sword;
+    const sw = (SPRITES.weapons && SPRITES.weapons[this.weapon]) || SPRITES.sword;
     ctx.save();
     ctx.translate(sx, sy - 1);
     ctx.rotate(a + Math.PI / 2);

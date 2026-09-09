@@ -107,8 +107,10 @@ class Slime {
     this.hp -= damage;
     this.hurtFlash = 0.12;
     this.showHp = 2.5;
-    this.kx = Math.cos(angle) * this.stats.knockback;
-    this.ky = Math.sin(angle) * this.stats.knockback;
+    // 도끼처럼 무거운 무기는 더 멀리 날아간다
+    const knockMult = (player && player.weaponSpec) ? player.weaponSpec().knockMult : 1;
+    this.kx = Math.cos(angle) * this.stats.knockback * knockMult;
+    this.ky = Math.sin(angle) * this.stats.knockback * knockMult;
 
     const pal = SLIME_PALETTES[this.level - 1];
     FX.spray(this.x, this.y, angle, crit ? 12 : 7, [pal.M, pal.n, '#ffffff']);
