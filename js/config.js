@@ -1,14 +1,64 @@
 'use strict';
 
 /* 게임 밸런스 수치는 전부 여기 모아둔다. 다른 파일은 이 값을 읽기만 한다. */
+
+// 몬스터와 무기의 최대 레벨
+const LEVEL_MAX = 23;
+
+/* 23단계나 되는 레벨을 색 5등급으로 묶는다.
+   레벨 숫자를 읽지 않아도 색만 보고 위험도를 가늠할 수 있게 하기 위한 것이다.
+   (1~4 초록 / 5~8 청록 / 9~13 파랑 / 14~18 보라 / 19~23 빨강) */
+const LEVEL_TIER_BREAKS = [4, 8, 13, 18];
+function levelTier(level) {
+  for (let i = 0; i < LEVEL_TIER_BREAKS.length; i++) {
+    if (level <= LEVEL_TIER_BREAKS[i]) return i;
+  }
+  return LEVEL_TIER_BREAKS.length;
+}
+
+/* 레벨별 능력치를 23줄짜리 표로 적는 대신 곡선으로 만든다.
+   base 에서 시작해 레벨이 1 오를 때마다 growth 배씩 커진다.
+   레벨 폭이 넓어졌으므로 한 레벨당 차이는 작게 잡았다. */
+function buildLevels(base, growth, extra) {
+  const out = [];
+  for (let lv = 1; lv <= LEVEL_MAX; lv++) {
+    const k = lv - 1;
+    const s = {};
+    for (const key in base) {
+      const g = growth[key] === undefined ? 1 : growth[key];
+      const v = base[key] * Math.pow(g, k);
+      s[key] = (key === 'scale') ? +v.toFixed(3) : Math.max(1, Math.round(v));
+    }
+    if (extra) Object.assign(s, extra(lv));
+    out.push(s);
+  }
+  return out;
+}
+
+/* 레벨당 증가율 — 세 몬스터가 같은 곡선을 쓰고 시작값만 다르다.
+   체력 +11.5%/레벨, 공격력 +8.5%/레벨 정도로 완만하다.
+   (1레벨 대비 23레벨은 체력 약 11배, 공격력 약 6배) */
+const ENEMY_GROWTH = {
+  hp: 1.115,
+  atk: 1.085,
+  speed: 1.010,       // 너무 빨라지면 도망칠 수 없으므로 아주 조금만
+  detect: 1.012,
+  scale: 1.022,       // 덩치로도 레벨이 보이게
+  xp: 1.115,
+  knockback: 0.988,   // 레벨이 높을수록 덜 밀린다
+};
+
 const CONFIG = {
   // 내부 렌더링 해상도 (CSS로 3배 확대되어 도트가 보인다)
   VIEW_W: 384,
   VIEW_H: 216,
 
   TILE: 16,
-  MAP_W: 80,   // 타일 단위 -> 1280px
-  MAP_H: 60,   // 타일 단위 -> 960px
+  /* 맵 크기. 지역이 셋이므로 넉넉해야 각 지역을 돌아다닐 맛이 난다.
+     나무·수풀 같은 장식 개수와 몬스터 수는 이 크기에 맞춰 자동으로 늘어난다
+     (World.scaled 기준값 80x60=4800타일). */
+  MAP_W: 160,  // 타일 단위 -> 2560px
+  MAP_H: 120,  // 타일 단위 -> 1920px
 
   // 지형 생성 기준값. 노이즈가 이 값을 넘으면 해당 지형이 된다 (0~1)
   world: {
@@ -64,8 +114,6 @@ const CONFIG = {
   /* 무기 3종. 세 무기의 성능은 서로 같다.
      damageMult / cooldown 이 셋 다 정확히 2.5 라서 초당 데미지가 동일하고,
      차이는 "한 방이 무거운가 / 자주 때리는가" 뿐이다.
-     (데미지를 고정값이 아니라 배수로 둔 이유: 고정값이면 플레이어 레벨이 오를수록
-      보너스 비중이 줄어 빠른 무기가 일방적으로 유리해진다.)
      사거리와 판정 각도도 어느 하나가 확실히 낫지 않도록 차이를 좁게 잡았다. */
   weapons: {
     order: ['dagger', 'sword', 'axe'],
@@ -73,9 +121,15 @@ const CONFIG = {
     sword:  { name: 'SWORD',  damageMult: 1.00, cooldown: 0.40, duration: 0.26, hitWindow: [0.04, 0.20], reach: 21, arc: 0.95, knockMult: 1.00 },
     axe:    { name: 'AXE',    damageMult: 1.55, cooldown: 0.62, duration: 0.36, hitWindow: [0.06, 0.28], reach: 23, arc: 1.04, knockMult: 1.55 },
 
-    // 무기 레벨 1~5 — 무기의 위력은 종류가 아니라 오직 이 레벨이 정한다
-    levelMult: [1.00, 1.35, 1.70, 2.05, 2.40],
-    // 레벨별 색 (칼날 색과 이름표에 함께 쓴다)
+    /* 무기 레벨 1~23 — 레벨당 +2.5% 로 아주 완만하다 (L1 x1.00 -> L23 x1.55).
+       이 게임은 무기가 아니라 플레이어 레벨이 중심이므로, 무기는 거들 뿐이다.
+       좋은 무기를 주우면 조금 수월해지지만, 진짜로 강해지는 건 레벨업이다. */
+    levelMult: (function () {
+      const a = [];
+      for (let lv = 1; lv <= LEVEL_MAX; lv++) a.push(+(1 + (lv - 1) * 0.025).toFixed(3));
+      return a;
+    })(),
+    // 칼날 색 — 레벨이 아니라 색 등급(levelTier)으로 고른다
     levelColor: ['#c8d0d8', '#8fe0a8', '#7ec8ff', '#c79ce8', '#ffb35c'],
   },
 
@@ -96,35 +150,63 @@ const CONFIG = {
   },
 
   levelUp: {
-    // n레벨 -> n+1레벨에 필요한 경험치
-    xpNeed: (lv) => Math.round(18 + lv * lv * 6 + lv * 10),
+    /* n레벨 -> n+1레벨에 필요한 경험치.
+       몬스터 레벨 폭이 넓어진 만큼 성장을 빠르게 하려고 요구량을 크게 낮췄다.
+       (Lv5 기준 268 -> 90, Lv10 기준 718 -> 270) */
+    xpNeed: (lv) => Math.round(10 + lv * lv * 2 + lv * 6),
+    /* 레벨업이 이 게임의 성장 축이다. 무기 레벨 배수를 완만하게(x1.55까지) 낮춘 대신
+       레벨당 증가폭을 크게 잡아, 강해지는 체감이 레벨업에서 나오도록 했다.
+       기본 공격력 7에서 시작해 30레벨이면 65 — 약 9배로 늘어난다. */
     hpGain: 8,
-    damageGain: 2,
+    damageGain: 2.0,
   },
 
-  /* 몬스터 등장 규칙 — 종류가 늘어나도 여기만 고치면 된다.
-     레벨 색(초록/청록/파랑/보라/빨강)은 종류가 달라도 같은 규칙이라,
-     색만 보고 "저건 4레벨이구나"를 바로 알 수 있다. */
   spawn: {
-    maxAlive: 22,           // 맵에 동시에 존재하는 몬스터 수
+    maxAlive: 80,           // 맵에 동시에 존재하는 몬스터 수 (맵이 4배가 되어 함께 늘림)
     respawnMin: 2.5,        // 죽은 뒤 다시 등장하기까지 (초)
     respawnMax: 6.0,
     minDistFromPlayer: 78,  // 플레이어 코앞에 튀어나오지 않도록
-    // 레벨 1~5가 뽑힐 상대 확률 (낮은 레벨이 흔하다)
-    levelWeights: [34, 26, 20, 13, 7],
-    // 종류가 뽑힐 상대 확률
-    typeWeights: { slime: 50, mushroom: 26, wolf: 24 },
+    // 어떤 몬스터가 몇 레벨로 나올지는 그 자리의 "지역"이 정한다 (CONFIG.regions)
+  },
+
+  /* 지역 — 세 구역이 삼각형으로 모여 서로 전부 맞닿는다.
+     어느 하나가 다른 하나를 둘러싸지 않고, 각자 자기 구역을 가지면서
+     세 지역이 만나는 지점이 맵 한가운데에 생긴다.
+     삼각형이 놓이는 방향은 맵마다 달라서 매번 다른 배치가 나온다. */
+  regions: {
+    clusterRadius: 0.26, // 맵 중심에서 각 지역 중심까지의 거리 (맵 크기 비율)
+    borderWobble: 11,    // 경계를 울퉁불퉁하게 흔드는 정도 (타일)
+
+    list: [
+      {
+        id: 'edge', name: 'FOREST EDGE', color: '#9be564',
+        // 시작 지역 — 약한 슬라임 위주라 처음 몇 분을 안전하게 익힐 수 있다
+        typeWeights: { slime: 70, wolf: 20, mushroom: 10 },
+        levelMin: 1, levelMax: 6,
+        treeDensity: 1.0, pineChance: 0.10, boulders: 1.0,
+      },
+      {
+        id: 'deep', name: 'DEEP FOREST', color: '#4fb0e0',
+        // 침엽수가 빽빽하고 늑대가 많다 — 돌진을 피하며 싸우는 구간
+        typeWeights: { slime: 30, wolf: 50, mushroom: 20 },
+        levelMin: 7, levelMax: 15,
+        treeDensity: 1.6, pineChance: 0.70, boulders: 1.2,
+      },
+      {
+        id: 'cave', name: 'CAVE MOUTH', color: '#e08a4f',
+        // 돌바닥에 나무가 드물고 버섯이 지천 — 포자를 피해 다니는 구간
+        typeWeights: { slime: 20, wolf: 20, mushroom: 60 },
+        levelMin: 15, levelMax: 23,
+        treeDensity: 0.40, pineChance: 0.35, boulders: 3.0,
+      },
+    ],
   },
 
   slime: {
-    // 레벨별 능력치 — 레벨이 오를수록 단단하고 아프고 빠르고 커진다
-    levels: [
-      { hp: 14, atk: 3,  speed: 21, detect: 62,  scale: 0.78, xp: 6,  knockback: 62 },
-      { hp: 24, atk: 5,  speed: 25, detect: 72,  scale: 0.90, xp: 11, knockback: 56 },
-      { hp: 38, atk: 8,  speed: 29, detect: 84,  scale: 1.00, xp: 18, knockback: 50 },
-      { hp: 56, atk: 12, speed: 33, detect: 98,  scale: 1.14, xp: 28, knockback: 42 },
-      { hp: 80, atk: 17, speed: 38, detect: 116, scale: 1.30, xp: 42, knockback: 34 },
-    ],
+    levels: buildLevels(
+      { hp: 28, atk: 3, speed: 21, detect: 62, scale: 0.78, xp: 6, knockback: 62 },
+      ENEMY_GROWTH
+    ),
     hopCycle: 0.85,         // 한 번 통통 튀는 주기 (초)
     hopMoveRatio: 0.45,     // 주기 중 실제로 이동하는 비율
     contactCooldown: 0.9,   // 같은 슬라임에게 연속으로 맞지 않게
@@ -133,13 +215,15 @@ const CONFIG = {
   /* 버섯 — 제자리에 뿌리내린 포탑. 쫓아오지 않는 대신 포자를 쏜다.
      "다가가서 빨리 없앨까 / 피해서 지나갈까"를 고르게 만드는 몬스터. */
   mushroom: {
-    levels: [
-      { hp: 20,  atk: 4,  detect: 82,  scale: 0.85, xp: 8,  knockback: 26, interval: 2.6, shots: 1 },
-      { hp: 34,  atk: 6,  detect: 92,  scale: 0.95, xp: 14, knockback: 22, interval: 2.4, shots: 1 },
-      { hp: 52,  atk: 9,  detect: 104, scale: 1.05, xp: 22, knockback: 18, interval: 2.2, shots: 3 },
-      { hp: 76,  atk: 13, detect: 116, scale: 1.15, xp: 34, knockback: 15, interval: 2.0, shots: 3 },
-      { hp: 104, atk: 18, detect: 130, scale: 1.28, xp: 50, knockback: 12, interval: 1.8, shots: 5 },
-    ],
+    levels: buildLevels(
+      { hp: 40, atk: 4, detect: 82, scale: 0.85, xp: 8, knockback: 26 },
+      ENEMY_GROWTH,
+      (lv) => ({
+        // 레벨이 오를수록 자주, 여러 발을 쏜다
+        interval: +(2.6 - (lv - 1) / (LEVEL_MAX - 1) * 0.8).toFixed(2),
+        shots: lv < 8 ? 1 : (lv < 16 ? 3 : 5),
+      })
+    ),
     windup: 0.55,           // 쏘기 전 부풀어오르는 예고 시간 — 이때 피할 수 있다
     spread: 0.34,           // 여러 발일 때 퍼지는 각도 (라디안)
     sporeSpeed: 62,
@@ -150,13 +234,14 @@ const CONFIG = {
   /* 늑대 — 빠르게 접근했다가 잠깐 웅크린 뒤 직선으로 돌진한다.
      예고 동작을 보고 피하는 재미를 담당한다. */
   wolf: {
-    levels: [
-      { hp: 12, atk: 5,  speed: 34, detect: 96,  scale: 0.92, xp: 7,  knockback: 70, lunge: 150 },
-      { hp: 20, atk: 8,  speed: 40, detect: 110, scale: 0.98, xp: 13, knockback: 62, lunge: 165 },
-      { hp: 32, atk: 12, speed: 46, detect: 124, scale: 1.04, xp: 21, knockback: 54, lunge: 180 },
-      { hp: 46, atk: 17, speed: 52, detect: 138, scale: 1.10, xp: 32, knockback: 46, lunge: 195 },
-      { hp: 64, atk: 23, speed: 60, detect: 152, scale: 1.18, xp: 48, knockback: 38, lunge: 212 },
-    ],
+    /* 체력이 셋 중 가장 낮다 — 빠르고 세게 때리는 대신 물렁하다.
+       다만 웅크리는 예고를 보기도 전에 죽어버리면 돌진을 피하는 재미가 사라지므로
+       너무 낮게는 잡지 않았다. */
+    levels: buildLevels(
+      { hp: 32, atk: 5, speed: 34, detect: 96, scale: 0.92, xp: 7, knockback: 70 },
+      ENEMY_GROWTH,
+      (lv) => ({ lunge: Math.round(150 + (lv - 1) / (LEVEL_MAX - 1) * 62) })
+    ),
     lungeRange: 52,         // 이 거리 안에 들어오면 돌진 준비
     windup: 0.42,           // 웅크리는 예고 시간
     lungeTime: 0.30,        // 돌진이 이어지는 시간
@@ -171,8 +256,8 @@ const CONFIG = {
 
   items: {
     // 2주차: 슬라임이 떨구는 건 회복 포션 한 종류. 레벨이 높을수록 잘 나온다
-    potionDropChance: [0.10, 0.13, 0.17, 0.22, 0.30], // 슬라임 레벨별 드랍 확률
-    potionDoubleChance: 0.25, // Lv5가 2개를 떨굴 확률
+    potionDropChance: [0.10, 0.13, 0.17, 0.22, 0.30], // 색 등급별 드랍 확률
+    potionDoubleChance: 0.25, // 높은 등급이 2개를 떨굴 확률
     potionHeal: 25,           // 포션 1개 회복량
     potionMax: 5,             // 최대 소지 수 (인벤토리)
     potionStart: 1,           // 게임 시작 지급 수

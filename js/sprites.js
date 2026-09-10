@@ -461,6 +461,52 @@ function makeSandTile(seed) {
   return makeNoiseTile(seed, '#c2a877', '#ad9366', '#d6bd8c');
 }
 
+// 깊은 숲 바닥 — 나무 그늘이 져서 가장자리보다 어둡다
+function makeDarkGrassTile(seed) {
+  const cv = makeNoiseTile(seed, '#2c6431', '#255628', '#35743a');
+  const ctx = cv.getContext('2d');
+  const rng = Util.makeRng(seed + 3);
+  for (let i = 0; i < 3; i++) {   // 풀잎
+    ctx.fillStyle = '#3d8442';
+    ctx.fillRect(Math.floor(rng() * 16), Math.floor(rng() * 14), 1, 2);
+  }
+  for (let i = 0; i < 2; i++) {   // 떨어진 솔잎
+    ctx.fillStyle = '#4a3b22';
+    ctx.fillRect(Math.floor(rng() * 15), Math.floor(rng() * 15), 2, 1);
+  }
+  return cv;
+}
+
+// 동굴 지대 바닥 — 이끼 낀 돌바닥
+function makeStoneTile(seed) {
+  const cv = makeNoiseTile(seed, '#67635d', '#585450', '#787269');
+  const ctx = cv.getContext('2d');
+  const rng = Util.makeRng(seed + 5);
+  for (let i = 0; i < 2; i++) {   // 갈라진 금
+    const x = Math.floor(rng() * 12), y = Math.floor(rng() * 12);
+    ctx.fillStyle = '#484440';
+    ctx.fillRect(x, y, 3, 1);
+    ctx.fillRect(x + 2, y + 1, 2, 1);
+  }
+  for (let i = 0; i < 3; i++) {   // 이끼
+    ctx.fillStyle = '#41703f';
+    ctx.fillRect(Math.floor(rng() * 15), Math.floor(rng() * 15), 2, 1);
+  }
+  return cv;
+}
+
+// 동굴 지대의 흙길은 자갈밭이 된다
+function makeGravelTile(seed) {
+  const cv = makeNoiseTile(seed, '#5a544d', '#4c473f', '#6d675e');
+  const ctx = cv.getContext('2d');
+  const rng = Util.makeRng(seed + 9);
+  for (let i = 0; i < 5; i++) {
+    ctx.fillStyle = rng() < 0.5 ? '#847d72' : '#413c35';
+    ctx.fillRect(Math.floor(rng() * 14), Math.floor(rng() * 14), 2, 2);
+  }
+  return cv;
+}
+
 function makeWaterTile(seed) {
   const cv = makeNoiseTile(seed, '#2f6f9e', '#27618c', '#3a80b0');
   const ctx = cv.getContext('2d');
@@ -615,6 +661,40 @@ function makeGrassTuft(seed, lean) {
   return cv;
 }
 
+/* 동굴 입구 — 동굴 지대의 이정표. 미니맵에도 표시된다.
+   지금은 들어갈 수 없는 장식이지만, 나중에 보스방 입구로 쓸 자리다. */
+function makeCaveEntrance(seed) {
+  const cv = makeCanvas(38, 34), ctx = cv.getContext('2d');
+  const rng = Util.makeRng(seed);
+  const OUT = '#1d1a17', ROCK = '#6a655e', LIT = '#857f75', DARK = '#4b4740';
+
+  // 바위 덩어리를 겹쳐 아치를 만든다
+  const blobs = [[19, 20, 17], [8, 24, 10], [30, 24, 10], [19, 12, 12]];
+  for (const b of blobs) fillCircle(ctx, b[0], b[1], b[2] + 1, OUT);
+  for (const b of blobs) fillCircle(ctx, b[0], b[1], b[2], ROCK);
+  for (const b of blobs) fillCircle(ctx, b[0] - 2, b[1] - 3, b[2] - 4, LIT);
+
+  // 아래를 평평하게 잘라 땅에 붙은 것처럼 보이게 한다
+  ctx.clearRect(0, 31, 38, 3);
+
+  // 입구 — 안쪽으로 갈수록 완전히 검어진다
+  fillCircle(ctx, 19, 24, 10, DARK);
+  fillCircle(ctx, 19, 25, 8.5, '#241f1b');
+  fillCircle(ctx, 19, 26, 7, '#0d0b0a');
+  ctx.fillStyle = '#0d0b0a';
+  ctx.fillRect(12, 24, 15, 7);
+
+  // 질감 얼룩
+  for (let i = 0; i < 40; i++) {
+    const x = 2 + Math.floor(rng() * 34), y = 2 + Math.floor(rng() * 26);
+    const px = ctx.getImageData(x, y, 1, 1).data;
+    if (px[3] === 0 || (px[0] < 60 && px[1] < 60)) continue;   // 입구 안쪽은 건드리지 않는다
+    ctx.fillStyle = rng() < 0.5 ? LIT : DARK;
+    ctx.fillRect(x, y, 1, 1);
+  }
+  return cv;
+}
+
 function makeLilyPad(seed) {
   const cv = makeCanvas(11, 9), ctx = cv.getContext('2d');
   fillCircle(ctx, 5.5, 4.5, 4.5, '#1d5a2c');
@@ -715,6 +795,17 @@ function buildSprites() {
   SPRITES.dirt = [0, 1, 2, 3].map(i => makeDirtTile(2000 + i * 811));
   SPRITES.sand = [0, 1, 2].map(i => makeSandTile(3000 + i * 733));
   SPRITES.water = [0, 1, 2, 3].map(i => makeWaterTile(4000 + i * 659));
+  SPRITES.darkGrass = [0, 1, 2, 3].map(i => makeDarkGrassTile(5000 + i * 613));
+  SPRITES.stone = [0, 1, 2, 3].map(i => makeStoneTile(6000 + i * 571));
+  SPRITES.gravel = [0, 1, 2].map(i => makeGravelTile(7000 + i * 487));
+
+  /* 지역별 바닥 타일 묶음 — [숲 가장자리, 깊은 숲, 동굴 지대] 순서.
+     같은 "풀"이라도 어느 지역이냐에 따라 밝은 잔디 / 그늘진 잔디 / 돌바닥이 된다. */
+  SPRITES.regionGround = [
+    { grass: SPRITES.grass, dirt: SPRITES.dirt, meadow: SPRITES.grass },
+    { grass: SPRITES.darkGrass, dirt: SPRITES.dirt, meadow: SPRITES.darkGrass },
+    { grass: SPRITES.stone, dirt: SPRITES.gravel, meadow: SPRITES.stone },
+  ];
 
   // 나무 — 활엽수 / 침엽수 / 고사목
   SPRITES.tree = [0, 1, 2, 3].map(i => makeTree(31 + i * 613));
@@ -728,6 +819,7 @@ function buildSprites() {
   SPRITES.stump = [makeStump(401)];
   SPRITES.log = [0, 1].map(i => makeLog(503 + i * 197));
   SPRITES.cattail = [0, 1].map(i => makeCattail(601 + i * 173));
+  SPRITES.caveEntrance = [0, 1].map(i => makeCaveEntrance(907 + i * 233));
   SPRITES.lilyPad = [0, 1].map(i => makeLilyPad(701 + i * 149));
   SPRITES.flower = ['#e8d15a', '#e56b7a', '#c79ce8', '#f0f0f0'].map(makeFlower);
 

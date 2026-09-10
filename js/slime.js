@@ -66,7 +66,7 @@ class Slime extends Enemy {
     const shadowScale = 1 - (-yOff / (6 * this.scale)) * 0.35;
     this.drawShadow(ctx, sx, sy, 5.5 * this.scale * shadowScale);
 
-    const sprite = this.hurtFlash > 0 ? SPRITES.slimeFlash[this.level - 1] : SPRITES.slime[this.level - 1];
+    const sprite = this.hurtFlash > 0 ? SPRITES.slimeFlash[levelTier(this.level)] : SPRITES.slime[levelTier(this.level)];
     ctx.drawImage(sprite, sx - Math.round(w / 2), Math.round(sy + yOff + 7 - h), w, h);
 
     this.drawLabel(ctx, sx, Math.round(sy + yOff - h + 4));

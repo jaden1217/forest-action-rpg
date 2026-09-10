@@ -60,14 +60,14 @@ const Projectiles = {
   },
 
   burst(p) {
-    const pal = LEVEL_PALETTES[p.level - 1];
+    const pal = LEVEL_PALETTES[levelTier(p.level)];
     FX.burst(p.x, p.y, 6, [pal.M, pal.n, '#ffffff'], { speed: 34, life: 0.28, gravity: 20, size: 1 });
   },
 
   draw(ctx, cam) {
     for (const p of this.list) {
       const sx = Math.round(p.x - cam.x), sy = Math.round(p.y - cam.y);
-      const sprite = SPRITES.spore[p.level - 1];
+      const sprite = SPRITES.spore[levelTier(p.level)];
       // 사라지기 직전에는 깜빡여서 곧 없어짐을 알린다
       if (p.life < 0.3 && Math.floor(p.life * 24) % 2 === 0) continue;
       // 살짝 위아래로 흔들리며 날아간다

@@ -14,14 +14,15 @@ const Minimap = {
   VIEW_W: 50,   // 구석 미니맵이 보여주는 타일 수
   VIEW_H: 38,
 
-  // 타일 종류별 색 (TILE_GRASS, TILE_DIRT, TILE_SAND, TILE_WATER, TILE_MEADOW 순서)
+  /* 타일 색 — [지역][타일종류]. 지역마다 바닥색이 달라서
+     지도만 봐도 "여기부터 깊은 숲, 저기부터 동굴 지대"가 바로 보인다.
+     (TILE_GRASS, TILE_DIRT, TILE_SAND, TILE_WATER, TILE_MEADOW 순서) */
   TILE_RGB: [
-    [63, 139, 64],
-    [125, 95, 60],
-    [194, 168, 119],
-    [47, 111, 158],
-    [86, 163, 90],
+    [[63, 139, 64], [125, 95, 60], [194, 168, 119], [47, 111, 158], [86, 163, 90]],
+    [[44, 100, 49], [110, 84, 53], [194, 168, 119], [47, 111, 158], [52, 112, 57]],
+    [[103, 99, 93], [90, 84, 77], [194, 168, 119], [47, 111, 158], [110, 106, 99]],
   ],
+  TREE_RGB: ['#1f5a2a', '#173f1f', '#3d4a3a'],
 
   build() {
     const W = CONFIG.MAP_W, H = CONFIG.MAP_H;
@@ -31,7 +32,8 @@ const Minimap = {
 
     const img = ctx.createImageData(W, H);
     for (let i = 0; i < W * H; i++) {
-      const c = this.TILE_RGB[World.tiles[i]] || this.TILE_RGB[0];
+      const byRegion = this.TILE_RGB[World.regions[i]] || this.TILE_RGB[0];
+      const c = byRegion[World.tiles[i]] || byRegion[0];
       img.data[i * 4] = c[0];
       img.data[i * 4 + 1] = c[1];
       img.data[i * 4 + 2] = c[2];
@@ -40,9 +42,19 @@ const Minimap = {
     ctx.putImageData(img, 0, 0);
 
     // 나무를 어두운 점으로 찍으면 숲이 빽빽한 곳이 한눈에 보인다
-    ctx.fillStyle = '#1f5a2a';
     for (const p of World.props) {
       if (!p.tree) continue;
+      const tx = Math.floor(p.x / CONFIG.TILE), ty = Math.floor(p.y / CONFIG.TILE);
+      ctx.fillStyle = this.TREE_RGB[World.regions[ty * W + tx]] || this.TREE_RGB[0];
+      ctx.fillRect(tx, ty, 1, 1);
+    }
+
+    // 동굴 입구는 이정표라 눈에 띄게 찍는다
+    for (const p of World.props) {
+      if (!p.landmark) continue;
+      ctx.fillStyle = '#e08a4f';
+      ctx.fillRect(Math.floor(p.x / CONFIG.TILE) - 1, Math.floor(p.y / CONFIG.TILE) - 1, 3, 3);
+      ctx.fillStyle = '#1d1a17';
       ctx.fillRect(Math.floor(p.x / CONFIG.TILE), Math.floor(p.y / CONFIG.TILE), 1, 1);
     }
   },
@@ -65,13 +77,21 @@ const Minimap = {
     ctx.globalAlpha = 1;
 
     this.drawDots(ctx, x, y, sx, sy, bw, bh, 1, player, enemies);
+
+    // 지금 서 있는 지역 이름을 지도 위에 붙여둔다
+    const spec = World.regionSpec(player.x, player.y);
+    if (spec) UI.drawText(ctx, spec.name, x + bw - UI.textWidth(spec.name), y - 7, spec.color, false);
   },
 
   /* ── 전체 지도 ─────────────────────────────────────────── */
 
   drawFull(ctx, player, enemies) {
     if (!this.canvas) return;
-    const scale = 2;
+    // 맵이 커져도 화면 안에 들어오도록 배율을 맞춘다 (도트가 뭉개지지 않게 정수 배율만)
+    const scale = Math.max(1, Math.floor(Math.min(
+      (CONFIG.VIEW_W - 36) / this.W,
+      (CONFIG.VIEW_H - 40) / this.H
+    )));
     const w = this.W * scale, h = this.H * scale;
     const x = Math.round((CONFIG.VIEW_W - w) / 2), y = Math.round((CONFIG.VIEW_H - h) / 2);
 
@@ -104,7 +124,7 @@ const Minimap = {
     }
     for (const s of enemies) {
       if (s.dead) continue;
-      put(s.x, s.y, LEVEL_PALETTES[s.level - 1].M, 1);
+      put(s.x, s.y, LEVEL_PALETTES[levelTier(s.level)].M, 1);
     }
 
     // 플레이어는 깜빡이는 십자로 그려서 점들 사이에서도 바로 찾을 수 있다

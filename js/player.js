@@ -143,7 +143,7 @@ class Player {
 
   // 무기 레벨 색 — HUD·바닥 이름표에 함께 쓴다
   weaponColor() {
-    return CONFIG.weapons.levelColor[this.weaponLevel - 1] || '#ffffff';
+    return CONFIG.weapons.levelColor[levelTier(this.weaponLevel)] || '#ffffff';
   }
 
   weaponLabel() {
@@ -417,7 +417,7 @@ class Player {
     // 무기를 부채꼴을 따라 휘두른다
     const a = base - 1.15 + p * 2.3;
     const set = SPRITES.weapons && SPRITES.weapons[this.weapon];
-    const sw = (set && set[this.weaponLevel - 1]) || SPRITES.sword;
+    const sw = (set && set[levelTier(this.weaponLevel)]) || SPRITES.sword;
     ctx.save();
     ctx.translate(sx, sy - 1);
     ctx.rotate(a + Math.PI / 2);

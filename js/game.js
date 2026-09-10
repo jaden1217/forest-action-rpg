@@ -15,6 +15,8 @@ const Game = {
   showMap: false,
   confirmNewGame: false,
   savedFlash: 0,     // 방금 저장했음을 알리는 표시가 남는 시간
+  currentRegion: -1, // 지금 서 있는 지역
+  regionBanner: 0,   // 새 지역에 들어섰음을 알리는 표시가 남는 시간
 
   init() {
     this.canvas = document.getElementById('game');
@@ -49,8 +51,12 @@ const Game = {
     this.savedFlash = 0;
     Save.timer = Save.interval;
 
-    this.player = new Player(World.w / 2, World.h / 2);
+    // 시작 지점은 숲 가장자리 한복판 (맵마다 위치가 다르다)
+    this.player = new Player(World.startX, World.startY);
     if (saved) Save.apply(saved, this.player);
+    // 시작하자마자 배너가 뜨지 않도록 지금 지역을 기준으로 잡아둔다
+    this.currentRegion = World.regionAt(this.player.x, this.player.y);
+    this.regionBanner = 0;
 
     this.enemies = [];
     this.respawnQueue = [];
@@ -66,25 +72,29 @@ const Game = {
     wolf: (x, y, lv) => new Wolf(x, y, lv),
   },
 
-  // ── 몬스터를 맵 아무 데나, 플레이어와 충분히 떨어진 빈 자리에 놓는다
+  /* ── 몬스터를 맵 아무 데나, 플레이어와 충분히 떨어진 빈 자리에 놓는다.
+     종류와 레벨은 "그 자리가 어느 지역인가"가 정한다 — 숲 가장자리는 약한 슬라임,
+     깊은 숲은 늑대, 동굴 지대는 고레벨 버섯이 나온다. */
   spawnEnemy() {
     const cs = CONFIG.spawn;
-    const level = Util.weightedIndex(cs.levelWeights) + 1;
-
-    // 종류를 가중치로 고른다
-    const names = Object.keys(cs.typeWeights);
-    const type = names[Util.weightedIndex(names.map(n => cs.typeWeights[n]))];
-    const make = this.ENEMY_TYPES[type] || this.ENEMY_TYPES.slime;
 
     for (let attempt = 0; attempt < 60; attempt++) {
       const x = Util.rand(30, World.w - 30);
       const y = Util.rand(60, World.h - 30);
       if (!World.isFreeSpot(x, y, 9)) continue;
       if (Util.dist(x, y, this.player.x, this.player.y) < cs.minDistFromPlayer) continue;
+
+      const spec = World.regionSpec(x, y);
+      // 레벨은 그 지역의 범위 안에서 고르게 뽑는다 (가장자리 1~6 / 깊은 숲 7~15 / 동굴 15~23)
+      const level = Util.randInt(spec.levelMin, spec.levelMax);
+      const names = Object.keys(spec.typeWeights);
+      const type = names[Util.weightedIndex(names.map(n => spec.typeWeights[n]))];
+      const make = this.ENEMY_TYPES[type] || this.ENEMY_TYPES.slime;
+
       const e = make(x, y, level);
       this.enemies.push(e);
       // 등장 연출
-      const pal = LEVEL_PALETTES[level - 1];
+      const pal = LEVEL_PALETTES[levelTier(level)];
       FX.burst(x, y, 8, [pal.M, pal.n], { speed: 30, life: 0.35, gravity: 40 });
       return e;
     }
@@ -173,6 +183,14 @@ const Game = {
           this.updateCamera(false);
           World.update(dt);
           Ambient.update(dt, this.cam);
+
+          // 지역을 넘어서면 이름을 잠깐 띄운다
+          const region = World.regionAt(this.player.x, this.player.y);
+          if (region !== this.currentRegion) {
+            this.currentRegion = region;
+            this.regionBanner = 2.4;
+          }
+          this.regionBanner = Math.max(0, this.regionBanner - dt);
         }
         FX.update(dt);
       }
@@ -241,6 +259,7 @@ const Game = {
     if (!this.showMap) Minimap.drawCorner(ctx, this.player, this.enemies);
     UI.draw(ctx, this.player, this.showInventory);
     if (this.showMap) Minimap.drawFull(ctx, this.player, this.enemies);
+    if (this.regionBanner > 0 && !this.showMap) UI.drawRegionBanner(ctx, this.currentRegion, this.regionBanner);
     if (this.confirmNewGame) UI.drawConfirm(ctx);
     if (this.savedFlash > 0) UI.drawSaved(ctx);
   },

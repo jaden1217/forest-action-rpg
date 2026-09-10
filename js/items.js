@@ -17,16 +17,17 @@ const Items = {
     this.nearWeapon = null;
   },
 
-  // 슬라임이 죽으면 호출 — 포션과 무기를 각각 확률로 떨군다
-  dropFor(slime) {
+  // 몬스터가 죽으면 호출 — 포션과 무기를 각각 확률로 떨군다.
+  // 포션 확률은 레벨이 아니라 색 등급(5단계)으로 본다 — 레벨은 23까지 올라가기 때문이다.
+  dropFor(enemy) {
     const cfg = CONFIG.items;
-    const chance = cfg.potionDropChance[slime.level - 1];
-    if (Math.random() < chance) {
+    const tier = levelTier(enemy.level);
+    if (Math.random() < cfg.potionDropChance[tier]) {
       let amount = 1;
-      if (slime.level >= 5 && Math.random() < cfg.potionDoubleChance) amount = 2;
-      this.spawn(slime.x, slime.y, amount);
+      if (tier >= 4 && Math.random() < cfg.potionDoubleChance) amount = 2;
+      this.spawn(enemy.x, enemy.y, amount);
     }
-    this.dropWeaponFor(slime);
+    this.dropWeaponFor(enemy);
   },
 
   /* 무기 드랍 규칙
@@ -182,9 +183,9 @@ const Items = {
 
     if (d.kind === 'weapon') {
       const spec = CONFIG.weapons[d.weapon];
-      const color = CONFIG.weapons.levelColor[d.level - 1] || '#ffffff';
+      const color = CONFIG.weapons.levelColor[levelTier(d.level)] || '#ffffff';
       const set = SPRITES.weapons && SPRITES.weapons[d.weapon];
-      const sp = set && set[d.level - 1];
+      const sp = set && set[levelTier(d.level)];
       fillCircle(ctx, sx, sy + 5, 5, 'rgba(0,0,0,0.28)');
       if (sp) ctx.drawImage(sp, sx - Math.floor(sp.width / 2), sy - 8 + bob);
       // 어떤 무기가 몇 레벨인지 바닥에서도 바로 보인다

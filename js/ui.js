@@ -143,7 +143,7 @@ const UI = {
     // ── 장착 무기 HUD (종류 + 레벨)
     if (player.weaponSpec) {
       const set = typeof SPRITES !== 'undefined' && SPRITES.weapons && SPRITES.weapons[player.weapon];
-      const icon = set && set[player.weaponLevel - 1];
+      const icon = set && set[levelTier(player.weaponLevel)];
       if (icon) ctx.drawImage(icon, 8, 58);
       this.drawText(ctx, player.weaponLabel(), 23, 62, player.weaponColor());
     }
@@ -186,7 +186,7 @@ const UI = {
     if (player.weaponSpec) {
       const spec = player.weaponSpec();
       const set = typeof SPRITES !== 'undefined' && SPRITES.weapons && SPRITES.weapons[player.weapon];
-      const icon = set && set[player.weaponLevel - 1];
+      const icon = set && set[levelTier(player.weaponLevel)];
       if (icon) ctx.drawImage(icon, x + 14, y + 46);
       this.drawText(ctx, player.weaponLabel(), x + 30, y + 48, player.weaponColor());
       this.drawText(ctx, 'DMG ' + player.attackDamage() + ' RNG ' + spec.reach, x + 30, y + 57, '#f0d9b5');
@@ -196,6 +196,23 @@ const UI = {
     this.drawText(ctx, 'E DRINK POTION', x + 14, y + 82, '#f0d9b5');
     this.drawText(ctx, 'F ON WEAPON TO SWAP', x + 14, y + 91, '#7fa86a');
     this.drawText(ctx, 'PAUSED - I TO CLOSE', x + 14, y + 100, '#7fa86a');
+  },
+
+  /* 새 지역에 들어섰을 때 잠깐 뜨는 이름표.
+     끝날 때 깜빡이며 사라져서 화면에 계속 남아 있지 않다. */
+  drawRegionBanner(ctx, regionId, timeLeft) {
+    const spec = CONFIG.regions.list[regionId];
+    if (!spec) return;
+    if (timeLeft < 0.6 && Math.floor(timeLeft * 12) % 2 === 0) return;
+
+    const w = this.textWidth(spec.name) + 14;
+    const x = Math.round((CONFIG.VIEW_W - w) / 2), y = 26;
+    ctx.fillStyle = 'rgba(10,12,10,0.72)';
+    ctx.fillRect(x, y, w, 13);
+    ctx.fillStyle = spec.color;
+    ctx.fillRect(x, y, w, 1);
+    ctx.fillRect(x, y + 12, w, 1);
+    this.drawText(ctx, spec.name, CONFIG.VIEW_W / 2, y + 4, spec.color, true);
   },
 
   // 자동 저장 직후 잠깐 뜨는 표시

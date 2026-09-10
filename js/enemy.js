@@ -33,7 +33,7 @@ class Enemy {
   }
 
   get palette() {
-    return LEVEL_PALETTES[this.level - 1];
+    return LEVEL_PALETTES[levelTier(this.level)];
   }
 
   get hurtBox() {
