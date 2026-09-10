@@ -749,10 +749,11 @@ function makeHeavySlashFrame(angle, t) {
 
 // 회전베기 — 플레이어를 둘러싸고 퍼져나가는 고리
 function makeSpinRing(t) {
-  const S = 76, cv = makeCanvas(S, S), ctx = cv.getContext('2d');
+  // 판정 반경(무기 사거리 21 + 보너스 22 = 약 43)에 맞춰 고리를 그린다
+  const S = 100, cv = makeCanvas(S, S), ctx = cv.getContext('2d');
   const cx = S / 2, cy = S / 2;
-  const r = 15 + t * 17;
-  const thick = 3.2 - t * 1.6;
+  const r = 20 + t * 23;
+  const thick = 3.4 - t * 1.6;
   for (let y = 0; y < S; y++) {
     for (let x = 0; x < S; x++) {
       const dx = x + 0.5 - cx, dy = y + 0.5 - cy;

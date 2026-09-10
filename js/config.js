@@ -16,6 +16,9 @@ function levelTier(level) {
   return LEVEL_TIER_BREAKS.length;
 }
 
+// 몬스터가 주는 경험치 전체 배수 — 성장 속도를 한 곳에서 조절한다
+const ENEMY_XP_MULT = 0.7;
+
 /* 레벨별 능력치를 23줄짜리 표로 적는 대신 곡선으로 만든다.
    base 에서 시작해 레벨이 1 오를 때마다 growth 배씩 커진다.
    레벨 폭이 넓어졌으므로 한 레벨당 차이는 작게 잡았다. */
@@ -26,7 +29,8 @@ function buildLevels(base, growth, extra) {
     const s = {};
     for (const key in base) {
       const g = growth[key] === undefined ? 1 : growth[key];
-      const v = base[key] * Math.pow(g, k);
+      let v = base[key] * Math.pow(g, k);
+      if (key === 'xp') v *= ENEMY_XP_MULT;
       s[key] = (key === 'scale') ? +v.toFixed(3) : Math.max(1, Math.round(v));
     }
     if (extra) Object.assign(s, extra(lv));
@@ -135,7 +139,7 @@ const CONFIG = {
         cooldown: 10.5,
         damageMult: 1.5,
         arc: Math.PI,        // 360도 — 둘러싸였을 때 빠져나오는 기술
-        reachBonus: 10,
+        reachBonus: 22,      // 평타 사거리(21)의 두 배 가까이 — 넓게 쓸어낸다
         duration: 0.55,
         hitWindow: [0.08, 0.48],
         hitInterval: 0.17,   // 도는 동안 이 간격으로 다시 맞는다
@@ -226,14 +230,14 @@ const CONFIG = {
       {
         id: 'deep', name: 'DEEP FOREST', color: '#4fb0e0',
         // 침엽수가 빽빽하고 늑대가 많다 — 돌진을 피하며 싸우는 구간
-        typeWeights: { slime: 30, wolf: 50, mushroom: 20 },
+        typeWeights: { wolf: 70, slime: 20, mushroom: 10 },
         levelMin: 7, levelMax: 15,
         treeDensity: 1.6, pineChance: 0.70, boulders: 1.2,
       },
       {
         id: 'cave', name: 'CAVE MOUTH', color: '#e08a4f',
         // 돌바닥에 나무가 드물고 버섯이 지천 — 포자를 피해 다니는 구간
-        typeWeights: { slime: 20, wolf: 20, mushroom: 60 },
+        typeWeights: { mushroom: 70, wolf: 20, slime: 10 },
         levelMin: 15, levelMax: 23,
         treeDensity: 0.40, pineChance: 0.35, boulders: 3.0,
       },
@@ -296,9 +300,9 @@ const CONFIG = {
     // 2주차: 슬라임이 떨구는 건 회복 포션 한 종류. 레벨이 높을수록 잘 나온다
     potionDropChance: [0.10, 0.13, 0.17, 0.22, 0.30], // 색 등급별 드랍 확률
     potionDoubleChance: 0.25, // 높은 등급이 2개를 떨굴 확률
-    potionHeal: 25,           // 포션 1개 회복량
-    potionMax: 5,             // 최대 소지 수 (인벤토리)
-    potionStart: 1,           // 게임 시작 지급 수
+    potionHeal: 30,           // 포션 1개 회복량
+    potionMax: 10,             // 최대 소지 수 (인벤토리)
+    potionStart: 3,           // 게임 시작 지급 수
     potionCooldown: 0.5,      // 연속 마시기 방지
     pickupRadius: 11,         // 이 거리 안이면 자동 줍기
     magnetRadius: 30,         // 이 거리 안이면 포션이 끌려온다

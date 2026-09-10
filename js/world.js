@@ -434,16 +434,17 @@ const World = {
       this.addProp(Util.choice(SPRITES.boulder), s.x, s.y, { solid: [7, 4, 6], footHeight: 3 });
     }
 
-    // 동굴 입구 — 동굴 지대의 이정표. 미니맵에도 따로 찍힌다
-    let caves = 0;
-    for (let i = 0, n = this.scaled(400), want = this.scaled(5); i < n && caves < want; i++) {
-      const s = spot();
-      if (!s) continue;
-      if (this.regionAt(s.x, s.y) !== REGION_CAVE) continue;
-      if (!this.isFreeSpot(s.x, s.y, 22)) continue;
-      const p = this.addProp(Util.choice(SPRITES.caveEntrance), s.x, s.y, { solid: [12, 6, 9], footHeight: 3 });
-      p.landmark = true;
-      caves++;
+    /* 동굴 입구 — 지역마다 딱 하나씩, 그 지역 안 아무 데나 세운다.
+       흔하면 이정표 구실을 못 하므로 희소하게 두었다. 미니맵에 따로 찍힌다. */
+    for (let region = 0; region < CONFIG.regions.list.length; region++) {
+      for (let i = 0; i < 600; i++) {
+        const x = 40 + rng() * (this.w - 80), y = 50 + rng() * (this.h - 90);
+        if (this.regionAt(x, y) !== region) continue;
+        if (!this.isFreeSpot(x, y, 22)) continue;
+        const p = this.addProp(Util.choice(SPRITES.caveEntrance), x, y, { solid: [12, 6, 9], footHeight: 3 });
+        p.landmark = true;
+        break;
+      }
     }
     for (let i = 0, n = this.scaled(22); i < n; i++) {   // 그루터기 — 부딪힌다
       const s = spot();
