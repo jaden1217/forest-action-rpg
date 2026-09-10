@@ -157,6 +157,9 @@ const UI = {
 
     if (showInventory) this.drawInventory(ctx, player);
 
+    // ── 스킬 바 (화면 아래 가운데)
+    if (player.skillCooldowns) this.drawSkillBar(ctx, player);
+
     // ── 사망 안내
     if (player.dead) {
       ctx.fillStyle = 'rgba(20,8,8,0.55)';
@@ -196,6 +199,49 @@ const UI = {
     this.drawText(ctx, 'E DRINK POTION', x + 14, y + 82, '#f0d9b5');
     this.drawText(ctx, 'F ON WEAPON TO SWAP', x + 14, y + 91, '#7fa86a');
     this.drawText(ctx, 'PAUSED - I TO CLOSE', x + 14, y + 100, '#7fa86a');
+  },
+
+  /* 스킬 칸 — 키, 이름, 쿨다운, 잠김 여부를 한 자리에서 보여준다.
+     쿨다운은 칸이 아래에서 위로 밝아지며 차오른다. */
+  drawSkillBar(ctx, player) {
+    const list = CONFIG.skills.list;
+    const slotW = 26, slotH = 16, gap = 5;
+    const total = list.length * slotW + (list.length - 1) * gap;
+    let x = Math.round((CONFIG.VIEW_W - total) / 2);
+    const y = CONFIG.VIEW_H - 21;
+
+    for (const spec of list) {
+      const locked = player.level < spec.unlockLevel;
+      const cd = player.skillCooldowns[spec.id] || 0;
+      const ready = !locked && cd <= 0;
+
+      ctx.fillStyle = '#17110d';
+      ctx.fillRect(x - 1, y - 1, slotW + 2, slotH + 2);
+      ctx.fillStyle = locked ? '#1d211b' : '#252c22';
+      ctx.fillRect(x, y, slotW, slotH);
+
+      // 쿨다운이 도는 동안에는 아래쪽부터 차오른다
+      if (cd > 0) {
+        const filled = Math.round(slotH * (1 - cd / spec.cooldown));
+        ctx.fillStyle = '#38452f';
+        ctx.fillRect(x, y + slotH - filled, slotW, filled);
+      }
+
+      if (locked) {
+        this.drawText(ctx, spec.key, x + 2, y + 2, '#5f6b59');
+        this.drawText(ctx, 'LV' + spec.unlockLevel, x + 2, y + 9, '#5f6b59');
+      } else {
+        const color = ready ? spec.color : '#96a08d';
+        this.drawText(ctx, spec.key, x + 2, y + 2, color);
+        this.drawText(ctx, spec.name, x + 2, y + 9, color);
+        // 쓸 수 있게 되면 테두리가 켜진다
+        if (ready) {
+          ctx.strokeStyle = spec.color;
+          ctx.strokeRect(x + 0.5, y + 0.5, slotW - 1, slotH - 1);
+        }
+      }
+      x += slotW + gap;
+    }
   },
 
   /* 새 지역에 들어섰을 때 잠깐 뜨는 이름표.

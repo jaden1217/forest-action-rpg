@@ -52,6 +52,102 @@ class Player {
     this.dashQueued = 0;       // 대시 입력 버퍼
     this.dashIFrames = 0;      // 대시 무적 (피격 무적과 달리 깜빡이지 않는다)
     this.trail = [];           // 대시 잔상
+
+    // 스킬 (강공격 / 회전베기)
+    this.skillCooldowns = {};  // 스킬 id -> 남은 쿨다운
+    this.activeSkill = null;   // 지금 쓰는 중인 스킬 id
+    this.skillTimer = 0;
+    this.skillHitIds = new Set();
+    this.skillHitTimer = 0;    // 회전베기처럼 여러 번 맞히는 스킬용
+    this.skillQueued = null;   // 스킬 입력 버퍼
+    this.skillQueueTime = 0;
+    this.lockedHint = 0;       // 잠긴 스킬 안내 스팸 방지
+    this.spinAngle = 0;        // 회전베기 연출용
+  }
+
+  skillSpec(id) {
+    return CONFIG.skills.list.find(s => s.id === id);
+  }
+
+  /* 스킬 — 쿨다운을 돌리고, 쓰는 중이면 판정을 굴리고, 입력이 있으면 새로 발동한다.
+     위력은 평타 데미지에 배수를 곱해 정하므로 레벨이 오르면 스킬도 세진다. */
+  updateSkills(dt, enemies) {
+    for (const spec of CONFIG.skills.list) {
+      if (this.skillCooldowns[spec.id] > 0) {
+        this.skillCooldowns[spec.id] = Math.max(0, this.skillCooldowns[spec.id] - dt);
+      }
+    }
+    this.lockedHint = Math.max(0, this.lockedHint - dt);
+    this.skillQueueTime = Math.max(0, this.skillQueueTime - dt);
+    if (this.skillQueueTime <= 0) this.skillQueued = null;
+
+    // ── 쓰는 중
+    if (this.activeSkill) {
+      const spec = this.skillSpec(this.activeSkill);
+      const elapsed = spec.duration - this.skillTimer;
+
+      if (spec.id === 'spin') this.spinAngle += dt * 20;
+
+      // 강공격은 휘두르며 앞으로 밀고 나간다
+      if (spec.lunge && elapsed < 0.18) {
+        this.moveWithCollision(
+          Math.cos(this.swingAngle) * spec.lunge * dt,
+          Math.sin(this.swingAngle) * spec.lunge * dt
+        );
+      }
+
+      if (elapsed >= spec.hitWindow[0] && elapsed <= spec.hitWindow[1]) {
+        // 회전베기는 일정 간격마다 판정을 새로 열어 여러 번 맞힌다
+        if (spec.hitInterval) {
+          this.skillHitTimer -= dt;
+          if (this.skillHitTimer <= 0) {
+            this.skillHitIds.clear();
+            this.skillHitTimer = spec.hitInterval;
+          }
+        }
+        this.resolveHits(enemies, {
+          ids: this.skillHitIds,
+          reachBonus: spec.reachBonus,
+          arc: spec.arc,
+          damageMult: spec.damageMult,
+          knockMult: spec.knockMult,
+        });
+      }
+
+      this.skillTimer -= dt;
+      if (this.skillTimer <= 0) this.activeSkill = null;
+      return;
+    }
+
+    // ── 새로 발동
+    if (!this.skillQueued) return;
+    if (this.dashTimer > 0 || this.attackTimer > 0) return;   // 다른 동작 중이면 기다린다
+
+    const spec = this.skillSpec(this.skillQueued);
+    if (!spec) { this.skillQueued = null; return; }
+
+    if (this.level < spec.unlockLevel) {
+      if (this.lockedHint <= 0) {
+        FX.number(this.x, this.y - 22, 'LV' + spec.unlockLevel, '#8f9aa8');
+        this.lockedHint = 0.8;
+      }
+      this.skillQueued = null;
+      return;
+    }
+    if (this.skillCooldowns[spec.id] > 0) return;   // 쿨다운이 풀리면 버퍼로 바로 나간다
+
+    this.skillQueued = null;
+    this.activeSkill = spec.id;
+    this.skillTimer = spec.duration;
+    this.skillHitIds = new Set();
+    this.skillHitTimer = 0;
+    this.skillCooldowns[spec.id] = spec.cooldown;
+    this.swingAngle = this.aim;
+    this.spinAngle = 0;
+    this.attackTimer = 0;
+    this.cooldown = Math.max(this.cooldown, spec.duration);   // 스킬 직후 평타가 바로 안 나가게
+    FX.addShake(spec.shake);
+    FX.burst(this.x, this.y, 12, [spec.color, '#ffffff'], { speed: 55, life: 0.4, gravity: 30 });
   }
 
   /* 대시 — 충전을 하나 쓰고 짧게 미끄러진다.
@@ -83,7 +179,9 @@ class Player {
     this.dashGap = d.gap;
     this.dashQueued = 0;
     this.dashIFrames = d.invuln;
-    this.attackTimer = 0;      // 대시하면 휘두르던 동작은 끊긴다
+    // 대시하면 휘두르던 동작도 쓰던 스킬도 끊긴다 (빠져나가는 수단이므로)
+    this.attackTimer = 0;
+    this.activeSkill = null;
     this.kx = this.ky = 0;
     FX.burst(this.x, this.y + 4, 10, ['#cbd8e8', '#ffffff'], { speed: 42, life: 0.3, gravity: 18, size: 1 });
   }
@@ -95,6 +193,8 @@ class Player {
     if (Input.attackPressed()) this.attackBuffer = CONFIG.player.attackBuffer;
     if (Input.potionPressed()) this.potionQueued = true;
     if (Input.dashPressed()) this.dashQueued = CONFIG.dash.buffer;
+    const skill = Input.skillPressed();
+    if (skill) { this.skillQueued = skill; this.skillQueueTime = CONFIG.skills.buffer; }
   }
 
   // 마우스가 가리키는 곳을 향한 각도. 마우스를 안 쓰면 걸어간 방향을 유지한다.
@@ -170,6 +270,7 @@ class Player {
     // 겨냥은 마우스를 따라 늘 갱신된다 (휘두르는 중에는 시작할 때 고정한 각도를 쓴다)
     this.updateAim(ix, iy);
     this.updateDash(dt, ix, iy);
+    this.updateSkills(dt, enemies);
 
     if (this.dashTimer > 0) {
       // 대시 중에는 이동 입력과 넉백을 무시하고 정해진 방향으로만 미끄러진다
@@ -177,8 +278,9 @@ class Player {
       this.moveWithCollision(Math.cos(this.dashDir) * d.speed * dt, Math.sin(this.dashDir) * d.speed * dt);
       this.trail.push({ x: this.x, y: this.y, life: 0.2, facing: this.facing });
     } else {
-      // 공격 중에는 속도가 크게 줄어든다
-      const speedScale = this.attackTimer > 0 ? 0.35 : 1;
+      // 스킬을 쓰는 동안은 제자리에 묶이고(강공격은 스스로 앞으로 나간다),
+      // 평타 중에는 속도가 크게 줄어든다
+      const speedScale = this.activeSkill ? 0 : (this.attackTimer > 0 ? 0.35 : 1);
       const vx = ix * c.speed * speedScale + this.kx;
       const vy = iy * c.speed * speedScale + this.ky;
       this.moveWithCollision(vx * dt, vy * dt);
@@ -218,7 +320,7 @@ class Player {
     this.attackBuffer = Math.max(0, this.attackBuffer - dt);
     // 버퍼에 남은 입력이 있거나 공격키를 계속 누르고 있으면 쿨다운이 풀리는 즉시 이어서 휘두른다
     const wantsAttack = this.attackBuffer > 0 || Input.attackHeld();
-    if (wantsAttack && this.cooldown <= 0 && this.attackTimer <= 0 && this.dashTimer <= 0) {
+    if (wantsAttack && this.cooldown <= 0 && this.attackTimer <= 0 && this.dashTimer <= 0 && !this.activeSkill) {
       this.attackTimer = w.duration;
       this.cooldown = w.cooldown;
       this.hitIds = new Set();
@@ -260,23 +362,39 @@ class Player {
   }
 
   // 무기 사거리 안, 바라보는 부채꼴 안에 들어온 몬스터를 때린다
-  resolveHits(enemies) {
+  /* 평타와 스킬이 같이 쓰는 판정.
+     opts 로 사거리·판정각·데미지 배수를 갈아끼우면 그대로 스킬 판정이 된다.
+       ids         이미 맞힌 적 목록 (한 번 휘둘러 같은 적을 여러 번 때리지 않게)
+       reachBonus  사거리 추가
+       arc         판정 반각. Math.PI 이상이면 사방 전체
+       damageMult  평타 대비 배수
+       knockMult   넉백 배수 */
+  resolveHits(enemies, opts) {
     const c = CONFIG.player;
     const w = this.weaponSpec();
     const base = this.swingAngle;   // 휘두르기 시작할 때 고정한 마우스 방향
+    const ids = (opts && opts.ids) || this.hitIds;
+    const reach = w.reach + ((opts && opts.reachBonus) || 0);
+    const arc = (opts && opts.arc !== undefined) ? opts.arc : w.arc;
+    const dmgMult = (opts && opts.damageMult) || 1;
+    const knockMult = (opts && opts.knockMult) || 1;
+    const omni = arc >= Math.PI;    // 사방을 다 때리는 기술인가
+
     for (const s of enemies) {
-      if (s.dead || this.hitIds.has(s.id)) continue;
+      if (s.dead || ids.has(s.id)) continue;
       const dx = s.x - this.x, dy = s.y - this.y;
       const d = Math.sqrt(dx * dx + dy * dy);
-      if (d > w.reach + s.radius) continue;
-      if (d > 3 && Math.abs(Util.angleDiff(Math.atan2(dy, dx), base)) > w.arc) continue;
+      if (d > reach + s.radius) continue;
+      const toEnemy = Math.atan2(dy, dx);
+      if (!omni && d > 3 && Math.abs(Util.angleDiff(toEnemy, base)) > arc) continue;
 
-      this.hitIds.add(s.id);
+      ids.add(s.id);
       const crit = Math.random() < c.critChance;   // 치명타율은 무기와 무관하게 동일
-      let dmg = this.attackDamage() + Util.randInt(-1, 1);
+      let dmg = Math.round((this.attackDamage() + Util.randInt(-1, 1)) * dmgMult);
       if (crit) dmg = Math.round(dmg * c.critMult);
       dmg = Math.max(1, dmg);
-      s.takeHit(dmg, base, crit, this);
+      // 사방 공격은 바깥쪽으로, 베는 공격은 휘두른 방향으로 날린다
+      s.takeHit(dmg, omni ? toEnemy : base, crit, this, knockMult);
       FX.freeze(CONFIG.fx.hitStop);
       FX.addShake(crit ? 2.4 : 1.3);
     }
@@ -399,9 +517,47 @@ class Player {
     const set = this.invuln > CONFIG.player.invulnTime - 0.25 ? SPRITES.playerFlash : SPRITES.player;
     // 걸을 때 살짝 위아래로 흔들리면 발걸음이 살아난다
     const bob = frame === 1 ? -1 : 0;
-    ctx.drawImage(set[this.facing][frame], sx - 8, sy - 8 + bob);
+    // 회전베기 중에는 바라보는 방향을 빠르게 돌려서 도는 것처럼 보이게 한다
+    const facing = this.activeSkill === 'spin' ? Player.facingFromAngle(this.spinAngle) : this.facing;
+    ctx.drawImage(set[facing][frame], sx - 8, sy - 8 + bob);
 
-    if (this.attackTimer > 0) this.drawSwing(ctx, sx, sy);
+    if (this.activeSkill) this.drawSkill(ctx, sx, sy);
+    else if (this.attackTimer > 0) this.drawSwing(ctx, sx, sy);
+  }
+
+  // 지금 든 무기의 도트 (종류 + 레벨 등급)
+  weaponSprite() {
+    const set = SPRITES.weapons && SPRITES.weapons[this.weapon];
+    return (set && set[levelTier(this.weaponLevel)]) || SPRITES.sword;
+  }
+
+  drawSkill(ctx, sx, sy) {
+    const spec = this.skillSpec(this.activeSkill);
+    const p = 1 - this.skillTimer / spec.duration;      // 0 -> 1
+    const fi = Util.clamp(Math.floor(p * 3), 0, 2);
+    const sw = this.weaponSprite();
+
+    if (spec.id === 'spin') {
+      // 몸을 둘러싸고 퍼져나가는 고리 + 같이 도는 무기
+      const ring = SPRITES.spinRing[fi];
+      ctx.drawImage(ring, sx - Math.floor(ring.width / 2), sy - Math.floor(ring.height / 2));
+      ctx.save();
+      ctx.translate(sx, sy - 1);
+      ctx.rotate(this.spinAngle + Math.PI / 2);
+      ctx.drawImage(sw, -Math.floor(sw.width / 2), -23);
+      ctx.restore();
+      return;
+    }
+
+    // 강공격 — 넓고 굵은 궤적을 크게 그린다
+    const arc = SPRITES.heavySlash[slashIndex(this.swingAngle)][fi];
+    ctx.drawImage(arc, sx - Math.floor(arc.width / 2), sy - Math.floor(arc.height / 2));
+    const a = this.swingAngle - 1.6 + p * 3.2;
+    ctx.save();
+    ctx.translate(sx, sy - 1);
+    ctx.rotate(a + Math.PI / 2);
+    ctx.drawImage(sw, -Math.floor(sw.width / 2), -25);
+    ctx.restore();
   }
 
   drawSwing(ctx, sx, sy) {
@@ -416,8 +572,7 @@ class Player {
 
     // 무기를 부채꼴을 따라 휘두른다
     const a = base - 1.15 + p * 2.3;
-    const set = SPRITES.weapons && SPRITES.weapons[this.weapon];
-    const sw = (set && set[levelTier(this.weaponLevel)]) || SPRITES.sword;
+    const sw = this.weaponSprite();
     ctx.save();
     ctx.translate(sx, sy - 1);
     ctx.rotate(a + Math.PI / 2);

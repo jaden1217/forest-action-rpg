@@ -70,6 +70,14 @@ const Input = {
     return !!(this.pressed.ShiftLeft || this.pressed.ShiftRight);
   },
 
+  // 7주차 스킬 — 어떤 키가 어떤 스킬인지는 CONFIG.skills.list 가 정한다
+  skillPressed() {
+    for (const spec of CONFIG.skills.list) {
+      if (this.pressed['Key' + spec.key]) return spec.id;
+    }
+    return null;
+  },
+
   // 캔버스 좌표의 마우스를 월드 좌표로 바꾼다 (카메라만큼 밀어준다)
   aimWorld(cam) {
     return { x: cam.x + this.mouse.x, y: cam.y + this.mouse.y };

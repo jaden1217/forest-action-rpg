@@ -111,6 +111,41 @@ const CONFIG = {
     buffer: 0.18,        // 대시 입력도 잠깐 기억해둔다
   },
 
+  /* 스킬 — 평타 말고 따로 쓰는 공격 수단. 쿨다운이 있고 플레이어 레벨로 열린다.
+     위력을 고정값이 아니라 "평타 데미지 x 배수"로 정했기 때문에,
+     레벨이 오르면 스킬도 같이 세진다 (성장 축이 레벨이라는 원칙을 스킬에도 적용). */
+  skills: {
+    buffer: 0.18,          // 스킬 입력도 잠깐 기억해둔다
+    list: [
+      {
+        id: 'heavy', name: 'HEAVY', key: 'Q', unlockLevel: 10,
+        cooldown: 6.0,
+        damageMult: 2.6,     // 평타의 2.6배
+        arc: 1.5,            // 평타(0.95)보다 훨씬 넓게 벤다
+        reachBonus: 6,
+        duration: 0.42,
+        hitWindow: [0.14, 0.30],
+        lunge: 95,           // 휘두르며 앞으로 밀고 나간다
+        knockMult: 2.2,
+        shake: 4.5,
+        color: '#ffb35c',
+      },
+      {
+        id: 'spin', name: 'SPIN', key: 'R', unlockLevel: 20,
+        cooldown: 10.5,
+        damageMult: 1.5,
+        arc: Math.PI,        // 360도 — 둘러싸였을 때 빠져나오는 기술
+        reachBonus: 10,
+        duration: 0.55,
+        hitWindow: [0.08, 0.48],
+        hitInterval: 0.17,   // 도는 동안 이 간격으로 다시 맞는다
+        knockMult: 1.4,
+        shake: 3,
+        color: '#7ec8ff',
+      },
+    ],
+  },
+
   /* 무기 3종. 세 무기의 성능은 서로 같다.
      damageMult / cooldown 이 셋 다 정확히 2.5 라서 초당 데미지가 동일하고,
      차이는 "한 방이 무거운가 / 자주 때리는가" 뿐이다.
@@ -162,7 +197,10 @@ const CONFIG = {
   },
 
   spawn: {
-    maxAlive: 80,           // 맵에 동시에 존재하는 몬스터 수 (맵이 4배가 되어 함께 늘림)
+    /* 맵에 동시에 존재하는 몬스터 수.
+       80마리면 화면(약 324타일)에 평균 1.4마리라 너무 휑했다.
+       250마리면 평균 4마리쯤 보여서 돌아다니는 내내 교전이 이어진다. */
+    maxAlive: 250,
     respawnMin: 2.5,        // 죽은 뒤 다시 등장하기까지 (초)
     respawnMax: 6.0,
     minDistFromPlayer: 78,  // 플레이어 코앞에 튀어나오지 않도록

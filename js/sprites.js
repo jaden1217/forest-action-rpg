@@ -725,6 +725,49 @@ function makeVignette(w, h, strength) {
   return cv;
 }
 
+// 강공격 궤적 — 평타보다 굵고 넓고 노랗다
+function makeHeavySlashFrame(angle, t) {
+  const S = 64, cv = makeCanvas(S, S), ctx = cv.getContext('2d');
+  const cx = S / 2, cy = S / 2;
+  const rIn = 13 + t * 11;
+  const rOut = rIn + 11 - t * 5;
+  const spread = 1.55 - t * 0.35;
+  for (let y = 0; y < S; y++) {
+    for (let x = 0; x < S; x++) {
+      const dx = x + 0.5 - cx, dy = y + 0.5 - cy;
+      const d = Math.sqrt(dx * dx + dy * dy);
+      if (d < rIn || d > rOut) continue;
+      const da = Math.abs(Util.angleDiff(Math.atan2(dy, dx), angle));
+      if (da > spread) continue;
+      if (da / spread > 0.78 && (x + y) % 2 === 0) continue;
+      ctx.fillStyle = d > rIn + (rOut - rIn) * 0.5 ? '#ffb35c' : '#fff2d0';
+      ctx.fillRect(x, y, 1, 1);
+    }
+  }
+  return cv;
+}
+
+// 회전베기 — 플레이어를 둘러싸고 퍼져나가는 고리
+function makeSpinRing(t) {
+  const S = 76, cv = makeCanvas(S, S), ctx = cv.getContext('2d');
+  const cx = S / 2, cy = S / 2;
+  const r = 15 + t * 17;
+  const thick = 3.2 - t * 1.6;
+  for (let y = 0; y < S; y++) {
+    for (let x = 0; x < S; x++) {
+      const dx = x + 0.5 - cx, dy = y + 0.5 - cy;
+      const d = Math.sqrt(dx * dx + dy * dy);
+      if (d < r - thick || d > r) continue;
+      // 고리를 촘촘한 점선으로 만들어 회전하는 느낌을 준다
+      const a = Math.atan2(dy, dx);
+      if (Math.floor((a + Math.PI) * 7) % 2 === 0 && t > 0.3) continue;
+      ctx.fillStyle = d > r - thick * 0.5 ? '#7ec8ff' : '#ffffff';
+      ctx.fillRect(x, y, 1, 1);
+    }
+  }
+  return cv;
+}
+
 /* ── 전부 만들어서 SPRITES 에 담기 ─────────────────────────── */
 
 const SPRITES = {};
@@ -843,8 +886,11 @@ function buildSprites() {
   // 마우스로 아무 방향이나 겨눌 수 있으므로 16방향 x 3프레임을 미리 만들어 둔다.
   // 캔버스 회전을 쓰면 도트가 뭉개지므로, 각도별로 따로 찍는 편이 깔끔하다.
   SPRITES.slash = [];
+  SPRITES.heavySlash = [];
   for (let i = 0; i < SLASH_DIRS; i++) {
     const a = (i / SLASH_DIRS) * Math.PI * 2;
     SPRITES.slash.push([0, 0.5, 1].map(t => makeSlashFrame(a, t)));
+    SPRITES.heavySlash.push([0, 0.5, 1].map(t => makeHeavySlashFrame(a, t)));
   }
+  SPRITES.spinRing = [0, 0.5, 1].map(makeSpinRing);
 }

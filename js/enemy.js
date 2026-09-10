@@ -118,12 +118,14 @@ class Enemy {
 
   onBlocked() { /* 필요한 종류만 쓴다 (늑대는 돌진을 멈춘다) */ }
 
-  takeHit(damage, angle, crit, player) {
+  // knockScale — 스킬처럼 더 세게 날려보내야 할 때 쓰는 추가 배수
+  takeHit(damage, angle, crit, player, knockScale) {
     this.hp -= damage;
     this.hurtFlash = 0.12;
     this.showHp = 2.5;
     // 도끼처럼 무거운 무기는 더 멀리 날려보낸다
-    const knockMult = (player && player.weaponSpec) ? player.weaponSpec().knockMult : 1;
+    const weaponKnock = (player && player.weaponSpec) ? player.weaponSpec().knockMult : 1;
+    const knockMult = weaponKnock * (knockScale || 1);
     this.kx = Math.cos(angle) * this.stats.knockback * knockMult;
     this.ky = Math.sin(angle) * this.stats.knockback * knockMult;
 
