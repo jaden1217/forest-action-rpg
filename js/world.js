@@ -44,7 +44,8 @@ const World = {
     this.props = [];
     this.solids = [];
     this.time = 0;
-    this.bossCave = null;   // 숲 가장자리 동굴 — 보스를 부르는 곳
+    this.bossCave = null;   // 숲 가장자리 동굴 — 보스 방으로 들어가는 곳
+    this.merchant = null;   // 상인 (Shop.place 가 채운다)
 
     this.buildRegions(seed);
     this.buildTiles(seed);
@@ -52,7 +53,8 @@ const World = {
     this.placeTrees(Util.makeRng(seed + 17));
     this.buildGrid();   // 나무 충돌을 먼저 등록해야 장식이 나무를 피해서 놓인다
     this.placeDecor(Util.makeRng(seed + 41));
-    this.buildGrid();   // 바위·그루터기까지 포함해 다시 만든다
+    Shop.place();       // 9주차: 시작 지점 옆 가판대와 상인
+    this.buildGrid();   // 바위·그루터기·가판대까지 포함해 다시 만든다
   },
 
   update(dt) {
@@ -66,7 +68,7 @@ const World = {
   STATE_KEYS: [
     'cols', 'rows', 'w', 'h', 'ground', 'props', 'solids', 'grid',
     'tiles', 'tileBlocked', 'regions', 'regionCenters',
-    'startX', 'startY', 'wetNoise', 'openNoise', 'bossCave', 'arenaExit',
+    'startX', 'startY', 'wetNoise', 'openNoise', 'bossCave', 'arenaExit', 'merchant',
     'time', 'isArena',
   ],
 
@@ -95,6 +97,7 @@ const World = {
     this.solids = [];
     this.time = 0;
     this.bossCave = null;
+    this.merchant = null;
     this.isArena = true;
 
     const rng = Util.makeRng(seed);

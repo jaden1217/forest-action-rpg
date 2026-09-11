@@ -36,9 +36,15 @@ html, body {
 
 #controls {
   display: flex;
-  gap: 22px;
+  flex-wrap: wrap;            /* 창이 좁으면 줄을 바꾼다 — 칸 안에서 글자가 꺾이지 않게 */
+  justify-content: center;
+  gap: 6px 18px;
   font-size: 13px;
   letter-spacing: .2px;
+}
+
+#controls span {
+  white-space: nowrap;
 }
 
 #savenote {

@@ -29,6 +29,7 @@ const Items = {
        확률이 낮은 대신 한 번 얻으면 다시는 무기를 갈아끼울 필요가 없는 물건이다. */
     if (enemy.isBoss) {
       const r = CONFIG.boss.reward;
+      this.giveGold(enemy, CONFIG.gold.amountByTier[tier] * CONFIG.gold.bossMult);
       for (let i = 0; i < r.potions; i++) this.spawn(enemy.x, enemy.y, 1);
       if (Math.random() < r.daggerChance) {
         this.spawnWeapon(enemy.x, enemy.y, r.weapon, Game.player.level, { growing: true });
@@ -41,6 +42,15 @@ const Items = {
       this.spawn(enemy.x, enemy.y, amount);
     }
     this.dropWeaponFor(enemy);
+    // 골드는 잡는 즉시 들어온다 — 양은 색 등급이 정한다
+    const g = CONFIG.gold;
+    const base = g.amountByTier[tier] || g.amountByTier[0];
+    this.giveGold(enemy, Math.max(1, Math.round(base * Util.rand(1 - g.variance, 1 + g.variance))));
+  },
+
+  // 잡은 자리에서 금화가 튀어오르며 액수가 뜨고, 주머니에 바로 더해진다
+  giveGold(enemy, amount) {
+    Game.player.addGold(amount, enemy.x, enemy.y);
   },
 
   /* 무기 드랍 규칙

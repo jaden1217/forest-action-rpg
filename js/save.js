@@ -36,6 +36,7 @@ const Save = {
         kills: p.kills, deaths: p.deaths,
         potions: p.potions,
         weapon: p.weapon, weaponLevel: p.weaponLevel, weaponGrowing: p.weaponGrowing,
+        gold: p.gold, upgrades: p.upgrades,
       },
       drops: drops.map(d => ({
         kind: d.kind, weapon: d.weapon, level: d.level, amount: d.amount,
@@ -91,6 +92,10 @@ const Save = {
     player.xpNeed = s.xpNeed || CONFIG.levelUp.xpNeed(player.level);
     player.kills = s.kills || 0;
     player.deaths = s.deaths || 0;
+    // 9주차: 골드와 강화 랭크. 가방 크기는 랭크에서 다시 계산한다 (maxHp/damage 는 값 자체가 저장돼 있다)
+    player.gold = Math.max(0, s.gold || 0);
+    player.upgrades = Object.assign({}, s.upgrades || {});
+    player.maxPotions = CONFIG.items.potionMax + (player.upgrades.bag || 0);
     player.potions = Util.clamp(s.potions || 0, 0, player.maxPotions);
 
     if (CONFIG.weapons[s.weapon]) {

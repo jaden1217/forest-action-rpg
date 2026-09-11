@@ -28,6 +28,10 @@ class Player {
     // 보스가 떨구는 '성장하는 무기' — 레벨이 내 레벨을 따라 같이 오른다
     this.weaponGrowing = false;
 
+    // 9주차: 골드와 상점 강화 랭크 (hp / atk / bag). 강화로 오른 수치는 maxHp 등에 바로 더해져 있다
+    this.gold = 0;
+    this.upgrades = {};
+
     this.attackTimer = 0;      // 휘두르는 중이면 0보다 큼
     this.cooldown = 0;
     this.attackBuffer = 0;     // 쿨다운 중에 누른 공격을 잠깐 기억해둔다
@@ -471,6 +475,14 @@ class Player {
     }
   }
 
+  // 골드는 바닥에 떨어지지 않고 잡는 즉시 들어온다. 액수는 잡은 자리에 띄운다
+  addGold(amount, x, y) {
+    this.gold += amount;
+    if (x === undefined) { x = this.x; y = this.y; }
+    FX.number(x, y - 14, '+' + amount + ' G', CONFIG.gold.color);
+    FX.burst(x, y - 2, 6, [CONFIG.gold.color, '#ffffff'], { speed: 38, life: 0.4, gravity: 90, size: 1 });
+  }
+
   // 가방에 들어갈 만큼만 담고 실제로 담은 개수를 돌려준다.
   // 2개짜리 드랍인데 한 칸만 남았으면 1개만 담고 나머지는 바닥에 남는다.
   addPotion(amount) {
@@ -568,8 +580,9 @@ class Player {
     const sw = this.weaponSprite();
 
     if (spec.id === 'spin') {
-      // 몸을 둘러싸고 퍼져나가는 고리 + 같이 도는 무기
-      const ring = SPRITES.spinRing[fi];
+      // 몸을 둘러싸고 퍼져나가는 고리 + 같이 도는 무기. 고리는 도는 내내 0.55초마다 다시 퍼진다
+      const elapsed = spec.duration - this.skillTimer;
+      const ring = SPRITES.spinRing[Math.floor((elapsed / 0.55) * 3) % 3];
       ctx.drawImage(ring, sx - Math.floor(ring.width / 2), sy - Math.floor(ring.height / 2));
       ctx.save();
       ctx.translate(sx, sy - 1);

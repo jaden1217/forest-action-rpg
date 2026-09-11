@@ -49,10 +49,10 @@ const Minimap = {
       ctx.fillRect(tx, ty, 1, 1);
     }
 
-    // 동굴 입구는 이정표라 눈에 띄게 찍는다
+    // 동굴 입구와 상인은 이정표라 눈에 띄게 찍는다 (동굴 주황, 상인 노랑)
     for (const p of World.props) {
       if (!p.landmark) continue;
-      ctx.fillStyle = '#e08a4f';
+      ctx.fillStyle = p.landmark === 'shop' ? '#ffe066' : '#e08a4f';
       ctx.fillRect(Math.floor(p.x / CONFIG.TILE) - 1, Math.floor(p.y / CONFIG.TILE) - 1, 3, 3);
       ctx.fillStyle = '#1d1a17';
       ctx.fillRect(Math.floor(p.x / CONFIG.TILE), Math.floor(p.y / CONFIG.TILE), 1, 1);

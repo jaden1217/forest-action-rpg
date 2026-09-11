@@ -31,6 +31,11 @@ const PAL = {
   'G': '#d8ecff',     // 포션 유리
   'r': '#8e2a2a',     // 포션 액체 어두운면
   'R': '#e5484d',     // 포션 액체
+  'y': '#d9a441',     // 금화 어두운면 / 상인 장식
+  'Y': '#ffe066',     // 금화
+  'u': '#6b4a8a',     // 상인 로브 (플레이어의 파랑과 구분되는 보라)
+  'U': '#8a66a8',     // 상인 로브 밝은면
+  'v': '#4a3260',     // 상인 두건
 };
 
 function makeCanvas(w, h) {
@@ -663,6 +668,38 @@ function makeGrassTuft(seed, lean) {
 
 /* 동굴 입구 — 동굴 지대의 이정표. 미니맵에도 표시된다.
    지금은 들어갈 수 없는 장식이지만, 나중에 보스방 입구로 쓸 자리다. */
+/* 9주차: 가판대 (34x30). 상인이 이 앞에 선다.
+   붉은 줄무늬 차양이 멀리서도 "가게"로 읽히게 해준다. */
+function makeStall(seed) {
+  const cv = makeCanvas(34, 30), ctx = cv.getContext('2d');
+  const OUT = '#17110d', WOOD = '#8a5a2b', WOODL = '#b07a3c', WOODD = '#5a3a1c';
+  const RED = '#c0392b', REDD = '#8e2a2a', CLOTH = '#f0e6d2';
+  // 기둥
+  ctx.fillStyle = OUT; ctx.fillRect(2, 8, 4, 20); ctx.fillRect(28, 8, 4, 20);
+  ctx.fillStyle = WOOD; ctx.fillRect(3, 9, 2, 18); ctx.fillRect(29, 9, 2, 18);
+  // 차양 — 줄무늬, 아래쪽은 지그재그로 늘어진다
+  ctx.fillStyle = OUT; ctx.fillRect(0, 2, 34, 9);
+  for (let x = 1; x < 33; x++) {
+    ctx.fillStyle = (Math.floor((x - 1) / 4) % 2 === 0) ? RED : CLOTH;
+    ctx.fillRect(x, 3, 1, 6);
+    if (((x - 1) % 4) === 1 || ((x - 1) % 4) === 2) ctx.fillRect(x, 9, 1, 1);
+  }
+  ctx.fillStyle = REDD; ctx.fillRect(1, 8, 32, 1);
+  // 판매대
+  ctx.fillStyle = OUT; ctx.fillRect(1, 18, 32, 11);
+  ctx.fillStyle = WOOD; ctx.fillRect(2, 19, 30, 9);
+  ctx.fillStyle = WOODL; ctx.fillRect(2, 19, 30, 2);
+  ctx.fillStyle = WOODD;
+  for (let x = 6; x < 32; x += 6) ctx.fillRect(x, 21, 1, 7);
+  ctx.fillRect(2, 27, 30, 1);
+  // 판매대 위 물건 — 포션 하나, 동전 몇 닢
+  ctx.fillStyle = '#e5484d'; ctx.fillRect(8, 15, 3, 3); ctx.fillStyle = '#d8ecff'; ctx.fillRect(8, 14, 3, 1);
+  ctx.fillStyle = '#8d5726'; ctx.fillRect(9, 13, 1, 1);
+  ctx.fillStyle = '#ffe066'; ctx.fillRect(20, 16, 2, 2); ctx.fillRect(23, 16, 2, 2); ctx.fillRect(21, 14, 2, 2);
+  ctx.fillStyle = '#d9a441'; ctx.fillRect(20, 17, 2, 1); ctx.fillRect(23, 17, 2, 1);
+  return cv;
+}
+
 function makeCaveEntrance(seed) {
   const cv = makeCanvas(38, 34), ctx = cv.getContext('2d');
   const rng = Util.makeRng(seed);
@@ -838,6 +875,39 @@ function makeShockRing(t, radius) {
 
 const SPRITES = {};
 
+/* 9주차: 금화 (7x7) */
+const COIN = [
+  '..ooo..',
+  '.oYYYo.',
+  'oYYyYYo',
+  'oYyyyYo',
+  'oYYyYYo',
+  '.oyyyo.',
+  '..ooo..',
+];
+
+/* 9주차: 상인 (16x16) — 두건을 쓴 보라 로브. 시작 지점 옆 가판대에 서 있다.
+   두 번째 그림은 눈을 감은 것(깜빡임)이라 살아 있는 느낌이 난다. */
+const MERCHANT = [
+  '......oooo......',
+  '.....ovvvvo.....',
+  '....ovvvvvvo....',
+  '...ovvvvvvvvo...',
+  '...ovssssssvo...',
+  '...ovseesseso...',
+  '...ovssssssvo...',
+  '....osssSSso....',
+  '...ouuuuuuuuo...',
+  '..osoUuuuuUoso..',
+  '..osouuyyuuoso..',
+  '...ouuuyyuuuo...',
+  '...ouuuuuuuuo...',
+  '...ouuuuuuuuo...',
+  '...oBBBooBBBo...',
+  '....ooo..ooo....',
+];
+const MERCHANT_BLINK = MERCHANT.map((row, i) => i === 5 ? MERCHANT[4] : row);   // 눈 줄만 살 색으로
+
 function buildSprites() {
   // 플레이어: 방향 x 다리자세
   const dirs = {
@@ -870,6 +940,9 @@ function buildSprites() {
     );
   }
   SPRITES.potion = makeSprite('potion', POTION);
+  SPRITES.coin = makeSprite('coin', COIN);
+  SPRITES.merchant = [makeSprite('merchant', MERCHANT), makeSprite('merchant_blink', MERCHANT_BLINK)];
+  SPRITES.stall = makeStall(1201);
 
   // 몬스터: 레벨별 색상 5종 + 피격용 흰 실루엣
   SPRITES.slime = LEVEL_PALETTES.map((pal, i) => makeSprite('slime_lv' + (i + 1), SLIME, pal));

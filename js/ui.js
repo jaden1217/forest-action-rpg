@@ -47,6 +47,7 @@ const FONT = {
   ':': ['   ', ' # ', '   ', ' # ', '   '],
   '!': [' # ', ' # ', ' # ', '   ', ' # '],
   '?': ['## ', '  #', ' ##', '   ', ' # '],
+  '>': ['#  ', ' # ', '  #', ' # ', '#  '],   // 상점 커서
   ' ': ['   ', '   ', '   ', '   ', '   '],
 };
 
@@ -133,6 +134,13 @@ const UI = {
     // ── 처치 수
     const kills = 'KILLS ' + player.kills;
     this.drawText(ctx, kills, CONFIG.VIEW_W - 8 - this.textWidth(kills), 8, '#f0d9b5');
+    // 9주차: 골드
+    if (player.gold !== undefined) {
+      const g = String(player.gold);
+      const gx = CONFIG.VIEW_W - 8 - this.textWidth(g);
+      ctx.drawImage(SPRITES.coin, gx - 9, 16);
+      this.drawText(ctx, g, gx, 17, CONFIG.gold.color);
+    }
 
     // ── 대시 충전 — 남은 칸은 밝게, 채워지는 중인 칸은 게이지로 보여준다
     if (player.dashCharges !== undefined) {
@@ -345,7 +353,7 @@ const UI = {
 
   // 자동 저장 직후 잠깐 뜨는 표시
   drawSaved(ctx) {
-    this.drawText(ctx, 'SAVED', CONFIG.VIEW_W - 8 - this.textWidth('SAVED'), 16, '#9be564');
+    this.drawText(ctx, 'SAVED', CONFIG.VIEW_W - 8 - this.textWidth('SAVED'), 26, '#9be564');
   },
 
   // 새 게임 확인 — 저장을 지우는 되돌릴 수 없는 동작이라 한 번 묻는다

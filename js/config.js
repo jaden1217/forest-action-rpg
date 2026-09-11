@@ -137,12 +137,12 @@ const CONFIG = {
       {
         id: 'spin', name: 'SPIN', key: 'R', unlockLevel: 20,
         cooldown: 10.5,
-        damageMult: 1.5,
+        damageMult: 1.05,    // 한 번 맞는 위력은 평타보다 조금 센 정도 — 대신 오래 돌며 여러 번 맞힌다
         arc: Math.PI,        // 360도 — 둘러싸였을 때 빠져나오는 기술
         reachBonus: 22,      // 평타 사거리(21)의 두 배 가까이 — 넓게 쓸어낸다
-        duration: 0.55,
-        hitWindow: [0.08, 0.48],
-        hitInterval: 0.17,   // 도는 동안 이 간격으로 다시 맞는다
+        duration: 1.65,      // 1.65초 동안 계속 돈다
+        hitWindow: [0.08, 1.58],
+        hitInterval: 0.17,   // 도는 동안 이 간격으로 다시 맞는다 (약 9번)
         knockMult: 1.4,
         shake: 3,
         color: '#7ec8ff',
@@ -366,11 +366,35 @@ const CONFIG = {
     potionDropChance: [0.10, 0.13, 0.17, 0.22, 0.30], // 색 등급별 드랍 확률
     potionDoubleChance: 0.25, // 높은 등급이 2개를 떨굴 확률
     potionHeal: 30,           // 포션 1개 회복량
-    potionMax: 10,             // 최대 소지 수 (인벤토리)
-    potionStart: 3,           // 게임 시작 지급 수
+    potionMax: 5,             // 최대 소지 수 (인벤토리)
+    potionStart: 2,           // 게임 시작 지급 수
     potionCooldown: 0.5,      // 연속 마시기 방지
     pickupRadius: 11,         // 이 거리 안이면 자동 줍기
     magnetRadius: 30,         // 이 거리 안이면 포션이 끌려온다
     lifetime: 40,             // 바닥에 남아있는 시간 (초)
+  },
+
+  /* 9주차: 골드 — 몬스터를 잡으면 바닥에 떨어지지 않고 곧바로 주머니에 들어온다.
+     (줍는 수고를 없앤 대신 확정 지급이고, 양은 그만큼 살짝 낮췄다)
+     양은 레벨이 아니라 색 등급(5단계)으로 정해서, 깊은 지역일수록 벌이가 좋다. */
+  gold: {
+    amountByTier: [2, 5, 8, 13, 20],    // 등급별 기본량 (1~4 / 5~8 / 9~13 / 14~18 / 19~23)
+    variance: 0.35,                     // 기본량의 ±35% 사이에서 흔들린다
+    bossMult: 12,                       // 보스는 자기 등급 기본량의 12배
+    color: '#ffe066',
+  },
+
+  /* 9주차: 상점 — 시작 지점 옆 가판대의 상인. F 로 말을 건다.
+     파는 것은 포션과 '강화' 셋. 강화는 살 때마다 랭크가 오르고 값이 priceMult 배씩 뛴다.
+     성장 축은 여전히 레벨이므로, 강화는 레벨업을 거드는 정도로 잡았다
+     (공격력 +1 은 레벨업 한 번(+2)의 절반, 체력 +10 은 레벨업 하나(+8)와 비슷). */
+  shop: {
+    interactRange: 26,      // 상인에게서 이 거리 안이면 말을 걸 수 있다
+    potionPrice: 20,
+    upgrades: [
+      { id: 'hp',  name: 'MAX HP +10',     stat: 'maxHp',      gain: 10, basePrice: 40, priceMult: 1.4, maxRank: 10 },
+      { id: 'atk', name: 'ATTACK +1',      stat: 'damage',     gain: 1,  basePrice: 60, priceMult: 1.4, maxRank: 10 },
+      { id: 'bag', name: 'POTION BAG +1',  stat: 'maxPotions', gain: 1,  basePrice: 50, priceMult: 1.5, maxRank: 5 },
+    ],
   },
 };

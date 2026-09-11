@@ -26,6 +26,7 @@ const Game = {
   transition: null,  // 화면이 어두워졌다 밝아지는 장면 전환
   failTimer: 0,      // 보스 방에서 쓰러진 뒤 밖으로 쫓겨나기까지
   lairBanner: 0,     // 보스 방에 들어섰음을 알리는 표시
+  shopPrompt: false, // 상인 앞에 서 있어서 안내가 떠 있는가
 
   init() {
     this.canvas = document.getElementById('game');
@@ -54,6 +55,7 @@ const Game = {
     Items.reset();
     Projectiles.reset();
     Ambient.reset();
+    Shop.reset();
     this.showInventory = false;
     this.showMap = false;
     this.confirmNewGame = false;
@@ -74,6 +76,7 @@ const Game = {
     this.overworld = null;
     this.transition = null;
     this.lairBanner = 0;
+    this.shopPrompt = false;
 
     this.enemies = [];
     this.respawnQueue = [];
@@ -126,8 +129,25 @@ const Game = {
     this.bossReadyIn = Math.max(0, this.bossReadyIn - dt);
     this.cavePrompt = false;
     this.exitPrompt = false;
+    this.shopPrompt = false;
     if (this.inArena) this.updateArenaGate(dt);
-    else this.updateCaveGate();
+    else {
+      this.updateCaveGate();
+      this.updateShopGate();
+    }
+  },
+
+  // 상인 앞에서 F — 무기 줍기와 동굴 입장이 먼저이고, 둘 다 아니면 상점이다
+  updateShopGate() {
+    const npc = World.merchant;
+    if (!npc || this.player.dead || this.cavePrompt) return;
+    if (Util.dist(this.player.x, this.player.y, npc.x, npc.y) > CONFIG.shop.interactRange) return;
+    if (Items.nearWeapon) return;
+
+    this.shopPrompt = true;
+    if (!Items.pickupRequested) return;
+    Items.pickupRequested = false;
+    Shop.openShop();
   },
 
   updateCaveGate() {
@@ -300,7 +320,7 @@ const Game = {
   },
 
   paused() {
-    return this.showInventory || this.showMap || this.confirmNewGame;
+    return this.showInventory || this.showMap || this.confirmNewGame || Shop.open;
   },
 
   // 지역 이름표 — 보스 방은 겉맵의 지역이 아니므로 따로 띄운다
@@ -328,6 +348,8 @@ const Game = {
       }
       return;
     }
+    // 상점이 열려 있으면 상점이 키를 다 가져간다
+    if (Shop.open) { Shop.handleInput(this.player); return; }
     if (Input.inventoryPressed()) this.showInventory = !this.showInventory;
     // 보스 방에서는 겉맵 지도를 펼칠 수 없다 (여기는 그 지도에 없는 곳이다)
     if (Input.mapPressed() && !this.inArena) this.showMap = !this.showMap;
@@ -454,6 +476,8 @@ const Game = {
     if (this.boss && !this.boss.dead && !this.showMap) UI.drawBossBar(ctx, this.boss);
     if (this.cavePrompt) UI.drawCavePrompt(ctx, World.bossCave, cam, this.bossReadyIn, 'ENTER');
     if (this.exitPrompt) UI.drawCavePrompt(ctx, World.arenaExit, cam, 0, 'LEAVE');
+    if (this.shopPrompt && !this.showMap) Shop.drawPrompt(ctx, cam);
+    if (Shop.open) Shop.draw(ctx, this.player);
     if (this.lairBanner > 0) UI.drawBanner(ctx, CONFIG.boss.lairName, '#ff6b6b', this.lairBanner);
     if (this.regionBanner > 0 && !this.showMap) UI.drawRegionBanner(ctx, this.currentRegion, this.regionBanner);
     if (this.confirmNewGame) UI.drawConfirm(ctx);
