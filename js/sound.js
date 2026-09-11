@@ -6,7 +6,7 @@
    효과음: 오실레이터(사인/삼각/사각/톱니) 몇 개와 백색소음 + 필터로 만든다.
            도트 그림에 어울리게 짧고 단순한 칩튠 소리로 잡았다.
    배경음: 스텝 시퀀서. 베이스·화음·멜로디 세 성부를 미리 적어둔 악보로 돌리고,
-           지역(숲 가장자리/깊은 숲/동굴 지대)과 보스 방마다 다른 곡을 튼다.
+           지역(숲 가장자리/깊은 숲/포자 골짜기)과 보스 방마다 다른 곡을 튼다.
 
    브라우저는 사용자가 뭔가 누르기 전에는 소리를 못 내게 막으므로,
    첫 키 입력이나 클릭에서 AudioContext 를 만든다(unlock). */
@@ -148,6 +148,8 @@ const Sound = {
                  S.tone({ freq: 180, slide: 420, type: 'triangle', dur: 0.16, gain: 0.18 }); },
     blip(S)    { S.tone({ freq: 720, slide: 380, type: 'square', dur: 0.06, gain: 0.06 }); },
     growl(S)   { S.tone({ freq: 130, slide: 90, type: 'sawtooth', dur: 0.22, gain: 0.1, lowpass: 700 }); },
+    howl(S)    { S.tone({ freq: 330, slide: 520, type: 'sawtooth', dur: 0.9, gain: 0.16, lowpass: 1200, attack: 0.08 });
+                 S.tone({ freq: 336, slide: 528, type: 'triangle', dur: 0.9, gain: 0.12, attack: 0.08 }); },
     shopOpen(S){ S.arp([440, 660], 'triangle', 0.08, 0.12); },
     shopClose(S){ S.arp([660, 440], 'triangle', 0.08, 0.1); },
     buy(S)     { S.arp([1046, 1318], 'sine', 0.08, 0.14); },
@@ -217,7 +219,7 @@ const Sound = {
         64, 0, 0, 0, 68, 0, 0, 0, 71, 0, 0, 0, 0, 0, 0, 0,
       ],
     },
-    // 동굴 지대 — 성기고 낮게, 멜로디는 드문드문
+    // 포자 골짜기 — 성기고 낮게, 멜로디는 드문드문
     cave: {
       bpm: 84, type: 'triangle', leadGain: 0.1, bassType: 'triangle',
       bass: [38, 38, 34, 36, 38, 38, 34, 41],

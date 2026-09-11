@@ -482,7 +482,7 @@ function makeDarkGrassTile(seed) {
   return cv;
 }
 
-// 동굴 지대 바닥 — 이끼 낀 돌바닥
+// 포자 골짜기 바닥 — 이끼 낀 돌바닥
 function makeStoneTile(seed) {
   const cv = makeNoiseTile(seed, '#67635d', '#585450', '#787269');
   const ctx = cv.getContext('2d');
@@ -500,7 +500,7 @@ function makeStoneTile(seed) {
   return cv;
 }
 
-// 동굴 지대의 흙길은 자갈밭이 된다
+// 포자 골짜기의 흙길은 자갈밭이 된다
 function makeGravelTile(seed) {
   const cv = makeNoiseTile(seed, '#5a544d', '#4c473f', '#6d675e');
   const ctx = cv.getContext('2d');
@@ -666,7 +666,7 @@ function makeGrassTuft(seed, lean) {
   return cv;
 }
 
-/* 동굴 입구 — 동굴 지대의 이정표. 미니맵에도 표시된다.
+/* 동굴 입구 — 포자 골짜기의 이정표. 미니맵에도 표시된다.
    지금은 들어갈 수 없는 장식이지만, 나중에 보스방 입구로 쓸 자리다. */
 /* 9주차: 가판대 (34x30). 상인이 이 앞에 선다.
    붉은 줄무늬 차양이 멀리서도 "가게"로 읽히게 해준다. */
@@ -971,7 +971,7 @@ function buildSprites() {
   // 보스 — 레벨 색 등급별 5종 + 피격 실루엣, 착지 충격파 4프레임
   SPRITES.giantSlime = LEVEL_PALETTES.map(makeGiantSlime);
   SPRITES.giantSlimeFlash = SPRITES.giantSlime.map(s => makeSilhouette(s, '#ffffff'));
-  SPRITES.shockRing = [0, 0.34, 0.67, 1].map(t => makeShockRing(t, CONFIG.boss.slam.radius));
+  SPRITES.shockRing = [0, 0.34, 0.67, 1].map(t => makeShockRing(t, CONFIG.bosses.edge.slam.radius));
   SPRITES.playerFlash = {};
   for (const dir in SPRITES.player) {
     SPRITES.playerFlash[dir] = SPRITES.player[dir].map(s => makeSilhouette(s, '#ff9a9a'));
@@ -986,7 +986,7 @@ function buildSprites() {
   SPRITES.stone = [0, 1, 2, 3].map(i => makeStoneTile(6000 + i * 571));
   SPRITES.gravel = [0, 1, 2].map(i => makeGravelTile(7000 + i * 487));
 
-  /* 지역별 바닥 타일 묶음 — [숲 가장자리, 깊은 숲, 동굴 지대] 순서.
+  /* 지역별 바닥 타일 묶음 — [숲 가장자리, 깊은 숲, 포자 골짜기] 순서.
      같은 "풀"이라도 어느 지역이냐에 따라 밝은 잔디 / 그늘진 잔디 / 돌바닥이 된다. */
   SPRITES.regionGround = [
     { grass: SPRITES.grass, dirt: SPRITES.dirt, meadow: SPRITES.grass },

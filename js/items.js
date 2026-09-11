@@ -28,10 +28,10 @@ const Items = {
        이 단검은 주운 순간부터 플레이어와 레벨이 같아지고, 레벨업할 때마다 함께 오른다.
        확률이 낮은 대신 한 번 얻으면 다시는 무기를 갈아끼울 필요가 없는 물건이다. */
     if (enemy.isBoss) {
-      const r = CONFIG.boss.reward;
+      const r = enemy.reward;   // 보스마다 다르다 (CONFIG.bosses[*].reward)
       this.giveGold(enemy, CONFIG.gold.amountByTier[tier] * CONFIG.gold.bossMult);
       for (let i = 0; i < r.potions; i++) this.spawn(enemy.x, enemy.y, 1);
-      if (Math.random() < r.daggerChance) {
+      if (Math.random() < r.chance) {
         this.spawnWeapon(enemy.x, enemy.y, r.weapon, Game.player.level, { growing: true });
       }
       return;
@@ -247,7 +247,7 @@ const Items = {
       if (d.growing) this.drawAura(ctx, sx, sy, d.age);
       if (sp) ctx.drawImage(sp, sx - Math.floor(sp.width / 2), sy - 8 + bob);
       // 어떤 무기가 몇 레벨인지 바닥에서도 바로 보인다
-      if (d.growing) UI.drawRainbowText(ctx, CONFIG.boss.reward.name, sx, sy + 8, true);
+      if (d.growing) UI.drawRainbowText(ctx, CONFIG.weapons.growNames[d.weapon] || spec.name, sx, sy + 8, true);
       else UI.drawText(ctx, spec.name + ' L' + d.level, sx, sy + 8, color, true);
       // 발밑에 서 있으면 바꾸는 방법을 알려준다
       if (d.playerNear) UI.drawText(ctx, 'F SWAP', sx, sy - 19, '#ffffff', true);

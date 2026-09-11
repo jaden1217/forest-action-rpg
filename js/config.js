@@ -47,6 +47,20 @@ function buildLevels(base, growth, extra) {
    전에는 같은 레벨 슬라임에게 20번을 맞아야 죽어서 위협이 없었다.
    목표는 '같은 레벨 슬라임 기준 1레벨 12번 -> 12레벨 11번 -> 23레벨 7번' —
    초반은 여유 있게 배우고, 깊이 갈수록 둘러싸이면 정말 위험해지도록. */
+/* 표(1~23) 밖의 레벨이 필요할 때 — 보스는 지역 상한보다 높은 레벨을 쓸 수 있다.
+   23레벨 값에서 같은 증가율로 더 늘려 잡는다. */
+function enemyStatsAt(levels, level) {
+  if (level <= levels.length) return levels[level - 1];
+  const top = levels[levels.length - 1], k = level - levels.length;
+  const s = Object.assign({}, top);
+  for (const key in ENEMY_GROWTH) {
+    if (top[key] === undefined) continue;
+    const v = top[key] * Math.pow(ENEMY_GROWTH[key], k);
+    s[key] = key === 'scale' ? +v.toFixed(3) : Math.max(1, Math.round(v));
+  }
+  return s;
+}
+
 const ENEMY_GROWTH = {
   hp: 1.115,
   atk: 1.09,
@@ -177,6 +191,9 @@ const CONFIG = {
     levelColor: ['#c8d0d8', '#8fe0a8', '#7ec8ff', '#c79ce8', '#ffb35c'],
     // 성장하는 무기(보스 보상)는 등급색 대신 이 금색으로 표시해 한눈에 구별한다
     growColor: '#ffd93d',
+    /* 성장하는 무기의 이름 — 어느 보스가 떨구느냐에 따라 다르다.
+       (픽셀 폰트가 대문자뿐이라 게임 안에서는 전부 대문자로 보인다) */
+    growNames: { dagger: 'SLIMELORD', sword: 'WOLFLORD', axe: 'SPORELORD' },
     /* 성장하는 무기의 이름표와 바닥 오라에 쓰는 무지개.
        hsl 로 매끈하게 돌리지 않고 일곱 색을 딱딱 끊어 쓴다 — 도트 그림에는 이쪽이 어울린다 */
     rainbow: ['#ff5c5c', '#ffb35c', '#ffe066', '#7dff8a', '#5cd8ff', '#8f8fff', '#e08fff'],
@@ -245,7 +262,7 @@ const CONFIG = {
         treeDensity: 1.6, pineChance: 0.70, boulders: 1.2,
       },
       {
-        id: 'cave', name: 'CAVE MOUTH', color: '#e08a4f',
+        id: 'cave', name: 'SPORE HOLLOW', color: '#e08a4f',
         // 돌바닥에 나무가 드물고 버섯이 지천 — 포자를 피해 다니는 구간
         typeWeights: { mushroom: 70, wolf: 20, slime: 10 },
         levelMin: 15, levelMax: 23,
@@ -301,63 +318,145 @@ const CONFIG = {
     contactCooldown: 0.9,
   },
 
-  /* 보스 — 거대 슬라임. 숲 가장자리의 동굴 입구에서 직접 불러낸다.
-     일반 몬스터처럼 돌아다니지 않고, 정해진 패턴을 번갈아 쓴다.
-     모든 공격에 예고 동작이 있어서 보고 피할 수 있다. */
-  boss: {
-    name: 'GIANT SLIME',
-    lairName: 'SLIME LAIR',   // 보스 방에 들어섰을 때 뜨는 이름표
-    level: 12,              // 숲 가장자리(1~6)보다 한참 위 — 준비가 됐을 때 부르는 상대
-    hpMult: 18,             // 같은 레벨 슬라임의 18배
-    atkMult: 2.2,
-    xpMult: 30,
-    scale: 2.6,
-    speed: 26,              // 평소엔 느릿느릿 다가온다
-    detect: 260,
-    contactCooldown: 1.0,
+  /* ── 보스 방 (모든 보스 공통) ─────────────────────────────
+     지역마다 하나씩 있는 동굴 입구로 들어가면 나오는 전용 공간.
+     화면이 24x13타일이므로 세로는 화면보다 조금만 크게 잡아 보스가 늘 눈에 들어오게 하고,
+     대신 가로를 넓혀 좌우로 도망치며 싸우는 방으로 만들었다. */
+  arena: {
+    w: 40, h: 17,
     enterRange: 26,         // 동굴 입구에서 이 거리 안이면 들어갈 수 있다
     respawnDelay: 300,      // 잡은 뒤 다시 도전할 수 있게 되기까지 (초) — 5분
+  },
 
-    /* 보스전 전용 공간 (동굴 안).
-       화면이 24x13타일이므로 세로는 화면보다 조금만 크게 잡아 보스가 늘 눈에 들어오게 하고,
-       대신 가로를 넓혀 좌우로 도망치며 싸우는 방으로 만들었다. */
-    arena: { w: 40, h: 17 },
+  /* ── 보스 셋 — 지역마다 하나 (regions.list 의 id 로 찾는다) ─────
+     일반 몬스터처럼 돌아다니지 않고 정해진 패턴을 번갈아 쓰며,
+     모든 공격에 예고 동작이 있어서 보고 피할 수 있다.
+     체력이 절반 아래로 내려가면 2페이즈 — 빨라지고 패턴이 독해진다.
 
-    /* 처치 보상
-       - 성장하는 단검 'SLIMELORD': 플레이어 레벨을 따라 레벨이 같이 오르는 특별한 무기.
-         (픽셀 폰트가 대문자뿐이라 게임 안에서는 SLIMELORD 로 보인다)
-       - 포션은 확정으로 준다 */
-    reward: {
-      weapon: 'dagger',
-      name: 'SLIMELORD',
-      daggerChance: 0.10,
-      potions: 6,
+     레벨은 그 지역 몬스터 상한보다 위로 잡았다 (가장자리 6 -> 12, 깊은 숲 15 -> 20, 골짜기 23 -> 30).
+     처치 보상은 포션 6개 확정 + 10% 확률로 '성장하는 무기' (weapons.growNames 참고). */
+  bosses: {
+    // 숲 가장자리 — 거대 슬라임: 느리지만 덩치와 분열로 밀어붙인다
+    edge: {
+      type: 'slime', name: 'GIANT SLIME', lairName: 'SLIME LAIR',
+      level: 12,
+      hpMult: 18,             // 같은 레벨 슬라임의 18배
+      atkMult: 2.2,
+      xpMult: 30,
+      scale: 2.6,
+      speed: 26,              // 평소엔 느릿느릿 다가온다
+      detect: 260,
+      contactCooldown: 1.0,
+      reward: { weapon: 'dagger', chance: 0.10, potions: 6 },
+
+      phase2At: 0.5,
+      phase2Speed: 1.35,
+      idleTime: [0.9, 1.7],   // 패턴과 패턴 사이 쉬는 시간
+
+      // 패턴별 수치. 뽑히는 확률(weight)은 [1페이즈, 2페이즈]
+      slam: {
+        windup: 0.62, air: 0.52, recover: 0.55,
+        radius: 62,           // 착지 충격파 반경
+        damageMult: 1.6,
+        weight: [34, 30],
+      },
+      roll: {
+        windup: 0.5, time: 1.25, speed: 165,
+        damageMult: 1.4,
+        weight: [30, 32],
+      },
+      split: {
+        windup: 0.55, count: [3, 5], levelBelow: 6,
+        weight: [20, 18],
+      },
+      spit: {
+        windup: 0.45, shots: [7, 11], speed: 74, life: 2.4,
+        damageMult: 0.9,
+        weight: [16, 20],
+      },
     },
 
-    phase2At: 0.5,          // 체력이 절반 아래로 내려가면 2페이즈
-    phase2Speed: 1.35,      // 2페이즈에서는 모든 동작이 빨라진다
-    idleTime: [0.9, 1.7],   // 패턴과 패턴 사이 쉬는 시간
+    // 깊은 숲 — 우두머리 늑대: 빠르다. 돌진을 피하고 벽에 부딪힌 빈틈을 노려야 한다
+    deep: {
+      type: 'wolf', name: 'ALPHA WOLF', lairName: 'WOLF DEN',
+      level: 20,
+      hpMult: 13,
+      atkMult: 1.2,             // 늑대는 원래 공격이 세고 빨라서 배수는 낮게
+      xpMult: 30,
+      scale: 3,               // 늑대 도트를 정수 배로 키운다 (도트가 깨지지 않게)
+      speed: 58,              // 평소에도 플레이어만큼 빠르다
+      detect: 300,
+      contactCooldown: 0.8,
+      reward: { weapon: 'sword', chance: 0.10, potions: 6 },
 
-    // 패턴별 수치. 뽑히는 확률(weight)은 페이즈에 따라 달라진다
-    slam: {
-      windup: 0.62, air: 0.52, recover: 0.55,
-      radius: 62,           // 착지 충격파 반경
-      damageMult: 1.6,
-      weight: [34, 30],     // [1페이즈, 2페이즈]
+      phase2At: 0.5,
+      phase2Speed: 1.3,
+      idleTime: [0.5, 1.1],
+      keepDistance: 60,       // 평소엔 이 거리쯤에서 서성이며 틈을 본다
+
+      lunge: {
+        windup: 0.5, gapWindup: 0.22,   // 첫 돌진 예고 / 연속 돌진 사이 짧은 예고
+        speed: 320, time: 0.55,
+        count: [1, 3],        // 2페이즈에서는 세 번 연달아 돌진한다
+        damageMult: 1.3,
+        recover: 0.6,         // 벽에 부딪히거나 다 달린 뒤 빈틈
+        weight: [40, 34],
+      },
+      pounce: {
+        windup: 0.5, air: 0.38, recover: 0.45,
+        radius: 30,           // 착지 범위 (좁지만 정확히 내가 있던 자리)
+        damageMult: 1.5,
+        weight: [28, 28],
+      },
+      howl: {
+        windup: 0.8, count: [2, 3], levelBelow: 8,
+        weight: [18, 22],
+      },
+      circle: {
+        time: 1.4, radius: 64, speed: 130,   // 주위를 돌다가 곧바로 돌진으로 이어진다
+        weight: [14, 16],
+      },
     },
-    roll: {
-      windup: 0.5, time: 1.25, speed: 165,
-      damageMult: 1.4,
-      weight: [30, 32],
-    },
-    split: {
-      windup: 0.55, count: [3, 5], levelBelow: 6,
-      weight: [20, 18],
-    },
-    spit: {
-      windup: 0.45, shots: [7, 11], speed: 74, life: 2.4,
-      damageMult: 0.9,
-      weight: [16, 20],
+
+    // 포자 골짜기 — 늙은 버섯: 거의 움직이지 않는 대신 방 전체를 포자로 덮는다
+    cave: {
+      type: 'mushroom', name: 'ELDER SHROOM', lairName: 'SPORE NEST',
+      level: 30,                // 몬스터 표(23)보다 위 — enemyStatsAt 이 같은 곡선으로 늘려 잡는다
+      hpMult: 9,              // 버섯은 같은 레벨 체력이 가장 높아서 배수는 낮게 (약 4,000)
+      atkMult: 1.15,
+      xpMult: 35,
+      scale: 3,
+      speed: 12,              // 뿌리를 끌며 아주 천천히 다가온다 (2페이즈에서 빨라진다)
+      detect: 300,
+      contactCooldown: 1.0,
+      reward: { weapon: 'axe', chance: 0.10, potions: 6 },
+
+      phase2At: 0.5,
+      phase2Speed: 1.3,
+      idleTime: [0.8, 1.4],
+
+      ring: {
+        windup: 0.55, shots: [10, 14], waves: [1, 2], waveGap: 0.4,
+        speed: 68, life: 2.6,
+        damageMult: 0.8,
+        weight: [34, 30],
+      },
+      rain: {
+        windup: 0.45, count: [5, 8], radius: 24,
+        delay: 1.0,           // 표시가 뜨고 터지기까지 — 이 안에 벗어나면 된다
+        scatter: 70,          // 플레이어 주변 이 반경 안에 떨어진다
+        damageMult: 1.2,
+        weight: [30, 32],
+      },
+      spawn: {
+        windup: 0.6, count: [2, 3], levelBelow: 8,
+        weight: [14, 12],
+      },
+      pulse: {
+        windup: 0.8, radius: 88, speed: 120,   // 몸에서 퍼지는 고리 — 대시로 통과하거나 밖에 있어야 한다
+        damageMult: 1.5,
+        weight: [22, 26],
+      },
     },
   },
 

@@ -300,7 +300,7 @@ const UI = {
     ctx.fillRect(x, y, Math.round(w * ratio), 6);
     // 절반 지점 눈금 — 여기를 넘기면 2페이즈다
     ctx.fillStyle = '#17110d';
-    ctx.fillRect(x + Math.round(w * CONFIG.boss.phase2At), y, 1, 6);
+    ctx.fillRect(x + Math.round(w * boss.spec.phase2At), y, 1, 6);
 
     const label = boss.name + (boss.phase2 ? '  ENRAGED' : '');
     this.drawText(ctx, label, CONFIG.VIEW_W / 2, y - 9, boss.phase2 ? '#ff6b6b' : '#f0d9b5', true);

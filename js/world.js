@@ -18,7 +18,7 @@ const REGION_EDGE = 0, REGION_DEEP = 1, REGION_CAVE = 2;
 const TILE_BASE_COLOR = [
   ['#3f8b40', '#7d5f3c', '#c2a877', '#2f6f9e', '#3f8b40'],   // 숲 가장자리
   ['#2c6431', '#7d5f3c', '#c2a877', '#2f6f9e', '#2c6431'],   // 깊은 숲
-  ['#67635d', '#5a544d', '#c2a877', '#2f6f9e', '#67635d'],   // 동굴 지대
+  ['#67635d', '#5a544d', '#c2a877', '#2f6f9e', '#67635d'],   // 포자 골짜기
 ];
 
 const World = {
@@ -44,7 +44,7 @@ const World = {
     this.props = [];
     this.solids = [];
     this.time = 0;
-    this.bossCave = null;   // 숲 가장자리 동굴 — 보스 방으로 들어가는 곳
+    this.caves = [null, null, null];   // 지역별 동굴 입구 — 각자 그 지역 보스 방으로 이어진다
     this.merchant = null;   // 상인 (Shop.place 가 채운다)
 
     this.buildRegions(seed);
@@ -68,7 +68,7 @@ const World = {
   STATE_KEYS: [
     'cols', 'rows', 'w', 'h', 'ground', 'props', 'solids', 'grid',
     'tiles', 'tileBlocked', 'regions', 'regionCenters',
-    'startX', 'startY', 'wetNoise', 'openNoise', 'bossCave', 'arenaExit', 'merchant',
+    'startX', 'startY', 'wetNoise', 'openNoise', 'caves', 'arenaExit', 'merchant',
     'time', 'isArena',
   ],
 
@@ -87,8 +87,8 @@ const World = {
      남쪽 벽에 나가는 굴이 하나 뚫려 있다.
      겉맵과 달리 지형을 뽑아내지 않고 손으로 짠 방이라 매번 같은 모양이다 —
      보스와 싸우는 자리는 예측 가능해야 패턴을 외워 대응할 수 있기 때문이다. */
-  initArena(seed) {
-    const T = CONFIG.TILE, a = CONFIG.boss.arena, WALL = 2;
+  initArena(seed, region) {
+    const T = CONFIG.TILE, a = CONFIG.arena, WALL = 2;
     this.cols = a.w;
     this.rows = a.h;
     this.w = this.cols * T;
@@ -96,16 +96,17 @@ const World = {
     this.props = [];
     this.solids = [];
     this.time = 0;
-    this.bossCave = null;
+    this.caves = [null, null, null];
     this.merchant = null;
     this.isArena = true;
+    this.arenaRegion = region || 0;
 
     const rng = Util.makeRng(seed);
     const N = this.cols * this.rows;
     this.tiles = new Uint8Array(N);
     this.tileBlocked = new Uint8Array(N);
     this.regions = new Uint8Array(N);
-    for (let i = 0; i < N; i++) this.regions[i] = REGION_CAVE;   // 동굴 지대 = 돌바닥 색
+    for (let i = 0; i < N; i++) this.regions[i] = REGION_CAVE;   // 포자 골짜기 = 돌바닥 색
     this.regionCenters = [{ x: this.cols / 2, y: this.rows / 2 }];
     // 겉맵 전용 노이즈를 참조하다 터지지 않도록 밋밋한 값으로 채워둔다
     this.wetNoise = () => 0;
@@ -120,7 +121,7 @@ const World = {
       }
     }
 
-    this.bakeArena(rng, WALL);
+    this.bakeArena(rng, WALL, region || 0);
 
     // 나가는 굴은 남쪽 벽 한가운데. 들어온 자리이자 나가는 자리다
     const ex = Math.floor(this.cols / 2) * T;
@@ -153,8 +154,11 @@ const World = {
   },
 
   // 보스 방 바닥 굽기 — 벽은 캄캄하게, 바닥은 자갈이 굴러다니는 돌바닥
-  bakeArena(rng, WALL) {
+  bakeArena(rng, WALL, region) {
     const T = CONFIG.TILE;
+    // 지역마다 벽 색조가 조금 다르다 — 가장자리는 흙빛, 깊은 숲은 이끼빛, 골짜기는 포자빛
+    const WALL_TINT = ['rgba(14,11,8,0.88)', 'rgba(8,14,10,0.88)', 'rgba(14,9,16,0.88)'][region] || 'rgba(12,11,10,0.88)';
+    const WALL_GRAIN = ['#2b2620', '#20301f', '#2e2033'][region] || '#2b2620';
     this.ground = makeCanvas(this.w, this.h);
     const ctx = this.ground.getContext('2d');
     ctx.imageSmoothingEnabled = false;
@@ -168,9 +172,9 @@ const World = {
 
         if (this.tileBlocked[i]) {
           // 벽 — 거의 검게 덮고 결만 남긴다
-          ctx.fillStyle = 'rgba(12,11,10,0.88)';
+          ctx.fillStyle = WALL_TINT;
           ctx.fillRect(x, y, T, T);
-          ctx.fillStyle = '#2b2620';
+          ctx.fillStyle = WALL_GRAIN;
           for (let k = 0; k < 5; k++) ctx.fillRect(x + Math.floor(rng() * T), y + Math.floor(rng() * T), 1, 1);
         } else if (rng() < 0.035) {
           // 자갈은 아주 드물게 — 흔하면 바닥이 어수선해서 보스 동작이 안 보인다
@@ -422,7 +426,7 @@ const World = {
         const t = this.tiles[i], region = this.regions[i];
         const x = tx * T, y = ty * T;
 
-        // 동굴 지대는 돌바닥이라 꽃이 자라지 않는다 — 대신 자갈이 굴러다닌다
+        // 포자 골짜기는 돌바닥이라 꽃이 자라지 않는다 — 대신 자갈이 굴러다닌다
         if (region === REGION_CAVE && (t === TILE_GRASS || t === TILE_MEADOW || t === TILE_DIRT)) {
           if (rng() < 0.10) ctx.drawImage(SPRITES.rock[0], x + Math.floor(rng() * 5), y + Math.floor(rng() * 6));
           continue;
@@ -503,7 +507,7 @@ const World = {
       if (!buckets.has(k)) buckets.set(k, []);
       buckets.get(k).push({ x: x, y: y });
 
-      // 지역마다 자라는 나무가 다르다 — 깊은 숲은 침엽수, 동굴 지대는 고사목이 많다
+      // 지역마다 자라는 나무가 다르다 — 깊은 숲은 침엽수, 포자 골짜기는 고사목이 많다
       const spec = this.regionSpec(x, y);
       const region = this.regionAt(x, y);
       let sprite, solid;
@@ -567,7 +571,7 @@ const World = {
       const s = spot();
       if (s) this.addProp(Util.choice(SPRITES.bush), s.x, s.y, { footHeight: 3 });
     }
-    for (let i = 0, n = this.scaled(70); i < n; i++) {   // 바위 — 부딪힌다. 동굴 지대에 특히 많다
+    for (let i = 0, n = this.scaled(70); i < n; i++) {   // 바위 — 부딪힌다. 포자 골짜기에 특히 많다
       const s = spot();
       if (!s) continue;
       if (rng() > this.regionSpec(s.x, s.y).boulders * 0.4) continue;
@@ -584,8 +588,7 @@ const World = {
         const p = this.addProp(Util.choice(SPRITES.caveEntrance), x, y, { solid: [12, 6, 9], footHeight: 3 });
         p.landmark = true;
         p.caveRegion = region;
-        // 숲 가장자리 동굴이 보스를 부르는 자리다
-        if (region === REGION_EDGE) this.bossCave = p;
+        this.caves[region] = p;   // 이 지역 보스 방의 입구
         break;
       }
     }
@@ -597,7 +600,7 @@ const World = {
       const s = spot();
       if (s) this.addProp(Util.choice(SPRITES.log), s.x, s.y, { footHeight: 2 });
     }
-    // 버섯은 그늘진 숲과 눅눅한 동굴 지대에 모여난다
+    // 버섯은 그늘진 숲과 눅눅한 포자 골짜기에 모여난다
     for (let i = 0, n = this.scaled(90); i < n; i++) {
       const s = spot();
       if (!s) continue;

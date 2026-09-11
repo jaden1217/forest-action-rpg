@@ -18,8 +18,9 @@ const Game = {
   currentRegion: -1, // 지금 서 있는 지역
   regionBanner: 0,   // 새 지역에 들어섰음을 알리는 표시가 남는 시간
   boss: null,        // 살아있는 보스
-  bossReadyIn: 0,    // 다시 도전할 수 있게 되기까지 남은 시간
-  cavePrompt: false, // 동굴 앞에 서 있어서 입장 안내가 떠 있는가
+  bossReadyIn: [0, 0, 0],   // 지역별로 다시 도전할 수 있게 되기까지 남은 시간
+  cavePrompt: null,  // 앞에 서 있는 동굴 입구 (입장 안내가 뜬다) — 없으면 null
+  arenaRegion: 0,    // 지금 들어가 있는 보스 방이 어느 지역 것인가
   exitPrompt: false, // 보스 방에서 나가는 굴 앞에 서 있는가
   inArena: false,    // 지금 보스 방 안인가
   overworld: null,   // 보스 방에 있는 동안 접어둔 겉맵 (맵·몬스터·드랍·플레이어 자리)
@@ -72,8 +73,8 @@ const Game = {
     this.currentRegion = World.regionAt(this.player.x, this.player.y);
     this.regionBanner = 0;
     this.boss = null;
-    this.bossReadyIn = 0;
-    this.cavePrompt = false;
+    this.bossReadyIn = [0, 0, 0];
+    this.cavePrompt = null;
     this.exitPrompt = false;
     this.inArena = false;
     this.overworld = null;
@@ -95,9 +96,21 @@ const Game = {
     wolf: (x, y, lv) => new Wolf(x, y, lv),
   },
 
+  // 보스 종류 -> 클래스 (CONFIG.bosses[*].type)
+  BOSS_TYPES: {
+    slime: (x, y) => new GiantSlime(x, y),
+    wolf: (x, y) => new AlphaWolf(x, y),
+    mushroom: (x, y) => new ElderShroom(x, y),
+  },
+
+  // 지금 들어가 있는(또는 들어가려는) 보스 방의 설정
+  bossSpec(region) {
+    return CONFIG.bosses[CONFIG.regions.list[region].id];
+  },
+
   /* ── 몬스터를 맵 아무 데나, 플레이어와 충분히 떨어진 빈 자리에 놓는다.
      종류와 레벨은 "그 자리가 어느 지역인가"가 정한다 — 숲 가장자리는 약한 슬라임,
-     깊은 숲은 늑대, 동굴 지대는 고레벨 버섯이 나온다. */
+     깊은 숲은 늑대, 포자 골짜기는 고레벨 버섯이 나온다. */
   spawnEnemy() {
     const cs = CONFIG.spawn;
 
@@ -125,12 +138,12 @@ const Game = {
   },
 
   /* ── 동굴 드나들기 ─────────────────────────────────────
-     숲 가장자리 동굴 입구에 서서 F 를 누르면 동굴 안 보스전 전용 공간으로 들어간다.
+     지역마다 하나씩 있는 동굴 입구에 서서 F 를 누르면 그 지역 보스의 방으로 들어간다.
      들어가고 나오는 F 는 무기 줍기와 같은 키이므로, 발밑에 무기가 있으면 그쪽이 먼저다.
      (그래서 이 검사는 Items.update 보다 먼저 돌려 F 입력을 가로챈다) */
   updateGates(dt) {
-    this.bossReadyIn = Math.max(0, this.bossReadyIn - dt);
-    this.cavePrompt = false;
+    for (let i = 0; i < this.bossReadyIn.length; i++) this.bossReadyIn[i] = Math.max(0, this.bossReadyIn[i] - dt);
+    this.cavePrompt = null;
     this.exitPrompt = false;
     this.shopPrompt = false;
     if (this.inArena) this.updateArenaGate(dt);
@@ -143,7 +156,7 @@ const Game = {
   // 상인 앞에서 F — 무기 줍기와 동굴 입장이 먼저이고, 둘 다 아니면 상점이다
   updateShopGate() {
     const npc = World.merchant;
-    if (!npc || this.player.dead || this.cavePrompt) return;
+    if (!npc || this.player.dead || this.cavePrompt) return;   // 동굴 안내가 떠 있으면 그쪽이 먼저
     if (Util.dist(this.player.x, this.player.y, npc.x, npc.y) > CONFIG.shop.interactRange) return;
     if (Items.nearWeapon) return;
 
@@ -154,17 +167,20 @@ const Game = {
   },
 
   updateCaveGate() {
-    const cave = World.bossCave;
-    if (!cave || this.player.dead) return;
-    if (Util.dist(this.player.x, this.player.y, cave.x, cave.y) > CONFIG.boss.enterRange) return;
-    if (Items.nearWeapon) return;   // 무기 교체가 먼저다
+    if (this.player.dead || Items.nearWeapon) return;   // 무기 교체가 먼저다
+    for (let region = 0; region < World.caves.length; region++) {
+      const cave = World.caves[region];
+      if (!cave) continue;
+      if (Util.dist(this.player.x, this.player.y, cave.x, cave.y) > CONFIG.arena.enterRange) continue;
 
-    this.cavePrompt = true;
-    if (this.bossReadyIn > 0) return;   // 잡은 지 얼마 안 됐으면 아직 비어 있다
-    if (!Items.pickupRequested) return;
+      this.cavePrompt = cave;
+      if (this.bossReadyIn[region] > 0) return;   // 잡은 지 얼마 안 됐으면 아직 비어 있다
+      if (!Items.pickupRequested) return;
 
-    Items.pickupRequested = false;      // 이 F 입력은 입장에 쓴다
-    this.beginTransition(() => this.enterArena());
+      Items.pickupRequested = false;      // 이 F 입력은 입장에 쓴다
+      this.beginTransition(() => this.enterArena(region));
+      return;
+    }
   },
 
   updateArenaGate(dt) {
@@ -178,7 +194,7 @@ const Game = {
 
     const exit = World.arenaExit;
     if (!exit) return;
-    if (Util.dist(this.player.x, this.player.y, exit.x, exit.y) > CONFIG.boss.enterRange) return;
+    if (Util.dist(this.player.x, this.player.y, exit.x, exit.y) > CONFIG.arena.enterRange) return;
     if (Items.nearWeapon) return;
 
     this.exitPrompt = true;
@@ -214,8 +230,9 @@ const Game = {
 
   /* 동굴 안으로 — 겉맵은 통째로 접어두고 보스 방을 펼친다.
      겉맵을 버리지 않으므로 나왔을 때 몬스터도 바닥에 떨어진 물건도 그대로 있다. */
-  enterArena() {
-    const cave = World.bossCave;
+  enterArena(region) {
+    const cave = World.caves[region];
+    this.arenaRegion = region;
     this.overworld = {
       world: World.snapshot(),
       enemies: this.enemies,
@@ -226,7 +243,7 @@ const Game = {
       region: this.currentRegion,
     };
 
-    World.initArena(this.seed + 7777);
+    World.initArena(this.seed + 7777 + region * 131, region);
     Items.reset();
     Projectiles.reset();
     FX.reset();
@@ -241,7 +258,8 @@ const Game = {
     p.attackTimer = 0;
     p.activeSkill = null;
 
-    const b = new GiantSlime(World.bossX, World.bossY, CONFIG.boss.level);
+    const spec = this.bossSpec(region);
+    const b = this.BOSS_TYPES[spec.type](World.bossX, World.bossY);
     this.enemies.push(b);
     this.boss = b;
     this.inArena = true;
@@ -308,7 +326,7 @@ const Game = {
       if (e.isBoss) {
         // 보스는 일반 몬스터 정원과 무관하다. 한참 뒤에 다시 도전할 수 있다
         this.boss = null;
-        this.bossReadyIn = CONFIG.boss.respawnDelay;
+        this.bossReadyIn[this.arenaRegion] = CONFIG.arena.respawnDelay;
       } else if (!this.inArena) {
         this.respawnQueue.push(Util.rand(CONFIG.spawn.respawnMin, CONFIG.spawn.respawnMax));
       }
@@ -496,11 +514,11 @@ const Game = {
     UI.draw(ctx, this.player, this.showInventory);
     if (this.showMap) Minimap.drawFull(ctx, this.player, this.enemies);
     if (this.boss && !this.boss.dead && !this.showMap) UI.drawBossBar(ctx, this.boss);
-    if (this.cavePrompt) UI.drawCavePrompt(ctx, World.bossCave, cam, this.bossReadyIn, 'ENTER');
+    if (this.cavePrompt) UI.drawCavePrompt(ctx, this.cavePrompt, cam, this.bossReadyIn[this.cavePrompt.caveRegion], 'ENTER');
     if (this.exitPrompt) UI.drawCavePrompt(ctx, World.arenaExit, cam, 0, 'LEAVE');
     if (this.shopPrompt && !this.showMap) Shop.drawPrompt(ctx, cam);
     if (Shop.open) Shop.draw(ctx, this.player);
-    if (this.lairBanner > 0) UI.drawBanner(ctx, CONFIG.boss.lairName, '#ff6b6b', this.lairBanner);
+    if (this.lairBanner > 0) UI.drawBanner(ctx, this.bossSpec(this.arenaRegion).lairName, '#ff6b6b', this.lairBanner);
     if (this.regionBanner > 0 && !this.showMap) UI.drawRegionBanner(ctx, this.currentRegion, this.regionBanner);
     if (this.confirmNewGame) UI.drawConfirm(ctx);
     if (this.savedFlash > 0) UI.drawSaved(ctx);

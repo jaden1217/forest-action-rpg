@@ -257,7 +257,7 @@ class Player {
 
   weaponLabel() {
     // 성장하는 무기는 고유한 이름만 보여준다 — 레벨은 늘 내 레벨과 같으니 적을 필요가 없다
-    if (this.weaponGrowing) return CONFIG.boss.reward.name;
+    if (this.weaponGrowing) return CONFIG.weapons.growNames[this.weapon] || this.weaponSpec().name;
     return this.weaponSpec().name + ' L' + this.weaponLevel;
   }
 

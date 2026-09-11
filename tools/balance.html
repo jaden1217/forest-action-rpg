@@ -136,16 +136,24 @@
   const totals = up.map(u => { let s = 0; for (let r = 0; r < u.maxRank; r++) s += Math.round(u.basePrice * Math.pow(u.priceMult, r)); return u.name + ' 전부 ' + s + 'G'; });
   out.appendChild(el('p', 'note', totals.join(' · ') + ' · 포션 ' + CONFIG.shop.potionPrice + 'G'));
 
-  /* ── 보스 ── */
-  const B = CONFIG.boss, bs = CONFIG.slime.levels[B.level - 1];
-  const bHp = Math.round(bs.hp * B.hpMult), bAtk = Math.round(bs.atk * B.atkMult);
-  section('보스 — 거대 슬라임 (Lv' + B.level + ')', '체력 ' + bHp + ', 몸통 공격 ' + bAtk + ', 내려찍기 ' + Math.round(bAtk * B.slam.damageMult) + ', 구르기 ' + Math.round(bAtk * B.roll.damageMult) + ', 뱉기 ' + Math.round(bAtk * B.spit.damageMult) + '/발. 재도전 ' + (B.respawnDelay / 60) + '분.');
-  table(['플레이어', '체력', '공격', '평타 몇 대', '검으로 몇 초 (쿨 ' + CONFIG.weapons.sword.cooldown + 's)', '몸통에 몇 대', '내려찍기 몇 대', '포션 회복'],
-    [8, 10, 12, 14, 16, 18, 20].map(L => {
-      const hits = Math.ceil(bHp / pDmg(L));
-      return ['L' + L, pHp(L), pDmg(L), hits, (hits * CONFIG.weapons.sword.cooldown).toFixed(0) + 's',
-        clsDie(Math.ceil(pHp(L) / bAtk)), clsDie(Math.ceil(pHp(L) / Math.round(bAtk * B.slam.damageMult))), potion(L)];
-    }));
+  /* ── 보스 셋 ── */
+  const BASES = { slime: CONFIG.slime.levels, wolf: CONFIG.wolf.levels, mushroom: CONFIG.mushroom.levels };
+  const BIG = { edge: ['slam', '내려찍기'], deep: ['pounce', '덮치기'], cave: ['pulse', '맥동'] };
+  const PLV = { edge: [8, 10, 12, 14, 16, 18], deep: [14, 16, 18, 20, 22, 24], cave: [20, 23, 26, 28, 30, 34] };
+  for (const key in CONFIG.bosses) {
+    const B = CONFIG.bosses[key], bs = enemyStatsAt(BASES[B.type], B.level);
+    const bHp = Math.round(bs.hp * B.hpMult), bAtk = Math.round(bs.atk * B.atkMult);
+    const big = BIG[key];
+    const patterns = Object.keys(B).filter(k => B[k] && B[k].damageMult).map(k => k + ' ' + Math.round(bAtk * B[k].damageMult)).join(', ');
+    section('보스 — ' + B.name + ' (Lv' + B.level + ', ' + CONFIG.regions.list.find(r => r.id === key).name + ')',
+      '체력 ' + bHp + ', 몸통 공격 ' + bAtk + '. 패턴 위력: ' + patterns + '. 재도전 ' + (CONFIG.arena.respawnDelay / 60) + '분.');
+    table(['플레이어', '체력', '공격', '평타 몇 대', '검으로 몇 초 (쿨 ' + CONFIG.weapons.sword.cooldown + 's)', '몸통에 몇 대', big[1] + ' 몇 대', '포션 회복'],
+      PLV[key].map(L => {
+        const hits = Math.ceil(bHp / pDmg(L));
+        return ['L' + L, pHp(L), pDmg(L), hits, (hits * CONFIG.weapons.sword.cooldown).toFixed(0) + 's',
+          clsDie(Math.ceil(pHp(L) / bAtk)), clsDie(Math.ceil(pHp(L) / Math.round(bAtk * B[big[0]].damageMult))), potion(L)];
+      }));
+  }
 
   /* ── 스킬 ── */
   const sk = CONFIG.skills.list;
