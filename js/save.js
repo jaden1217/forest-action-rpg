@@ -18,20 +18,28 @@ const Save = {
 
   collect(game) {
     const p = game.player;
+    /* 보스 방 안에서는 그곳의 좌표와 드랍을 저장하면 안 된다 —
+       보스 방은 저장되지 않는 임시 공간이라, 다시 켰을 때 겉맵의 엉뚱한 자리에 떨어진다.
+       그래서 접어둔 겉맵 쪽 좌표와 드랍을 대신 적는다. */
+    const o = game.overworld;
+    const x = o ? o.x : p.x, y = o ? o.y : p.y;
+    const drops = o ? o.drops : Items.drops;
+
     return {
       version: this.VERSION,
       seed: game.seed,
       savedAt: Date.now(),
       player: {
-        x: Math.round(p.x), y: Math.round(p.y),
+        x: Math.round(x), y: Math.round(y),
         hp: Math.round(p.hp), maxHp: p.maxHp, damage: p.damage,
         level: p.level, xp: p.xp, xpNeed: p.xpNeed,
         kills: p.kills, deaths: p.deaths,
         potions: p.potions,
-        weapon: p.weapon, weaponLevel: p.weaponLevel,
+        weapon: p.weapon, weaponLevel: p.weaponLevel, weaponGrowing: p.weaponGrowing,
       },
-      drops: Items.drops.map(d => ({
+      drops: drops.map(d => ({
         kind: d.kind, weapon: d.weapon, level: d.level, amount: d.amount,
+        growing: !!d.growing,
         x: Math.round(d.x), y: Math.round(d.y), life: Math.round(d.life),
       })),
     };
@@ -88,6 +96,8 @@ const Save = {
     if (CONFIG.weapons[s.weapon]) {
       player.weapon = s.weapon;
       player.weaponLevel = Util.clamp(s.weaponLevel || 1, 1, CONFIG.weapons.levelMult.length);
+      player.weaponGrowing = !!s.weaponGrowing;
+      player.syncWeaponLevel();   // 성장하는 무기는 레벨을 다시 맞춰둔다
     }
 
     // 저장된 자리가 막혀 있으면(설정을 바꿔 지형이 달라진 경우) 시작 지점으로 되돌린다
@@ -99,7 +109,7 @@ const Save = {
 
     Items.reset();
     for (const d of (data.drops || [])) {
-      if (d.kind === 'weapon') Items.spawnWeapon(d.x, d.y, d.weapon, d.level);
+      if (d.kind === 'weapon') Items.spawnWeapon(d.x, d.y, d.weapon, d.level, { growing: d.growing });
       else Items.spawn(d.x, d.y, d.amount);
       // spawn 은 빈 자리를 찾아 위치를 흔들므로 저장된 자리로 되돌린다
       const nd = Items.drops[Items.drops.length - 1];

@@ -25,6 +25,8 @@ class Player {
     // 장비 — 한 번에 하나의 무기만 든다. 종류는 성능이 같고, 위력은 무기 레벨이 정한다
     this.weapon = CONFIG.equipment.startWeapon;
     this.weaponLevel = CONFIG.equipment.startWeaponLevel;
+    // 보스가 떨구는 '성장하는 무기' — 레벨이 내 레벨을 따라 같이 오른다
+    this.weaponGrowing = false;
 
     this.attackTimer = 0;      // 휘두르는 중이면 0보다 큼
     this.cooldown = 0;
@@ -243,11 +245,21 @@ class Player {
 
   // 무기 레벨 색 — HUD·바닥 이름표에 함께 쓴다
   weaponColor() {
+    if (this.weaponGrowing) return CONFIG.weapons.growColor;
     return CONFIG.weapons.levelColor[levelTier(this.weaponLevel)] || '#ffffff';
   }
 
   weaponLabel() {
+    // 성장하는 무기는 고유한 이름만 보여준다 — 레벨은 늘 내 레벨과 같으니 적을 필요가 없다
+    if (this.weaponGrowing) return CONFIG.boss.reward.name;
     return this.weaponSpec().name + ' L' + this.weaponLevel;
+  }
+
+  /* 성장하는 무기는 내 레벨이 곧 무기 레벨이다.
+     레벨업 때마다 맞춰주므로 다시 주울 필요가 없다. */
+  syncWeaponLevel() {
+    if (!this.weaponGrowing) return;
+    this.weaponLevel = Util.clamp(this.level, 1, CONFIG.weapons.levelMult.length);
   }
 
   update(dt, enemies) {
@@ -423,6 +435,18 @@ class Player {
     FX.addShake(6);
   }
 
+  // 정해진 자리에서 되살아난다 (보스 방에서 쫓겨날 때 쓴다)
+  reviveAt(x, y) {
+    this.dead = false;
+    this.deadTimer = 0;
+    this.hp = this.maxHp;
+    this.x = x; this.y = y;
+    this.kx = this.ky = 0;
+    this.invuln = 1.2;
+    this.attackTimer = 0;
+    this.activeSkill = null;
+  }
+
   respawn() {
     this.dead = false;
     this.hp = this.maxHp;
@@ -441,6 +465,7 @@ class Player {
       this.damage += CONFIG.levelUp.damageGain;
       this.hp = this.maxHp;
       this.xpNeed = CONFIG.levelUp.xpNeed(this.level);
+      this.syncWeaponLevel();
       FX.number(this.x, this.y - 22, 'LEVEL UP', '#ffe066');
       FX.burst(this.x, this.y, 26, ['#ffe066', '#ffffff', '#9be564'], { speed: 60, life: 0.8, gravity: 40 });
     }
@@ -478,16 +503,21 @@ class Player {
   }
 
   // 무기 교체. 종류와 레벨이 모두 같으면 'same', 죽어있으면 false, 교체되면 true
-  equipWeapon(id, level) {
+  equipWeapon(id, level, growing) {
     if (this.dead) return false;
     if (!CONFIG.weapons[id]) return false;
+    growing = !!growing;
+    // 성장하는 무기는 주운 순간부터 내 레벨을 그대로 따라간다
+    level = growing ? this.level : level;
     level = Util.clamp(Math.round(level || 1), 1, CONFIG.weapons.levelMult.length);
-    if (this.weapon === id && this.weaponLevel === level) return 'same';
+    if (this.weapon === id && this.weaponLevel === level && this.weaponGrowing === growing) return 'same';
     this.weapon = id;
     this.weaponLevel = level;
+    this.weaponGrowing = growing;
     const color = this.weaponColor();
     FX.number(this.x, this.y - 22, this.weaponLabel() + '!', color);
-    FX.burst(this.x, this.y, 12, [color, '#ffffff'], { speed: 50, life: 0.45, gravity: 60 });
+    // 성장하는 무기는 조용히 손에 들어온다 (바닥 오라가 이미 충분히 화려하다)
+    if (!growing) FX.burst(this.x, this.y, 12, [color, '#ffffff'], { speed: 50, life: 0.45, gravity: 60 });
     // 휘두르는 도중에 바뀌면 판정이 꼬이므로 자세를 리셋한다
     this.attackTimer = 0;
     this.hitIds = new Set();

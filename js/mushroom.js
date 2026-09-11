@@ -38,7 +38,8 @@ class Mushroom extends Enemy {
       this.cooldown -= dt;
       if (this.cooldown <= 0) {
         this.windup = cfg.windup;
-        this.aim = Math.atan2(player.y - this.y, player.x - this.x);
+        // 조준은 포자가 나가는 위치(y-2) 기준으로 잰다
+        this.aim = Math.atan2(player.y - (this.y - 2), player.x - this.x);
         this.cooldown = this.stats.interval;
       }
     }

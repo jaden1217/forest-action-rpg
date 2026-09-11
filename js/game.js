@@ -17,6 +17,15 @@ const Game = {
   savedFlash: 0,     // 방금 저장했음을 알리는 표시가 남는 시간
   currentRegion: -1, // 지금 서 있는 지역
   regionBanner: 0,   // 새 지역에 들어섰음을 알리는 표시가 남는 시간
+  boss: null,        // 살아있는 보스
+  bossReadyIn: 0,    // 다시 도전할 수 있게 되기까지 남은 시간
+  cavePrompt: false, // 동굴 앞에 서 있어서 입장 안내가 떠 있는가
+  exitPrompt: false, // 보스 방에서 나가는 굴 앞에 서 있는가
+  inArena: false,    // 지금 보스 방 안인가
+  overworld: null,   // 보스 방에 있는 동안 접어둔 겉맵 (맵·몬스터·드랍·플레이어 자리)
+  transition: null,  // 화면이 어두워졌다 밝아지는 장면 전환
+  failTimer: 0,      // 보스 방에서 쓰러진 뒤 밖으로 쫓겨나기까지
+  lairBanner: 0,     // 보스 방에 들어섰음을 알리는 표시
 
   init() {
     this.canvas = document.getElementById('game');
@@ -57,6 +66,14 @@ const Game = {
     // 시작하자마자 배너가 뜨지 않도록 지금 지역을 기준으로 잡아둔다
     this.currentRegion = World.regionAt(this.player.x, this.player.y);
     this.regionBanner = 0;
+    this.boss = null;
+    this.bossReadyIn = 0;
+    this.cavePrompt = false;
+    this.exitPrompt = false;
+    this.inArena = false;
+    this.overworld = null;
+    this.transition = null;
+    this.lairBanner = 0;
 
     this.enemies = [];
     this.respawnQueue = [];
@@ -101,17 +118,178 @@ const Game = {
     return null;
   },
 
+  /* ── 동굴 드나들기 ─────────────────────────────────────
+     숲 가장자리 동굴 입구에 서서 F 를 누르면 동굴 안 보스전 전용 공간으로 들어간다.
+     들어가고 나오는 F 는 무기 줍기와 같은 키이므로, 발밑에 무기가 있으면 그쪽이 먼저다.
+     (그래서 이 검사는 Items.update 보다 먼저 돌려 F 입력을 가로챈다) */
+  updateGates(dt) {
+    this.bossReadyIn = Math.max(0, this.bossReadyIn - dt);
+    this.cavePrompt = false;
+    this.exitPrompt = false;
+    if (this.inArena) this.updateArenaGate(dt);
+    else this.updateCaveGate();
+  },
+
+  updateCaveGate() {
+    const cave = World.bossCave;
+    if (!cave || this.player.dead) return;
+    if (Util.dist(this.player.x, this.player.y, cave.x, cave.y) > CONFIG.boss.enterRange) return;
+    if (Items.nearWeapon) return;   // 무기 교체가 먼저다
+
+    this.cavePrompt = true;
+    if (this.bossReadyIn > 0) return;   // 잡은 지 얼마 안 됐으면 아직 비어 있다
+    if (!Items.pickupRequested) return;
+
+    Items.pickupRequested = false;      // 이 F 입력은 입장에 쓴다
+    this.beginTransition(() => this.enterArena());
+  },
+
+  updateArenaGate(dt) {
+    // 쓰러지면 잠깐 뒤 굴 밖으로 쫓겨난다. 벌칙은 없고 바로 다시 들어갈 수 있다
+    if (this.player.dead) {
+      this.failTimer = Math.max(0, this.failTimer - dt);
+      if (this.failTimer <= 0) this.beginTransition(() => this.exitArena());
+      return;
+    }
+    this.failTimer = 1.2;
+
+    const exit = World.arenaExit;
+    if (!exit) return;
+    if (Util.dist(this.player.x, this.player.y, exit.x, exit.y) > CONFIG.boss.enterRange) return;
+    if (Items.nearWeapon) return;
+
+    this.exitPrompt = true;
+    if (!Items.pickupRequested) return;
+    Items.pickupRequested = false;
+    this.beginTransition(() => this.exitArena());
+  },
+
+  /* 장면 전환 — 화면이 까맣게 덮였다가 다시 걷힌다.
+     한가운데(완전히 까매진 순간)에 맵을 갈아끼우므로 바뀌는 장면이 보이지 않는다.
+     전환 중에는 시간이 멈춰서 맞거나 때릴 수 없다. */
+  beginTransition(action) {
+    if (this.transition) return;
+    this.transition = { t: 0, dur: 0.85, action: action, fired: false };
+  },
+
+  updateTransition(dt) {
+    const tr = this.transition;
+    tr.t += dt;
+    if (!tr.fired && tr.t >= tr.dur / 2) {
+      tr.fired = true;
+      tr.action();
+    }
+    if (tr.t >= tr.dur) this.transition = null;
+  },
+
+  // 0(밝음) -> 1(완전히 검음) -> 0
+  fadeAlpha() {
+    const tr = this.transition;
+    if (!tr) return 0;
+    return 1 - Math.abs(1 - (tr.t / tr.dur) * 2);
+  },
+
+  /* 동굴 안으로 — 겉맵은 통째로 접어두고 보스 방을 펼친다.
+     겉맵을 버리지 않으므로 나왔을 때 몬스터도 바닥에 떨어진 물건도 그대로 있다. */
+  enterArena() {
+    const cave = World.bossCave;
+    this.overworld = {
+      world: World.snapshot(),
+      enemies: this.enemies,
+      respawnQueue: this.respawnQueue,
+      drops: Items.drops.slice(),
+      x: cave.x, y: cave.y + 24,        // 나왔을 때 설 자리 — 입구 안내(남은 시간)가 보이는 거리
+      spawnX: this.player.spawnX, spawnY: this.player.spawnY,
+      region: this.currentRegion,
+    };
+
+    World.initArena(this.seed + 7777);
+    Items.reset();
+    Projectiles.reset();
+    FX.reset();
+    this.enemies = [];
+    this.respawnQueue = [];
+
+    const p = this.player;
+    p.x = World.startX; p.y = World.startY;
+    p.spawnX = World.startX; p.spawnY = World.startY;
+    p.kx = p.ky = 0;
+    p.invuln = 0.9;
+    p.attackTimer = 0;
+    p.activeSkill = null;
+
+    const b = new GiantSlime(World.bossX, World.bossY, CONFIG.boss.level);
+    this.enemies.push(b);
+    this.boss = b;
+    this.inArena = true;
+    this.failTimer = 1.2;
+    this.regionBanner = 0;
+    this.lairBanner = 2.4;
+    this.updateCamera(true);
+    FX.addShake(6);
+    const pal = LEVEL_PALETTES[levelTier(b.level)];
+    FX.burst(b.x, b.y + 8, 40, [pal.M, pal.n, '#12100e'], { speed: 110, life: 0.8 });
+  },
+
+  // 동굴 밖으로 — 접어뒀던 겉맵을 그대로 펼치고 동굴 입구 앞에 세운다
+  exitArena() {
+    const o = this.overworld;
+    if (!o) return;
+    // 미처 줍지 못한 무기는 동굴 밖까지 들고 나온다 (보상을 문턱에서 잃지 않도록)
+    const carried = Items.drops.filter(d => d.kind === 'weapon');
+
+    World.restore(o.world);
+    this.enemies = o.enemies;
+    this.respawnQueue = o.respawnQueue;
+    Projectiles.reset();
+    FX.reset();
+    Items.reset();
+    for (const d of o.drops) Items.drops.push(d);
+
+    const p = this.player;
+    p.spawnX = o.spawnX; p.spawnY = o.spawnY;
+    // 동굴 입구 앞 — 막혀 있으면 주변으로 조금씩 밀어가며 설 자리를 찾는다
+    let px = o.x, py = o.y;
+    for (let i = 0; i < 24 && World.blocked({ x: px - 5, y: py + 1, w: 10, h: 6 }); i++) {
+      const a = i * 1.1;
+      px = o.x + Math.cos(a) * (8 + i * 2);
+      py = o.y + Math.sin(a) * (8 + i * 2);
+    }
+    if (p.dead) p.reviveAt(px, py);
+    else { p.x = px; p.y = py; p.kx = p.ky = 0; p.invuln = 0.9; }
+
+    for (const d of carried) {
+      Items.spawnWeapon(px, py, d.weapon, d.level, { growing: d.growing, pickupDelay: 0.4 });
+    }
+
+    this.boss = null;
+    this.inArena = false;
+    this.overworld = null;
+    this.lairBanner = 0;
+    this.currentRegion = World.regionAt(p.x, p.y);
+    this.regionBanner = 0;
+    this.updateCamera(true);
+  },
+
   updateEnemies(dt) {
     for (const e of this.enemies) e.update(dt, this.player);
 
     // 죽은 몬스터는 목록에서 빼고 재등장 타이머에 넣는다
     for (let i = this.enemies.length - 1; i >= 0; i--) {
-      if (this.enemies[i].dead) {
-        Items.dropFor(this.enemies[i]);
-        this.enemies.splice(i, 1);
+      if (!this.enemies[i].dead) continue;
+      const e = this.enemies[i];
+      Items.dropFor(e);
+      this.enemies.splice(i, 1);
+      if (e.isBoss) {
+        // 보스는 일반 몬스터 정원과 무관하다. 한참 뒤에 다시 도전할 수 있다
+        this.boss = null;
+        this.bossReadyIn = CONFIG.boss.respawnDelay;
+      } else if (!this.inArena) {
         this.respawnQueue.push(Util.rand(CONFIG.spawn.respawnMin, CONFIG.spawn.respawnMax));
       }
     }
+    // 보스 방에서는 겉맵 몬스터가 새로 나오지 않는다 (분열한 새끼도 다시 채우지 않는다)
+    if (this.inArena) return;
     for (let i = this.respawnQueue.length - 1; i >= 0; i--) {
       this.respawnQueue[i] -= dt;
       if (this.respawnQueue[i] <= 0) {
@@ -125,8 +303,21 @@ const Game = {
     return this.showInventory || this.showMap || this.confirmNewGame;
   },
 
+  // 지역 이름표 — 보스 방은 겉맵의 지역이 아니므로 따로 띄운다
+  updateBanners(dt) {
+    this.lairBanner = Math.max(0, this.lairBanner - dt);
+    this.regionBanner = Math.max(0, this.regionBanner - dt);
+    if (this.inArena) return;
+    const region = World.regionAt(this.player.x, this.player.y);
+    if (region !== this.currentRegion) {
+      this.currentRegion = region;
+      this.regionBanner = 2.4;
+    }
+  },
+
   // 인벤토리 / 지도 / 새 게임 확인 — 시간이 멈춰 있어도 입력은 받아야 한다
   handleMenuInput() {
+    if (this.transition) return;   // 장면이 넘어가는 동안에는 아무것도 열리지 않는다
     if (this.confirmNewGame) {
       // 확인 창이 떠 있는 동안에는 Y / N 만 받는다
       if (Input.pressed.KeyY) {
@@ -138,7 +329,8 @@ const Game = {
       return;
     }
     if (Input.inventoryPressed()) this.showInventory = !this.showInventory;
-    if (Input.mapPressed()) this.showMap = !this.showMap;
+    // 보스 방에서는 겉맵 지도를 펼칠 수 없다 (여기는 그 지도에 없는 곳이다)
+    if (Input.mapPressed() && !this.inArena) this.showMap = !this.showMap;
     if (Input.newGamePressed()) this.confirmNewGame = true;
   },
 
@@ -171,26 +363,25 @@ const Game = {
       Save.tick(dt, this);
       this.savedFlash = Math.max(0, this.savedFlash - dt);
 
-      // 인벤토리·지도를 펼쳐둔 동안에는 시간이 완전히 멈춘다 (읽는 사이에 맞지 않도록)
-      if (!this.paused()) {
+      // 동굴을 드나드는 장면 전환 중에도 시간이 멈춘다 (전환 도중에 맞으면 억울하다)
+      if (this.transition) {
+        this.updateTransition(dt);
+        FX.update(dt);
+      } else if (!this.paused()) {
+        // 인벤토리·지도를 펼쳐둔 동안에는 시간이 완전히 멈춘다 (읽는 사이에 맞지 않도록)
         if (FX.hitStop > 0) {
           FX.hitStop -= dt;   // 타격 순간에 아주 짧게 멈춘다 — 때리는 맛이 살아난다
         } else {
           this.player.update(dt, this.enemies);
           this.updateEnemies(dt);
           Projectiles.update(dt, this.player);
+          // F 입력을 먼저 가져갈 수 있도록 아이템 처리보다 앞에 둔다
+          this.updateGates(dt);
           Items.update(dt, this.player);
           this.updateCamera(false);
           World.update(dt);
           Ambient.update(dt, this.cam);
-
-          // 지역을 넘어서면 이름을 잠깐 띄운다
-          const region = World.regionAt(this.player.x, this.player.y);
-          if (region !== this.currentRegion) {
-            this.currentRegion = region;
-            this.regionBanner = 2.4;
-          }
-          this.regionBanner = Math.max(0, this.regionBanner - dt);
+          this.updateBanners(dt);
         }
         FX.update(dt);
       }
@@ -256,12 +447,19 @@ const Game = {
     Ambient.drawOverlay(ctx);
     ctx.drawImage(SPRITES.vignette, 0, 0);   // 가장자리를 어둡게 해 화면 중앙에 시선을 모은다
 
-    if (!this.showMap) Minimap.drawCorner(ctx, this.player, this.enemies);
+    // 보스 방은 겉맵 지도에 없는 곳이라 미니맵을 띄우지 않는다
+    if (!this.showMap && !this.inArena) Minimap.drawCorner(ctx, this.player, this.enemies);
     UI.draw(ctx, this.player, this.showInventory);
     if (this.showMap) Minimap.drawFull(ctx, this.player, this.enemies);
+    if (this.boss && !this.boss.dead && !this.showMap) UI.drawBossBar(ctx, this.boss);
+    if (this.cavePrompt) UI.drawCavePrompt(ctx, World.bossCave, cam, this.bossReadyIn, 'ENTER');
+    if (this.exitPrompt) UI.drawCavePrompt(ctx, World.arenaExit, cam, 0, 'LEAVE');
+    if (this.lairBanner > 0) UI.drawBanner(ctx, CONFIG.boss.lairName, '#ff6b6b', this.lairBanner);
     if (this.regionBanner > 0 && !this.showMap) UI.drawRegionBanner(ctx, this.currentRegion, this.regionBanner);
     if (this.confirmNewGame) UI.drawConfirm(ctx);
     if (this.savedFlash > 0) UI.drawSaved(ctx);
+    // 장면 전환은 맨 위를 덮는다
+    if (this.transition) UI.drawFade(ctx, this.fadeAlpha());
   },
 };
 

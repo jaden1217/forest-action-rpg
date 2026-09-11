@@ -22,6 +22,19 @@ const Items = {
   dropFor(enemy) {
     const cfg = CONFIG.items;
     const tier = levelTier(enemy.level);
+
+    /* 보스 보상
+       포션은 확정으로 여섯 개, 그리고 10% 확률로 '성장하는 단검'.
+       이 단검은 주운 순간부터 플레이어와 레벨이 같아지고, 레벨업할 때마다 함께 오른다.
+       확률이 낮은 대신 한 번 얻으면 다시는 무기를 갈아끼울 필요가 없는 물건이다. */
+    if (enemy.isBoss) {
+      const r = CONFIG.boss.reward;
+      for (let i = 0; i < r.potions; i++) this.spawn(enemy.x, enemy.y, 1);
+      if (Math.random() < r.daggerChance) {
+        this.spawnWeapon(enemy.x, enemy.y, r.weapon, Game.player.level, { growing: true });
+      }
+      return;
+    }
     if (Math.random() < cfg.potionDropChance[tier]) {
       let amount = 1;
       if (tier >= 4 && Math.random() < cfg.potionDoubleChance) amount = 2;
@@ -80,9 +93,15 @@ const Items = {
     const d = this.makeDrop(x, y, CONFIG.equipment.weaponLifetime, opts);
     d.kind = 'weapon';
     d.weapon = weaponId;
+    d.growing = !!(opts && opts.growing);
     d.level = Util.clamp(Math.round(level || 1), 1, CONFIG.weapons.levelMult.length);
     d.amount = 1;
+    d.auraTimer = 0;
     this.drops.push(d);
+    // 성장하는 무기는 떨어지는 순간 무지개가 크게 터져 멀리서도 눈에 띈다
+    if (d.growing) {
+      FX.burst(d.x, d.y - 4, 36, CONFIG.weapons.rainbow, { speed: 85, life: 0.9, gravity: 40 });
+    }
   },
 
   update(dt, player) {
@@ -115,6 +134,17 @@ const Items = {
         }
         d.vx *= Math.pow(0.005, dt);
         d.vy *= Math.pow(0.005, dt);
+      }
+
+      // 성장하는 무기는 바닥에 있는 동안에도 플레이어 레벨을 따라간다
+      if (d.growing) {
+        d.level = Util.clamp(player.level, 1, CONFIG.weapons.levelMult.length);
+        // 무지개 알갱이가 계속 피어오른다 — 바닥에 놓여 있어도 오라가 살아 있다
+        d.auraTimer -= dt;
+        if (d.auraTimer <= 0) {
+          d.auraTimer = 0.22;
+          FX.burst(d.x + Util.rand(-6, 6), d.y - 2, 1, CONFIG.weapons.rainbow, { speed: 6, life: 0.7, gravity: -30, size: 1 });
+        }
       }
 
       if (d.pickupDelay > 0) continue;
@@ -160,17 +190,34 @@ const Items = {
 
   // 무기 줍기 = 장착 + 손에 있던 무기는 그 자리에 두기
   pickupWeapon(index, d, player) {
-    const oldId = player.weapon, oldLevel = player.weaponLevel;
-    if (oldId === d.weapon && oldLevel === d.level) {
+    const oldId = player.weapon, oldLevel = player.weaponLevel, oldGrow = player.weaponGrowing;
+    if (oldId === d.weapon && oldLevel === d.level && oldGrow === !!d.growing) {
       // 종류도 레벨도 같은 무기면 그냥 회수한다
       FX.burst(d.x, d.y - 4, 8, ['#ffffff', '#7ec8ff'], { speed: 40, life: 0.35, gravity: 60 });
       this.drops.splice(index, 1);
       return;
     }
-    if (!player.equipWeapon(d.weapon, d.level)) return;
+    if (!player.equipWeapon(d.weapon, d.level, d.growing)) return;
     this.drops.splice(index, 1);
     // 바꾸기 전 무기는 버려두고 간다 — 마음이 바뀌면 다시 F로 집을 수 있다
-    this.spawnWeapon(d.x, d.y, oldId, oldLevel, { pickupDelay: 0.35 });
+    this.spawnWeapon(d.x, d.y, oldId, oldLevel, { pickupDelay: 0.35, growing: oldGrow });
+  },
+
+  /* 성장하는 무기의 무지개 오라 — 바닥에 옅은 색 원판이 숨쉬듯 커졌다 작아지고,
+     그 둘레를 일곱 색 알갱이가 천천히 돈다. */
+  drawAura(ctx, sx, sy, age) {
+    const pal = CONFIG.weapons.rainbow;
+    const pulse = 1 + Math.sin(age * 3) * 0.5;      // 0.5 ~ 1.5
+    ctx.globalAlpha = 0.16 + pulse * 0.06;
+    fillCircle(ctx, sx, sy + 2, 8 + pulse * 2, UI.rainbowNow(0));
+    ctx.globalAlpha = 1;
+    for (let i = 0; i < pal.length; i++) {
+      const a = age * 1.6 + (i / pal.length) * Math.PI * 2;
+      const r = 10 + Math.sin(age * 3 + i) * 1.5;
+      ctx.fillStyle = pal[i];
+      // 바닥에 누운 타원 궤도 — 위에서 내려다보는 시점이므로 세로를 눌러 그린다
+      ctx.fillRect(Math.round(sx + Math.cos(a) * r), Math.round(sy + 2 + Math.sin(a) * r * 0.5), 1, 1);
+    }
   },
 
   // 드랍 하나 그리기. 나무·캐릭터와 같은 y 정렬 목록에 섞여 호출된다
@@ -187,9 +234,11 @@ const Items = {
       const set = SPRITES.weapons && SPRITES.weapons[d.weapon];
       const sp = set && set[levelTier(d.level)];
       fillCircle(ctx, sx, sy + 5, 5, 'rgba(0,0,0,0.28)');
+      if (d.growing) this.drawAura(ctx, sx, sy, d.age);
       if (sp) ctx.drawImage(sp, sx - Math.floor(sp.width / 2), sy - 8 + bob);
       // 어떤 무기가 몇 레벨인지 바닥에서도 바로 보인다
-      UI.drawText(ctx, spec.name + ' L' + d.level, sx, sy + 8, color, true);
+      if (d.growing) UI.drawRainbowText(ctx, CONFIG.boss.reward.name, sx, sy + 8, true);
+      else UI.drawText(ctx, spec.name + ' L' + d.level, sx, sy + 8, color, true);
       // 발밑에 서 있으면 바꾸는 방법을 알려준다
       if (d.playerNear) UI.drawText(ctx, 'F SWAP', sx, sy - 19, '#ffffff', true);
       else if (Math.floor(d.age * 3) % 2 === 0) {

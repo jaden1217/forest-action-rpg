@@ -35,11 +35,16 @@ const World = {
 
   init(seed) {
     const T = CONFIG.TILE;
-    this.w = CONFIG.MAP_W * T;
-    this.h = CONFIG.MAP_H * T;
+    this.cols = CONFIG.MAP_W;
+    this.rows = CONFIG.MAP_H;
+    this.isArena = false;
+    this.arenaExit = null;
+    this.w = this.cols * T;
+    this.h = this.rows * T;
     this.props = [];
     this.solids = [];
     this.time = 0;
+    this.bossCave = null;   // 숲 가장자리 동굴 — 보스를 부르는 곳
 
     this.buildRegions(seed);
     this.buildTiles(seed);
@@ -54,11 +59,143 @@ const World = {
     this.time += dt;
   },
 
+  /* ── 맵 갈아끼우기 ─────────────────────────────────────
+     동굴에 들어갈 때 겉맵을 통째로 접어뒀다가, 나올 때 그대로 펼친다.
+     시드로 다시 만들면 200ms쯤 걸리고 몬스터·아이템 위치도 잃어버리므로,
+     만들어 둔 것을 그냥 들고 있는 편이 낫다. (바닥 캔버스가 커봐야 20MB 남짓) */
+  STATE_KEYS: [
+    'cols', 'rows', 'w', 'h', 'ground', 'props', 'solids', 'grid',
+    'tiles', 'tileBlocked', 'regions', 'regionCenters',
+    'startX', 'startY', 'wetNoise', 'openNoise', 'bossCave', 'arenaExit',
+    'time', 'isArena',
+  ],
+
+  snapshot() {
+    const s = {};
+    for (const k of this.STATE_KEYS) s[k] = this[k];
+    return s;
+  },
+
+  restore(s) {
+    for (const k of this.STATE_KEYS) this[k] = s[k];
+  },
+
+  /* ── 보스전 전용 공간 ───────────────────────────────────
+     동굴 입구로 들어가면 나오는 방. 사방이 바위벽으로 막힌 돌바닥이고
+     남쪽 벽에 나가는 굴이 하나 뚫려 있다.
+     겉맵과 달리 지형을 뽑아내지 않고 손으로 짠 방이라 매번 같은 모양이다 —
+     보스와 싸우는 자리는 예측 가능해야 패턴을 외워 대응할 수 있기 때문이다. */
+  initArena(seed) {
+    const T = CONFIG.TILE, a = CONFIG.boss.arena, WALL = 2;
+    this.cols = a.w;
+    this.rows = a.h;
+    this.w = this.cols * T;
+    this.h = this.rows * T;
+    this.props = [];
+    this.solids = [];
+    this.time = 0;
+    this.bossCave = null;
+    this.isArena = true;
+
+    const rng = Util.makeRng(seed);
+    const N = this.cols * this.rows;
+    this.tiles = new Uint8Array(N);
+    this.tileBlocked = new Uint8Array(N);
+    this.regions = new Uint8Array(N);
+    for (let i = 0; i < N; i++) this.regions[i] = REGION_CAVE;   // 동굴 지대 = 돌바닥 색
+    this.regionCenters = [{ x: this.cols / 2, y: this.rows / 2 }];
+    // 겉맵 전용 노이즈를 참조하다 터지지 않도록 밋밋한 값으로 채워둔다
+    this.wetNoise = () => 0;
+    this.openNoise = () => 0.5;
+
+    for (let ty = 0; ty < this.rows; ty++) {
+      for (let tx = 0; tx < this.cols; tx++) {
+        const i = ty * this.cols + tx;
+        const wall = tx < WALL || ty < WALL || tx >= this.cols - WALL || ty >= this.rows - WALL;
+        this.tiles[i] = wall ? TILE_DIRT : TILE_GRASS;
+        this.tileBlocked[i] = wall ? 1 : 0;
+      }
+    }
+
+    this.bakeArena(rng, WALL);
+
+    // 나가는 굴은 남쪽 벽 한가운데. 들어온 자리이자 나가는 자리다
+    const ex = Math.floor(this.cols / 2) * T;
+    const ey = (this.rows - WALL) * T + 6;
+    this.arenaExit = this.addProp(SPRITES.caveEntrance[0], ex, ey, { footHeight: 3 });
+    this.arenaExit.landmark = true;
+
+    // 벽을 따라 바위를 세워 돌방처럼 보이게 한다 (벽 타일이 이미 막고 있으므로 충돌은 없다)
+    for (let tx = WALL; tx < this.cols - WALL; tx += 2) {
+      if (Math.abs(tx - this.cols / 2) < 3) continue;   // 나가는 굴 앞은 비워둔다
+      if (rng() < 0.35) continue;
+      this.addProp(Util.choice(SPRITES.boulder), tx * T + rng() * 8, (WALL - 1) * T + 12, { footHeight: 3 });
+      if (rng() < 0.5) this.addProp(Util.choice(SPRITES.boulder), tx * T + rng() * 8, (this.rows - WALL) * T + 10, { footHeight: 3 });
+    }
+    for (let ty = WALL + 1; ty < this.rows - WALL; ty += 3) {
+      if (rng() < 0.4) continue;
+      this.addProp(Util.choice(SPRITES.boulder), (WALL - 1) * T + 10, ty * T + rng() * 8, { footHeight: 3 });
+      this.addProp(Util.choice(SPRITES.boulder), (this.cols - WALL) * T + 6, ty * T + rng() * 8, { footHeight: 3 });
+    }
+
+    this.buildGrid();
+
+    /* 들어온 자리는 나가는 굴 앞, 보스는 방 반대편에서 기다린다.
+       둘 다 벽에서 충분히 떼어 놓는다 — 들어오자마자 굴에 가려 몸이 안 보이거나
+       보스가 화면 위 체력바에 걸쳐 잘리면 안 되기 때문이다. */
+    this.startX = ex;
+    this.startY = ey - 46;
+    this.bossX = ex;
+    this.bossY = WALL * T + 78;
+  },
+
+  // 보스 방 바닥 굽기 — 벽은 캄캄하게, 바닥은 자갈이 굴러다니는 돌바닥
+  bakeArena(rng, WALL) {
+    const T = CONFIG.TILE;
+    this.ground = makeCanvas(this.w, this.h);
+    const ctx = this.ground.getContext('2d');
+    ctx.imageSmoothingEnabled = false;
+
+    for (let ty = 0; ty < this.rows; ty++) {
+      for (let tx = 0; tx < this.cols; tx++) {
+        const i = ty * this.cols + tx;
+        const x = tx * T, y = ty * T;
+        const set = this.groundSet(this.tiles[i], REGION_CAVE);
+        ctx.drawImage(set[Math.floor(rng() * set.length)], x, y);
+
+        if (this.tileBlocked[i]) {
+          // 벽 — 거의 검게 덮고 결만 남긴다
+          ctx.fillStyle = 'rgba(12,11,10,0.88)';
+          ctx.fillRect(x, y, T, T);
+          ctx.fillStyle = '#2b2620';
+          for (let k = 0; k < 5; k++) ctx.fillRect(x + Math.floor(rng() * T), y + Math.floor(rng() * T), 1, 1);
+        } else if (rng() < 0.035) {
+          // 자갈은 아주 드물게 — 흔하면 바닥이 어수선해서 보스 동작이 안 보인다
+          ctx.drawImage(SPRITES.rock[0], x + Math.floor(rng() * 6), y + Math.floor(rng() * 7));
+        }
+      }
+    }
+
+    // 벽에 닿은 바닥은 그늘지게 — 경계가 칼처럼 떨어지지 않는다
+    for (let ty = 0; ty < this.rows; ty++) {
+      for (let tx = 0; tx < this.cols; tx++) {
+        if (this.tileBlocked[ty * this.cols + tx]) continue;
+        const near = this.tileBlocked[(ty - 1) * this.cols + tx] || this.tileBlocked[(ty + 1) * this.cols + tx] ||
+                     this.tileBlocked[ty * this.cols + tx - 1] || this.tileBlocked[ty * this.cols + tx + 1];
+        if (!near) continue;
+        ctx.fillStyle = 'rgba(12,11,10,0.30)';
+        ctx.fillRect(tx * T, ty * T, T, T);
+        ctx.fillStyle = 'rgba(12,11,10,0.5)';
+        for (let k = 0; k < 10; k++) ctx.fillRect(tx * T + Math.floor(rng() * T), ty * T + Math.floor(rng() * T), 1, 1);
+      }
+    }
+  },
+
   /* 장식 개수를 맵 크기에 맞춰 늘린다.
      인자는 "80x60(=4800타일) 맵이었을 때의 개수"이고, 지금 맵 넓이에 비례해 커진다.
      맵 크기를 바꿔도 숲의 빽빽한 정도가 그대로 유지된다. */
   scaled(countAt4800) {
-    return Math.round(countAt4800 * (CONFIG.MAP_W * CONFIG.MAP_H) / 4800);
+    return Math.round(countAt4800 * (this.cols * this.rows) / 4800);
   },
 
   /* ── 지형 ──────────────────────────────────────────────── */
@@ -88,7 +225,7 @@ const World = {
      경계 거리에 노이즈를 더해 직선이 아니라 울퉁불퉁하게 만들고,
      삼각형이 놓이는 방향은 맵마다 달라 매번 다른 배치가 나온다. */
   buildRegions(seed) {
-    const W = CONFIG.MAP_W, H = CONFIG.MAP_H, cfg = CONFIG.regions;
+    const W = this.cols, H = this.rows, cfg = CONFIG.regions;
     this.regions = new Uint8Array(W * H);
     const rng = Util.makeRng(seed + 71);
 
@@ -126,8 +263,8 @@ const World = {
   regionAt(x, y) {
     const T = CONFIG.TILE;
     const tx = Math.floor(x / T), ty = Math.floor(y / T);
-    if (tx < 0 || ty < 0 || tx >= CONFIG.MAP_W || ty >= CONFIG.MAP_H) return REGION_EDGE;
-    return this.regions[ty * CONFIG.MAP_W + tx];
+    if (tx < 0 || ty < 0 || tx >= this.cols || ty >= this.rows) return REGION_EDGE;
+    return this.regions[ty * this.cols + tx];
   },
 
   regionSpec(x, y) {
@@ -135,7 +272,7 @@ const World = {
   },
 
   buildTiles(seed) {
-    const W = CONFIG.MAP_W, H = CONFIG.MAP_H, cfg = CONFIG.world;
+    const W = this.cols, H = this.rows, cfg = CONFIG.world;
     this.tiles = new Uint8Array(W * H);
     this.tileBlocked = new Uint8Array(W * H);
     this.wetNoise = this.makeNoise(seed + 11, 7, 5);
@@ -175,7 +312,7 @@ const World = {
      맵이 커지면 길도 같이 늘려야 광활한 숲에서 방향을 잃지 않는다. */
   carvePaths(seed) {
     const rng = Util.makeRng(seed);
-    const W = CONFIG.MAP_W, H = CONFIG.MAP_H, half = CONFIG.world.pathWidth;
+    const W = this.cols, H = this.rows, half = CONFIG.world.pathWidth;
     const lanes = Math.max(1, Math.round(W / 70));   // 80타일 맵이면 1줄, 160타일이면 2줄
 
     for (let n = 0; n < lanes; n++) {
@@ -196,7 +333,7 @@ const World = {
 
   // 길은 물을 건너지 않는다 (다리는 아직 없으므로 연못은 그대로 둔다)
   paveTile(tx, ty) {
-    const W = CONFIG.MAP_W, H = CONFIG.MAP_H;
+    const W = this.cols, H = this.rows;
     if (tx < 0 || ty < 0 || tx >= W || ty >= H) return;
     const i = ty * W + tx;
     if (this.tiles[i] === TILE_WATER) return;
@@ -206,14 +343,14 @@ const World = {
   tileAt(x, y) {
     const T = CONFIG.TILE;
     const tx = Math.floor(x / T), ty = Math.floor(y / T);
-    if (tx < 0 || ty < 0 || tx >= CONFIG.MAP_W || ty >= CONFIG.MAP_H) return TILE_GRASS;
-    return this.tiles[ty * CONFIG.MAP_W + tx];
+    if (tx < 0 || ty < 0 || tx >= this.cols || ty >= this.rows) return TILE_GRASS;
+    return this.tiles[ty * this.cols + tx];
   },
 
   /* ── 바닥 굽기 ─────────────────────────────────────────── */
 
   bakeGround(rng) {
-    const T = CONFIG.TILE, W = CONFIG.MAP_W, H = CONFIG.MAP_H;
+    const T = CONFIG.TILE, W = this.cols, H = this.rows;
     this.ground = makeCanvas(this.w, this.h);
     const ctx = this.ground.getContext('2d');
     ctx.imageSmoothingEnabled = false;
@@ -243,7 +380,7 @@ const World = {
   // 경계에 서로의 색을 흩뿌려 칼같은 직선을 없앤다.
   // 타일 종류가 같아도 지역이 다르면 색이 다르므로 지역 경계도 함께 흐려진다.
   ditherEdges(ctx, rng) {
-    const T = CONFIG.TILE, W = CONFIG.MAP_W, H = CONFIG.MAP_H;
+    const T = CONFIG.TILE, W = this.cols, H = this.rows;
     const colorAt = (i) => TILE_BASE_COLOR[this.regions[i]][this.tiles[i]];
     const sprinkle = (x, y, w, h, color, n) => {
       ctx.fillStyle = color;
@@ -275,7 +412,7 @@ const World = {
 
   // 지형에 어울리는 잔디테일을 바닥에 직접 찍는다 (움직이지 않으므로 구워도 된다)
   bakeDetails(ctx, rng) {
-    const T = CONFIG.TILE, W = CONFIG.MAP_W, H = CONFIG.MAP_H;
+    const T = CONFIG.TILE, W = this.cols, H = this.rows;
     for (let ty = 0; ty < H; ty++) {
       for (let tx = 0; tx < W; tx++) {
         const i = ty * W + tx;
@@ -329,7 +466,7 @@ const World = {
 
   // 나무는 개방도 노이즈가 높은 곳(=숲)에 빽빽하게, 공터에는 드물게 심는다
   placeTrees(rng) {
-    const W = CONFIG.MAP_W, H = CONFIG.MAP_H, cfg = CONFIG.world;
+    const W = this.cols, H = this.rows, cfg = CONFIG.world;
     const minGap = 26;
     const cx = this.startX, cy = this.startY;
 
@@ -443,6 +580,9 @@ const World = {
         if (!this.isFreeSpot(x, y, 22)) continue;
         const p = this.addProp(Util.choice(SPRITES.caveEntrance), x, y, { solid: [12, 6, 9], footHeight: 3 });
         p.landmark = true;
+        p.caveRegion = region;
+        // 숲 가장자리 동굴이 보스를 부르는 자리다
+        if (region === REGION_EDGE) this.bossCave = p;
         break;
       }
     }
@@ -491,7 +631,7 @@ const World = {
     if (box.x < 6 || box.y < 6 || box.x + box.w > this.w - 6 || box.y + box.h > this.h - 6) return true;
 
     // 물에는 들어갈 수 없다
-    const T = CONFIG.TILE, W = CONFIG.MAP_W, H = CONFIG.MAP_H;
+    const T = CONFIG.TILE, W = this.cols, H = this.rows;
     const tx0 = Math.floor(box.x / T), tx1 = Math.floor((box.x + box.w) / T);
     const ty0 = Math.floor(box.y / T), ty1 = Math.floor((box.y + box.h) / T);
     for (let ty = ty0; ty <= ty1; ty++) {

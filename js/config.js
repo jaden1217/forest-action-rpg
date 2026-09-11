@@ -170,6 +170,11 @@ const CONFIG = {
     })(),
     // 칼날 색 — 레벨이 아니라 색 등급(levelTier)으로 고른다
     levelColor: ['#c8d0d8', '#8fe0a8', '#7ec8ff', '#c79ce8', '#ffb35c'],
+    // 성장하는 무기(보스 보상)는 등급색 대신 이 금색으로 표시해 한눈에 구별한다
+    growColor: '#ffd93d',
+    /* 성장하는 무기의 이름표와 바닥 오라에 쓰는 무지개.
+       hsl 로 매끈하게 돌리지 않고 일곱 색을 딱딱 끊어 쓴다 — 도트 그림에는 이쪽이 어울린다 */
+    rainbow: ['#ff5c5c', '#ffb35c', '#ffe066', '#7dff8a', '#5cd8ff', '#8f8fff', '#e08fff'],
   },
 
   equipment: {
@@ -289,6 +294,66 @@ const CONFIG = {
     lungeTime: 0.30,        // 돌진이 이어지는 시간
     recover: 0.55,          // 돌진 뒤 빈틈 — 이때가 때리기 좋다
     contactCooldown: 0.9,
+  },
+
+  /* 보스 — 거대 슬라임. 숲 가장자리의 동굴 입구에서 직접 불러낸다.
+     일반 몬스터처럼 돌아다니지 않고, 정해진 패턴을 번갈아 쓴다.
+     모든 공격에 예고 동작이 있어서 보고 피할 수 있다. */
+  boss: {
+    name: 'GIANT SLIME',
+    lairName: 'SLIME LAIR',   // 보스 방에 들어섰을 때 뜨는 이름표
+    level: 12,              // 숲 가장자리(1~6)보다 한참 위 — 준비가 됐을 때 부르는 상대
+    hpMult: 18,             // 같은 레벨 슬라임의 18배
+    atkMult: 2.2,
+    xpMult: 30,
+    scale: 2.6,
+    speed: 26,              // 평소엔 느릿느릿 다가온다
+    detect: 260,
+    contactCooldown: 1.0,
+    enterRange: 26,         // 동굴 입구에서 이 거리 안이면 들어갈 수 있다
+    respawnDelay: 300,      // 잡은 뒤 다시 도전할 수 있게 되기까지 (초) — 5분
+
+    /* 보스전 전용 공간 (동굴 안).
+       화면이 24x13타일이므로 세로는 화면보다 조금만 크게 잡아 보스가 늘 눈에 들어오게 하고,
+       대신 가로를 넓혀 좌우로 도망치며 싸우는 방으로 만들었다. */
+    arena: { w: 40, h: 17 },
+
+    /* 처치 보상
+       - 성장하는 단검 'SLIMELORD': 플레이어 레벨을 따라 레벨이 같이 오르는 특별한 무기.
+         (픽셀 폰트가 대문자뿐이라 게임 안에서는 SLIMELORD 로 보인다)
+       - 포션은 확정으로 준다 */
+    reward: {
+      weapon: 'dagger',
+      name: 'SLIMELORD',
+      daggerChance: 0.10,
+      potions: 6,
+    },
+
+    phase2At: 0.5,          // 체력이 절반 아래로 내려가면 2페이즈
+    phase2Speed: 1.35,      // 2페이즈에서는 모든 동작이 빨라진다
+    idleTime: [0.9, 1.7],   // 패턴과 패턴 사이 쉬는 시간
+
+    // 패턴별 수치. 뽑히는 확률(weight)은 페이즈에 따라 달라진다
+    slam: {
+      windup: 0.62, air: 0.52, recover: 0.55,
+      radius: 62,           // 착지 충격파 반경
+      damageMult: 1.6,
+      weight: [34, 30],     // [1페이즈, 2페이즈]
+    },
+    roll: {
+      windup: 0.5, time: 1.25, speed: 165,
+      damageMult: 1.4,
+      weight: [30, 32],
+    },
+    split: {
+      windup: 0.55, count: [3, 5], levelBelow: 6,
+      weight: [20, 18],
+    },
+    spit: {
+      windup: 0.45, shots: [7, 11], speed: 74, life: 2.4,
+      damageMult: 0.9,
+      weight: [16, 20],
+    },
   },
 
   fx: {

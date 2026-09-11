@@ -65,6 +65,37 @@ const UI = {
     this.blit(ctx, text, x, y, color);
   },
 
+  /* 무지개 글자 — 성장하는 무기 이름표 전용.
+     글자마다 색이 다르고 시간이 흐르면 색이 한 칸씩 흘러가서 반짝이는 것처럼 보인다.
+     글자 둘레에는 같은 색을 옅게 한 번 더 깔아 오라처럼 번지게 한다. */
+  drawRainbowText(ctx, text, x, y, centered) {
+    text = String(text).toUpperCase();
+    if (centered) x -= Math.floor(this.textWidth(text) / 2);
+    x = Math.round(x); y = Math.round(y);
+    const pal = CONFIG.weapons.rainbow;
+    const shift = Math.floor(World.time * 9);
+
+    this.blit(ctx, text, x + 1, y + 1, '#000000');
+    ctx.globalAlpha = 0.28;
+    for (let i = 0; i < text.length; i++) {
+      const c = pal[(i + shift) % pal.length];
+      this.blit(ctx, text[i], x + i * 4 - 1, y, c);
+      this.blit(ctx, text[i], x + i * 4 + 1, y, c);
+      this.blit(ctx, text[i], x + i * 4, y - 1, c);
+      this.blit(ctx, text[i], x + i * 4, y + 1, c);
+    }
+    ctx.globalAlpha = 1;
+    for (let i = 0; i < text.length; i++) {
+      this.blit(ctx, text[i], x + i * 4, y, pal[(i + shift) % pal.length]);
+    }
+  },
+
+  // 지금 이 순간의 무지개색 하나 (오라 원판처럼 한 색만 필요할 때)
+  rainbowNow(offset) {
+    const pal = CONFIG.weapons.rainbow;
+    return pal[(Math.floor(World.time * 9) + (offset || 0)) % pal.length];
+  },
+
   blit(ctx, text, x, y, color) {
     ctx.fillStyle = color;
     for (let i = 0; i < text.length; i++) {
@@ -145,7 +176,8 @@ const UI = {
       const set = typeof SPRITES !== 'undefined' && SPRITES.weapons && SPRITES.weapons[player.weapon];
       const icon = set && set[levelTier(player.weaponLevel)];
       if (icon) ctx.drawImage(icon, 8, 58);
-      this.drawText(ctx, player.weaponLabel(), 23, 62, player.weaponColor());
+      if (player.weaponGrowing) this.drawRainbowText(ctx, player.weaponLabel(), 23, 62);
+      else this.drawText(ctx, player.weaponLabel(), 23, 62, player.weaponColor());
     }
 
     // 체력이 낮고 포션이 있으면 깜빡이며 마시라고 알린다
@@ -191,7 +223,8 @@ const UI = {
       const set = typeof SPRITES !== 'undefined' && SPRITES.weapons && SPRITES.weapons[player.weapon];
       const icon = set && set[levelTier(player.weaponLevel)];
       if (icon) ctx.drawImage(icon, x + 14, y + 46);
-      this.drawText(ctx, player.weaponLabel(), x + 30, y + 48, player.weaponColor());
+      if (player.weaponGrowing) this.drawRainbowText(ctx, player.weaponLabel(), x + 30, y + 48);
+      else this.drawText(ctx, player.weaponLabel(), x + 30, y + 48, player.weaponColor());
       this.drawText(ctx, 'DMG ' + player.attackDamage() + ' RNG ' + spec.reach, x + 30, y + 57, '#f0d9b5');
       const dps = Math.round(player.attackDamage() / spec.cooldown);
       this.drawText(ctx, 'SPD ' + this.speedWord(spec.cooldown) + ' DPS ' + dps, x + 14, y + 70, '#7fa86a');
@@ -244,21 +277,70 @@ const UI = {
     }
   },
 
+  /* 보스 체력바 — 화면 위쪽 전체. 일반 몬스터의 머리 위 체력바와 달리
+     항상 떠 있고, 2페이즈에 들어가면 색이 붉어진다. */
+  drawBossBar(ctx, boss) {
+    // 왼쪽 HUD(~x85)와 오른쪽 KILLS(~x349) 사이에 들어가도록 좁게 잡는다
+    const w = 210, x = Math.round((CONFIG.VIEW_W - w) / 2), y = 16;
+    const ratio = Util.clamp(boss.hp / boss.maxHp, 0, 1);
+
+    ctx.fillStyle = '#17110d';
+    ctx.fillRect(x - 2, y - 2, w + 4, 10);
+    ctx.fillStyle = '#3a1414';
+    ctx.fillRect(x, y, w, 6);
+    ctx.fillStyle = boss.phase2 ? '#ff6b6b' : boss.palette.M;
+    ctx.fillRect(x, y, Math.round(w * ratio), 6);
+    // 절반 지점 눈금 — 여기를 넘기면 2페이즈다
+    ctx.fillStyle = '#17110d';
+    ctx.fillRect(x + Math.round(w * CONFIG.boss.phase2At), y, 1, 6);
+
+    const label = boss.name + (boss.phase2 ? '  ENRAGED' : '');
+    this.drawText(ctx, label, CONFIG.VIEW_W / 2, y - 9, boss.phase2 ? '#ff6b6b' : '#f0d9b5', true);
+  },
+
+  /* 동굴 입구(또는 보스 방에서 나가는 굴) 앞에 섰을 때 뜨는 안내.
+     아직 다시 도전할 수 없으면 남은 시간을 분·초로 보여준다. */
+  drawCavePrompt(ctx, cave, cam, readyIn, verb) {
+    if (!cave) return;
+    const sx = Math.round(cave.x - cam.x), sy = Math.round(cave.y - cam.y);
+    if (readyIn > 0) {
+      const m = Math.floor(readyIn / 60), s = Math.ceil(readyIn % 60);
+      const label = m > 0 ? (m + 'M' + (s < 10 ? '0' : '') + s) : (s + 'S');
+      this.drawText(ctx, label, sx, sy - 40, '#8f9aa8', true);
+      return;
+    }
+    // 깜빡여서 눈에 띄게
+    if (Math.floor(World.time * 3) % 2 === 0) return;
+    this.drawText(ctx, 'F  ' + verb, sx, sy - 40, '#ff6b6b', true);
+  },
+
+  // 화면을 까맣게 덮는다 (동굴을 드나들 때의 장면 전환)
+  drawFade(ctx, alpha) {
+    if (alpha <= 0) return;
+    ctx.fillStyle = 'rgba(0,0,0,' + Util.clamp(alpha, 0, 1).toFixed(3) + ')';
+    ctx.fillRect(0, 0, CONFIG.VIEW_W, CONFIG.VIEW_H);
+  },
+
   /* 새 지역에 들어섰을 때 잠깐 뜨는 이름표.
      끝날 때 깜빡이며 사라져서 화면에 계속 남아 있지 않다. */
   drawRegionBanner(ctx, regionId, timeLeft) {
     const spec = CONFIG.regions.list[regionId];
     if (!spec) return;
+    this.drawBanner(ctx, spec.name, spec.color, timeLeft);
+  },
+
+  // 화면 위쪽에 잠깐 떴다 사라지는 이름표 (지역 이름, 보스 방 이름)
+  drawBanner(ctx, text, color, timeLeft) {
     if (timeLeft < 0.6 && Math.floor(timeLeft * 12) % 2 === 0) return;
 
-    const w = this.textWidth(spec.name) + 14;
+    const w = this.textWidth(text) + 14;
     const x = Math.round((CONFIG.VIEW_W - w) / 2), y = 26;
     ctx.fillStyle = 'rgba(10,12,10,0.72)';
     ctx.fillRect(x, y, w, 13);
-    ctx.fillStyle = spec.color;
+    ctx.fillStyle = color;
     ctx.fillRect(x, y, w, 1);
     ctx.fillRect(x, y + 12, w, 1);
-    this.drawText(ctx, spec.name, CONFIG.VIEW_W / 2, y + 4, spec.color, true);
+    this.drawText(ctx, text, CONFIG.VIEW_W / 2, y + 4, color, true);
   },
 
   // 자동 저장 직후 잠깐 뜨는 표시

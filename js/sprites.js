@@ -769,6 +769,71 @@ function makeSpinRing(t) {
   return cv;
 }
 
+/* ── 보스: 거대 슬라임 ─────────────────────────────────────
+   32x32 격자를 손으로 찍기엔 칸이 너무 많아서, 나무처럼 원을 겹쳐 그린다.
+   일반 슬라임과 같은 레벨 색을 쓰되 눈매를 사납게 해서 구분한다. */
+function makeGiantSlime(pal) {
+  const W = 44, H = 38;
+  const cv = makeCanvas(W, H), ctx = cv.getContext('2d');
+  const OUT = '#12100e';
+  const cx = W / 2;
+
+  // 몸통 — 아래가 퍼진 돔 모양
+  const blobs = [[cx, 22, 19], [cx - 9, 26, 13], [cx + 9, 26, 13], [cx, 14, 14]];
+  for (const b of blobs) fillCircle(ctx, b[0], b[1], b[2] + 1, OUT);
+  for (const b of blobs) fillCircle(ctx, b[0], b[1], b[2], pal.M);
+  ctx.clearRect(0, 33, W, H - 33);          // 바닥을 평평하게 자른다
+  ctx.fillStyle = OUT; ctx.fillRect(6, 32, W - 12, 1);
+
+  // 위쪽 하이라이트와 아래쪽 그늘
+  fillCircle(ctx, cx - 5, 12, 9, pal.n);
+  fillCircle(ctx, cx - 7, 9, 5, '#ffffff');
+  ctx.globalAlpha = 0.55;
+  fillCircle(ctx, cx, 30, 15, pal.m);
+  ctx.globalAlpha = 1;
+
+  // 사나운 눈 — 눈썹이 안쪽으로 기울어 있다
+  for (const side of [-1, 1]) {
+    const ex = cx + side * 8;
+    ctx.fillStyle = OUT;
+    ctx.fillRect(ex - 3, 17, 6, 6);
+    ctx.fillStyle = '#ff5a4a';
+    ctx.fillRect(ex - 2, 19, 4, 3);
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(ex + (side > 0 ? -2 : 1), 19, 1, 1);
+    // 눈썹
+    ctx.fillStyle = OUT;
+    for (let i = 0; i < 5; i++) ctx.fillRect(ex - 3 + i, 14 + (side > 0 ? 4 - i : i) * 0.5, 1, 2);
+  }
+
+  // 입
+  ctx.fillStyle = OUT;
+  ctx.fillRect(cx - 5, 27, 10, 2);
+  ctx.fillRect(cx - 6, 26, 1, 1);
+  ctx.fillRect(cx + 5, 26, 1, 1);
+  return cv;
+}
+
+// 내려찍기 착지 충격파 — 바닥에 퍼지는 납작한 고리
+function makeShockRing(t, radius) {
+  const S = Math.ceil(radius * 2) + 8;
+  const cv = makeCanvas(S, Math.ceil(S * 0.62)), ctx = cv.getContext('2d');
+  const cx = S / 2, cy = cv.height / 2;
+  const r = radius * (0.35 + t * 0.65);
+  const thick = 4.5 - t * 2.5;
+  for (let y = 0; y < cv.height; y++) {
+    for (let x = 0; x < S; x++) {
+      const dx = x + 0.5 - cx, dy = (y + 0.5 - cy) / 0.62;   // 눌린 타원
+      const d = Math.sqrt(dx * dx + dy * dy);
+      if (d < r - thick || d > r) continue;
+      if (t > 0.55 && (x + y) % 2 === 0) continue;           // 끝날수록 성기게
+      ctx.fillStyle = d > r - thick * 0.45 ? '#ffd9a0' : '#ff9a4a';
+      ctx.fillRect(x, y, 1, 1);
+    }
+  }
+  return cv;
+}
+
 /* ── 전부 만들어서 SPRITES 에 담기 ─────────────────────────── */
 
 const SPRITES = {};
@@ -829,6 +894,11 @@ function buildSprites() {
   SPRITES.wolfLeftFlash = SPRITES.wolfLeft.map(frames => frames.map(s => makeSilhouette(s, '#ffffff')));
 
   SPRITES.spore = LEVEL_PALETTES.map((pal, i) => makeSprite('spore_lv' + (i + 1), SPORE, pal));
+
+  // 보스 — 레벨 색 등급별 5종 + 피격 실루엣, 착지 충격파 4프레임
+  SPRITES.giantSlime = LEVEL_PALETTES.map(makeGiantSlime);
+  SPRITES.giantSlimeFlash = SPRITES.giantSlime.map(s => makeSilhouette(s, '#ffffff'));
+  SPRITES.shockRing = [0, 0.34, 0.67, 1].map(t => makeShockRing(t, CONFIG.boss.slam.radius));
   SPRITES.playerFlash = {};
   for (const dir in SPRITES.player) {
     SPRITES.playerFlash[dir] = SPRITES.player[dir].map(s => makeSilhouette(s, '#ff9a9a'));

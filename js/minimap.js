@@ -25,7 +25,7 @@ const Minimap = {
   TREE_RGB: ['#1f5a2a', '#173f1f', '#3d4a3a'],
 
   build() {
-    const W = CONFIG.MAP_W, H = CONFIG.MAP_H;
+    const W = World.cols, H = World.rows;
     this.W = W; this.H = H;
     this.canvas = makeCanvas(W, H);
     const ctx = this.canvas.getContext('2d');
