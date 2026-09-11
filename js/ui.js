@@ -365,25 +365,10 @@ const UI = {
   },
 
   /* 조준점 — 마우스 자리에 검은 테두리를 두른 흰 십자. 적 위에 있으면 붉어진다.
-     플레이어에서 조준점까지 옅은 점선을 이어 "이쪽으로 휘두른다"가 한눈에 보이게 한다.
      (OS 십자 커서는 가늘고 색이 없어서 도트 배경에 묻히기 때문에 직접 그린다) */
   drawCrosshair(ctx, player, cam, enemies) {
     if (!Input.mouse.used) return;
     const mx = Math.round(Input.mouse.x), my = Math.round(Input.mouse.y);
-
-    // 조준선 — 플레이어 가슴께에서 조준점 앞까지 5px 간격 점선
-    if (!player.dead) {
-      const px = Math.round(player.x - cam.x), py = Math.round(player.y - cam.y - 2);
-      const dx = mx - px, dy = my - py, d = Math.sqrt(dx * dx + dy * dy);
-      if (d > 16) {
-        // 검은 밑점 위에 흰 점 — 밝은 풀밭에서도 어두운 흙길에서도 보인다
-        for (let k = 11; k < d - 7; k += 4) {
-          const x = Math.round(px + dx / d * k), y = Math.round(py + dy / d * k);
-          ctx.fillStyle = 'rgba(0,0,0,0.45)'; ctx.fillRect(x, y + 1, 1, 1);
-          ctx.fillStyle = 'rgba(255,255,255,0.6)'; ctx.fillRect(x, y, 1, 1);
-        }
-      }
-    }
 
     // 적 위에 있으면 붉게
     let hot = false;
