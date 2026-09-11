@@ -38,7 +38,7 @@ html, body {
   image-rendering: pixelated;
   image-rendering: crisp-edges;
   background: #2c5c2f;
-  cursor: crosshair;
+  cursor: none;   /* 조준점은 게임이 캔버스 안에 직접 그린다 */
 }
 
 #controls {
@@ -70,7 +70,7 @@ html, body {
 }
 
 </style>
-<!-- built 2026-09-11 13:58 by tools/build.js -->
+<!-- built 2026-09-11 16:33 by tools/build.js -->
 </head>
 <body>
   <div id="stage">
@@ -6336,6 +6336,52 @@ const UI = {
     this.drawText(ctx, on ? 'SOUND ON' : 'SOUND OFF', CONFIG.VIEW_W / 2, CONFIG.VIEW_H - 26, on ? '#9be564' : '#8f9aa8', true);
   },
 
+  /* 조준점 — 마우스 자리에 검은 테두리를 두른 흰 십자. 적 위에 있으면 붉어진다.
+     플레이어에서 조준점까지 옅은 점선을 이어 "이쪽으로 휘두른다"가 한눈에 보이게 한다.
+     (OS 십자 커서는 가늘고 색이 없어서 도트 배경에 묻히기 때문에 직접 그린다) */
+  drawCrosshair(ctx, player, cam, enemies) {
+    if (!Input.mouse.used) return;
+    const mx = Math.round(Input.mouse.x), my = Math.round(Input.mouse.y);
+
+    // 조준선 — 플레이어 가슴께에서 조준점 앞까지 5px 간격 점선
+    if (!player.dead) {
+      const px = Math.round(player.x - cam.x), py = Math.round(player.y - cam.y - 2);
+      const dx = mx - px, dy = my - py, d = Math.sqrt(dx * dx + dy * dy);
+      if (d > 16) {
+        // 검은 밑점 위에 흰 점 — 밝은 풀밭에서도 어두운 흙길에서도 보인다
+        for (let k = 11; k < d - 7; k += 4) {
+          const x = Math.round(px + dx / d * k), y = Math.round(py + dy / d * k);
+          ctx.fillStyle = 'rgba(0,0,0,0.45)'; ctx.fillRect(x, y + 1, 1, 1);
+          ctx.fillStyle = 'rgba(255,255,255,0.6)'; ctx.fillRect(x, y, 1, 1);
+        }
+      }
+    }
+
+    // 적 위에 있으면 붉게
+    let hot = false;
+    if (enemies) {
+      const wx = cam.x + mx, wy = cam.y + my;
+      for (const e of enemies) {
+        if (e.dead) continue;
+        if (Math.abs(e.x - wx) < e.radius + 3 && Math.abs(e.y - 4 - wy) < e.radius + 5) { hot = true; break; }
+      }
+    }
+    const color = hot ? '#ff6b6b' : '#ffffff';
+
+    // 십자 — 가운데 비우고 네 방향 막대 + 중심점. 검은 테두리를 먼저 깔아 어떤 배경에서도 읽힌다
+    const gap = 3, len = 4;
+    const cross = (c, o) => {
+      ctx.fillStyle = c;
+      ctx.fillRect(mx - gap - len - o, my - o, len + 2 * o, 1 + 2 * o);
+      ctx.fillRect(mx + gap + 1 - o, my - o, len + 2 * o, 1 + 2 * o);
+      ctx.fillRect(mx - o, my - gap - len - o, 1 + 2 * o, len + 2 * o);
+      ctx.fillRect(mx - o, my + gap + 1 - o, 1 + 2 * o, len + 2 * o);
+      ctx.fillRect(mx - o, my - o, 1 + 2 * o, 1 + 2 * o);
+    };
+    cross('#000000', 1);
+    cross(color, 0);
+  },
+
   // 시작 화면 — 게임 위에 어둡게 덮고 제목과 안내만 띄운다
   drawTitle(ctx, hasSave) {
     ctx.fillStyle = 'rgba(8,12,8,0.72)';
@@ -6927,6 +6973,8 @@ const Game = {
     // 장면 전환은 맨 위를 덮는다
     if (this.transition) UI.drawFade(ctx, this.fadeAlpha());
     if (this.title) UI.drawTitle(ctx, this.hasSave);
+    // 조준점은 무엇보다 위에 — 창이 열려 있어도 마우스 자리는 보여야 한다
+    else UI.drawCrosshair(ctx, this.player, cam, this.enemies);
   },
 };
 

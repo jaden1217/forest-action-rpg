@@ -31,7 +31,7 @@ html, body {
   image-rendering: pixelated;
   image-rendering: crisp-edges;
   background: #2c5c2f;
-  cursor: crosshair;
+  cursor: none;   /* 조준점은 게임이 캔버스 안에 직접 그린다 */
 }
 
 #controls {

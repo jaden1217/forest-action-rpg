@@ -537,6 +537,8 @@ const Game = {
     // 장면 전환은 맨 위를 덮는다
     if (this.transition) UI.drawFade(ctx, this.fadeAlpha());
     if (this.title) UI.drawTitle(ctx, this.hasSave);
+    // 조준점은 무엇보다 위에 — 창이 열려 있어도 마우스 자리는 보여야 한다
+    else UI.drawCrosshair(ctx, this.player, cam, this.enemies);
   },
 };
 
