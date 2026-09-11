@@ -46,6 +46,7 @@ class Wolf extends Enemy {
           this.state = 'windup';
           this.timer = cfg.windup;
           this.lungeDir = this.dir;                     // 여기서 방향이 고정된다
+          Sound.play('growl');
         }
         break;
       }

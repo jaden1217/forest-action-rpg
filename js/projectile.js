@@ -16,6 +16,7 @@ const Projectiles = {
   },
 
   spawn(x, y, angle, opts) {
+    Sound.play('blip');
     this.list.push({
       x: x, y: y,
       vx: Math.cos(angle) * opts.speed,

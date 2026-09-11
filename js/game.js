@@ -27,6 +27,8 @@ const Game = {
   failTimer: 0,      // 보스 방에서 쓰러진 뒤 밖으로 쫓겨나기까지
   lairBanner: 0,     // 보스 방에 들어섰음을 알리는 표시
   shopPrompt: false, // 상인 앞에 서 있어서 안내가 떠 있는가
+  soundFlash: 0,     // 소리를 켜고 끌 때 뜨는 표시
+  heartbeat: 0,      // 체력이 낮을 때 심장 소리 간격
 
   init() {
     this.canvas = document.getElementById('game');
@@ -35,6 +37,7 @@ const Game = {
 
     buildSprites();
     Input.init(this.canvas);
+    Sound.init();
 
     // 저장된 게임이 있으면 이어서 시작한다
     this.startGame(Save.read());
@@ -247,6 +250,7 @@ const Game = {
     this.lairBanner = 2.4;
     this.updateCamera(true);
     FX.addShake(6);
+    Sound.play('caveIn');
     const pal = LEVEL_PALETTES[levelTier(b.level)];
     FX.burst(b.x, b.y + 8, 40, [pal.M, pal.n, '#12100e'], { speed: 110, life: 0.8 });
   },
@@ -289,6 +293,7 @@ const Game = {
     this.currentRegion = World.regionAt(p.x, p.y);
     this.regionBanner = 0;
     this.updateCamera(true);
+    Sound.play('caveOut');
   },
 
   updateEnemies(dt) {
@@ -327,12 +332,22 @@ const Game = {
   updateBanners(dt) {
     this.lairBanner = Math.max(0, this.lairBanner - dt);
     this.regionBanner = Math.max(0, this.regionBanner - dt);
-    if (this.inArena) return;
+    if (this.inArena) { Sound.setTrack('boss'); return; }
     const region = World.regionAt(this.player.x, this.player.y);
     if (region !== this.currentRegion) {
       this.currentRegion = region;
       this.regionBanner = 2.4;
+      Sound.play('banner');
     }
+    Sound.setTrack(['forest', 'deep', 'cave'][region] || 'forest');
+  },
+
+  // 체력이 낮으면 심장이 뛴다 (화면 가장자리는 UI 가 붉게 칠한다)
+  updateHeartbeat(dt) {
+    const p = this.player;
+    if (p.dead || p.hp > p.maxHp * CONFIG.fx.lowHpRatio) { this.heartbeat = 0; return; }
+    this.heartbeat -= dt;
+    if (this.heartbeat <= 0) { this.heartbeat = 1.0; Sound.play('heartbeat'); }
   },
 
   // 인벤토리 / 지도 / 새 게임 확인 — 시간이 멈춰 있어도 입력은 받아야 한다
@@ -350,6 +365,7 @@ const Game = {
     }
     // 상점이 열려 있으면 상점이 키를 다 가져간다
     if (Shop.open) { Shop.handleInput(this.player); return; }
+    if (Input.pressed.KeyV) { Sound.toggle(); Sound.play('toggle'); this.soundFlash = 1.4; }
     if (Input.inventoryPressed()) this.showInventory = !this.showInventory;
     // 보스 방에서는 겉맵 지도를 펼칠 수 없다 (여기는 그 지도에 없는 곳이다)
     if (Input.mapPressed() && !this.inArena) this.showMap = !this.showMap;
@@ -384,6 +400,7 @@ const Game = {
 
       Save.tick(dt, this);
       this.savedFlash = Math.max(0, this.savedFlash - dt);
+      this.soundFlash = Math.max(0, this.soundFlash - dt);
 
       // 동굴을 드나드는 장면 전환 중에도 시간이 멈춘다 (전환 도중에 맞으면 억울하다)
       if (this.transition) {
@@ -404,6 +421,7 @@ const Game = {
           World.update(dt);
           Ambient.update(dt, this.cam);
           this.updateBanners(dt);
+          this.updateHeartbeat(dt);
         }
         FX.update(dt);
       }
@@ -422,7 +440,7 @@ const Game = {
     // 화면 흔들림은 카메라를 살짝 밀어서 표현한다
     const shakeX = FX.shake > 0 ? Util.rand(-FX.shake, FX.shake) : 0;
     const shakeY = FX.shake > 0 ? Util.rand(-FX.shake, FX.shake) : 0;
-    const cam = { x: Math.round(this.cam.x + shakeX), y: Math.round(this.cam.y + shakeY) };
+    const cam = { x: Math.round(this.cam.x + shakeX + FX.kick.x), y: Math.round(this.cam.y + shakeY + FX.kick.y) };
 
     ctx.clearRect(0, 0, CONFIG.VIEW_W, CONFIG.VIEW_H);
     World.drawGround(ctx, cam);
@@ -464,10 +482,14 @@ const Game = {
     }
 
     Projectiles.draw(ctx, cam);   // 탄은 캐릭터 위로 지나간다
+    FX.drawRings(ctx, cam);
     FX.drawParticles(ctx, cam);
+    FX.drawSparks(ctx, cam);
     FX.drawNumbers(ctx, cam);
     Ambient.drawOverlay(ctx);
     ctx.drawImage(SPRITES.vignette, 0, 0);   // 가장자리를 어둡게 해 화면 중앙에 시선을 모은다
+    UI.drawLowHp(ctx, this.player);
+    FX.drawFlashes(ctx);
 
     // 보스 방은 겉맵 지도에 없는 곳이라 미니맵을 띄우지 않는다
     if (!this.showMap && !this.inArena) Minimap.drawCorner(ctx, this.player, this.enemies);
@@ -482,6 +504,7 @@ const Game = {
     if (this.regionBanner > 0 && !this.showMap) UI.drawRegionBanner(ctx, this.currentRegion, this.regionBanner);
     if (this.confirmNewGame) UI.drawConfirm(ctx);
     if (this.savedFlash > 0) UI.drawSaved(ctx);
+    if (this.soundFlash > 0) UI.drawSoundState(ctx, Sound.enabled);
     // 장면 전환은 맨 위를 덮는다
     if (this.transition) UI.drawFade(ctx, this.fadeAlpha());
   },

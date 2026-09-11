@@ -351,6 +351,19 @@ const UI = {
     this.drawText(ctx, text, CONFIG.VIEW_W / 2, y + 4, color, true);
   },
 
+  // 체력이 낮으면 가장자리가 붉게 뛴다 (비네트 모양을 붉게 물들인 것)
+  drawLowHp(ctx, player) {
+    if (player.dead || player.hp > player.maxHp * CONFIG.fx.lowHpRatio) return;
+    if (!SPRITES.vignetteRed) SPRITES.vignetteRed = makeSilhouette(SPRITES.vignette, '#c01818');
+    ctx.globalAlpha = 0.45 + Math.sin(World.time * 6) * 0.25;
+    ctx.drawImage(SPRITES.vignetteRed, 0, 0);
+    ctx.globalAlpha = 1;
+  },
+
+  drawSoundState(ctx, on) {
+    this.drawText(ctx, on ? 'SOUND ON' : 'SOUND OFF', CONFIG.VIEW_W / 2, CONFIG.VIEW_H - 26, on ? '#9be564' : '#8f9aa8', true);
+  },
+
   // 자동 저장 직후 잠깐 뜨는 표시
   drawSaved(ctx) {
     this.drawText(ctx, 'SAVED', CONFIG.VIEW_W - 8 - this.textWidth('SAVED'), 26, '#9be564');

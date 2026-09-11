@@ -41,6 +41,7 @@ class GiantSlime extends Enemy {
     this.shock = 0;          // 충격파 연출이 남은 시간
     this.shockMax = 0.42;
     this.warn = 0;           // 예고 표시가 남은 시간
+    Sound.play('roar');
   }
 
   get feetBox() {
@@ -60,7 +61,9 @@ class GiantSlime extends Enemy {
     if (!this.phase2 && this.hp <= this.maxHp * cfg.phase2At) {
       this.phase2 = true;
       FX.addShake(7);
-      FX.number(this.x, this.y - 30, 'ENRAGED', '#ff6b6b');
+      FX.flash('#ff3b3b', 0.3, 0.4);
+      Sound.play('roar');
+      FX.number(this.x, this.y - 30, 'ENRAGED', '#ff6b6b', true);
       const pal = this.palette;
       FX.burst(this.x, this.y, 30, [pal.M, pal.n, '#ffffff'], { speed: 90, life: 0.7 });
     }
@@ -196,6 +199,9 @@ class GiantSlime extends Enemy {
     this.timer = cfg.slam.recover;
     this.shock = this.shockMax;
     FX.addShake(9);
+    FX.flash('#ffffff', 0.25, 0.12);
+    FX.freeze(0.05);
+    Sound.play('slam');
     const pal = this.palette;
     FX.burst(this.x, this.y + 6, 26, [pal.M, pal.n, '#cbbfa2'], { speed: 95, life: 0.6 });
 
@@ -221,6 +227,7 @@ class GiantSlime extends Enemy {
     FX.addShake(4);
     const pal = this.palette;
     FX.burst(this.x, this.y, 20, [pal.M, pal.m], { speed: 80, life: 0.5 });
+    Sound.play('split');
   }
 
   // 뱉기 — 사방으로 점액을 뿌린다. 2페이즈에서는 발수가 늘어난다
@@ -240,6 +247,7 @@ class GiantSlime extends Enemy {
       });
     }
     FX.addShake(3);
+    Sound.play('spit');
   }
 
   // 공중에 있는 동안은 때릴 수 없다
@@ -254,7 +262,11 @@ class GiantSlime extends Enemy {
     FX.addShake(10);
     const pal = this.palette;
     FX.burst(this.x, this.y, 60, [pal.M, pal.n, pal.m, '#ffffff'], { speed: 130, life: 1.0 });
-    FX.number(this.x, this.y - 34, 'DEFEATED', '#ffd93d');
+    FX.ring(this.x, this.y + 6, 24, '#ffffff');
+    FX.flash('#ffffff', 0.5, 0.35);
+    FX.freeze(0.18);
+    FX.number(this.x, this.y - 34, 'DEFEATED', '#ffd93d', true);
+    Sound.play('bossDead');
   }
 
   drawBody(ctx, sx, sy) {

@@ -154,6 +154,7 @@ class Player {
     this.cooldown = Math.max(this.cooldown, spec.duration);   // 스킬 직후 평타가 바로 안 나가게
     FX.addShake(spec.shake);
     FX.burst(this.x, this.y, 12, [spec.color, '#ffffff'], { speed: 55, life: 0.4, gravity: 30 });
+    Sound.play(spec.id);
   }
 
   /* 대시 — 충전을 하나 쓰고 짧게 미끄러진다.
@@ -190,6 +191,7 @@ class Player {
     this.activeSkill = null;
     this.kx = this.ky = 0;
     FX.burst(this.x, this.y + 4, 10, ['#cbd8e8', '#ffffff'], { speed: 42, life: 0.3, gravity: 18, size: 1 });
+    Sound.play('dash');
   }
 
   /* 히트스톱이나 인벤토리로 게임이 멈춘 프레임에도 키 입력은 사라지면 안 되므로,
@@ -342,6 +344,7 @@ class Player {
       this.hitIds = new Set();
       this.attackBuffer = 0;
       this.swingAngle = this.aim;   // 휘두르는 동안에는 이 각도로 고정된다
+      Sound.play('swing');
     }
 
     if (this.attackTimer > 0) {
@@ -411,8 +414,11 @@ class Player {
       dmg = Math.max(1, dmg);
       // 사방 공격은 바깥쪽으로, 베는 공격은 휘두른 방향으로 날린다
       s.takeHit(dmg, omni ? toEnemy : base, crit, this, knockMult);
-      FX.freeze(CONFIG.fx.hitStop);
-      FX.addShake(crit ? 2.4 : 1.3);
+      // 처치 > 치명타 > 보통 순으로 화면이 더 오래 멈춘다. 카메라도 휘두른 쪽으로 살짝 밀린다
+      const fx = CONFIG.fx;
+      FX.freeze(s.dead ? fx.hitStopKill : (crit ? fx.hitStopCrit : fx.hitStop));
+      FX.addShake(s.dead ? 3 : (crit ? 2.4 : 1.3));
+      FX.addKick(omni ? toEnemy : base, fx.kick * (crit ? 1.6 : 1));
     }
   }
 
@@ -427,6 +433,9 @@ class Player {
     FX.number(this.x, this.y - 12, '-' + amount, '#ff6b6b');
     FX.addShake(CONFIG.fx.shakeOnHurt);
     FX.spray(this.x, this.y, a, 8, ['#ff6b6b', '#ffffff']);
+    FX.flash('#ff3b3b', 0.22, 0.18);   // 화면이 붉게 번쩍 — 맞았다는 걸 눈이 놓치지 않게
+    FX.freeze(0.03);
+    Sound.play('hurt');
     if (this.hp <= 0) this.die();
   }
 
@@ -437,6 +446,8 @@ class Player {
     this.deadTimer = 1.6;
     FX.burst(this.x, this.y, 22, ['#ff6b6b', '#ffffff', '#f3c99b'], { speed: 80, life: 0.7 });
     FX.addShake(6);
+    FX.flash('#ff3b3b', 0.4, 0.5);
+    Sound.play('death');
   }
 
   // 정해진 자리에서 되살아난다 (보스 방에서 쫓겨날 때 쓴다)
@@ -470,7 +481,9 @@ class Player {
       this.hp = this.maxHp;
       this.xpNeed = CONFIG.levelUp.xpNeed(this.level);
       this.syncWeaponLevel();
-      FX.number(this.x, this.y - 22, 'LEVEL UP', '#ffe066');
+      FX.number(this.x, this.y - 22, 'LEVEL UP', '#ffe066', true);
+      FX.ring(this.x, this.y + 4, 10, '#ffe066');
+      Sound.play('levelup');
       FX.burst(this.x, this.y, 26, ['#ffe066', '#ffffff', '#9be564'], { speed: 60, life: 0.8, gravity: 40 });
     }
   }
@@ -481,6 +494,7 @@ class Player {
     if (x === undefined) { x = this.x; y = this.y; }
     FX.number(x, y - 14, '+' + amount + ' G', CONFIG.gold.color);
     FX.burst(x, y - 2, 6, [CONFIG.gold.color, '#ffffff'], { speed: 38, life: 0.4, gravity: 90, size: 1 });
+    Sound.play('gold');
   }
 
   // 가방에 들어갈 만큼만 담고 실제로 담은 개수를 돌려준다.
@@ -510,6 +524,7 @@ class Player {
     this.potionCooldown = cfg.potionCooldown;
     const healed = Math.min(cfg.potionHeal, this.maxHp - this.hp);
     this.hp += healed;
+    Sound.play('potion');
     FX.number(this.x, this.y - 20, '+' + healed, '#7dff8a');
     FX.burst(this.x, this.y, 14, ['#7dff8a', '#ffffff', '#e5484d'], { speed: 45, life: 0.5, gravity: 30 });
   }
@@ -530,6 +545,7 @@ class Player {
     FX.number(this.x, this.y - 22, this.weaponLabel() + '!', color);
     // 성장하는 무기는 조용히 손에 들어온다 (바닥 오라가 이미 충분히 화려하다)
     if (!growing) FX.burst(this.x, this.y, 12, [color, '#ffffff'], { speed: 50, life: 0.45, gravity: 60 });
+    Sound.play('pickup');
     // 휘두르는 도중에 바뀌면 판정이 꼬이므로 자세를 리셋한다
     this.attackTimer = 0;
     this.hitIds = new Set();

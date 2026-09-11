@@ -103,9 +103,10 @@ const Shop = {
   },
 
   buy(item, player) {
-    if (item.soldOut) { this.say(item.id === 'potion' ? 'BAG IS FULL' : 'MAX RANK'); return; }
-    if (player.gold < item.price) { this.say('NOT ENOUGH GOLD'); return; }
+    if (item.soldOut) { this.say(item.id === 'potion' ? 'BAG IS FULL' : 'MAX RANK'); Sound.play('error'); return; }
+    if (player.gold < item.price) { this.say('NOT ENOUGH GOLD'); Sound.play('error'); return; }
     player.gold -= item.price;
+    Sound.play('buy');
 
     if (item.id === 'potion') {
       player.addPotion(1);
@@ -129,10 +130,12 @@ const Shop = {
     this.open = true;
     this.cursor = 0;
     this.message = '';
+    Sound.play('shopOpen');
   },
 
   close() {
     this.open = false;
+    Sound.play('shopClose');
   },
 
   /* ── 창 ──────────────────────────────────────────────── */

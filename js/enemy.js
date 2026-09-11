@@ -131,7 +131,10 @@ class Enemy {
 
     const pal = this.palette;
     FX.spray(this.x, this.y, angle, crit ? 12 : 7, [pal.M, pal.n, '#ffffff']);
-    FX.number(this.x, this.y - 10 - this.radius, damage, crit ? '#ffd93d' : '#ffffff');
+    FX.number(this.x, this.y - 10 - this.radius, damage, crit ? '#ffd93d' : '#ffffff', crit);
+    // 맞은 쪽(때린 사람을 향한 면)에서 불꽃이 튄다
+    FX.spark(this.x - Math.cos(angle) * this.radius * 0.6, this.y - 2 - Math.sin(angle) * this.radius * 0.4, angle, crit);
+    Sound.play(crit ? 'crit' : 'hit');
 
     this.onHit(damage, player);
     if (this.hp <= 0) this.die(player);
@@ -143,6 +146,8 @@ class Enemy {
     this.dead = true;
     const pal = this.palette;
     FX.burst(this.x, this.y, 16 + this.level * 3, [pal.M, pal.n, pal.m], { speed: 70, life: 0.55 });
+    FX.ring(this.x, this.y + 2, this.radius + 2, pal.n);
+    Sound.play('kill');
     FX.number(this.x, this.y - 18, '+' + this.stats.xp + 'XP', '#9be564');
     player.kills++;
     player.gainXp(this.stats.xp);
@@ -154,6 +159,17 @@ class Enemy {
     if (this.dead) return;
     const sx = Math.round(this.x - cam.x);
     const sy = Math.round(this.y - cam.y);
+    // 맞은 직후엔 발을 축으로 옆으로 퍼졌다 돌아온다 — 충격이 몸에 전해지는 느낌
+    if (this.hurtFlash > 0) {
+      const k = this.hurtFlash / 0.12;
+      ctx.save();
+      ctx.translate(sx, sy + 7);
+      ctx.scale(1 + k * 0.16, 1 - k * 0.14);
+      ctx.translate(-sx, -(sy + 7));
+      this.drawBody(ctx, sx, sy);
+      ctx.restore();
+      return;
+    }
     this.drawBody(ctx, sx, sy);
   }
 
