@@ -104,6 +104,7 @@ const Items = {
     d.kind = 'weapon';
     d.weapon = weaponId;
     d.growing = !!(opts && opts.growing);
+    if (d.growing) d.life = 1e9;   // 성장 무기는 사라지지 않는다 (보스 보상이 증발하면 안 된다)
     d.level = Util.clamp(Math.round(level || 1), 1, CONFIG.weapons.levelMult.length);
     d.amount = 1;
     d.auraTimer = 0;

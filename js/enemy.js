@@ -17,7 +17,8 @@ class Enemy {
     this.id = ++enemyIdCounter;
     this.TYPE = 'enemy';
     this.level = level;
-    this.stats = stats;
+    // 표의 줄을 그대로 참조하면 한 마리를 고칠 때 같은 레벨 전부가 바뀐다 — 복사해서 쓴다
+    this.stats = Object.assign({}, stats);
     this.x = x; this.y = y;
     this.maxHp = stats.hp;
     this.hp = stats.hp;

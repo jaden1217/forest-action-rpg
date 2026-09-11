@@ -364,6 +364,25 @@ const UI = {
     this.drawText(ctx, on ? 'SOUND ON' : 'SOUND OFF', CONFIG.VIEW_W / 2, CONFIG.VIEW_H - 26, on ? '#9be564' : '#8f9aa8', true);
   },
 
+  // 시작 화면 — 게임 위에 어둡게 덮고 제목과 안내만 띄운다
+  drawTitle(ctx, hasSave) {
+    ctx.fillStyle = 'rgba(8,12,8,0.72)';
+    ctx.fillRect(0, 0, CONFIG.VIEW_W, CONFIG.VIEW_H);
+    const cx = CONFIG.VIEW_W / 2, cy = CONFIG.VIEW_H / 2;
+    // 제목 — 두 배 크기
+    ctx.save();
+    ctx.scale(2, 2);
+    this.drawText(ctx, 'FOREST ADVENTURE', Math.round(cx / 2), Math.round((cy - 30) / 2), '#9be564', true);
+    ctx.restore();
+    this.drawText(ctx, 'A TINY PIXEL ACTION RPG', cx, cy - 12, '#7fa86a', true);
+    // 세상이 멈춰 있으므로 깜빡임은 실제 시계로 돌린다
+    if ((Date.now() % 1000) < 650) {
+      this.drawText(ctx, hasSave ? 'PRESS ANY KEY TO CONTINUE' : 'PRESS ANY KEY TO START', cx, cy + 10, '#ffe066', true);
+    }
+    this.drawText(ctx, 'WASD MOVE   SPACE ATTACK   SHIFT DASH', cx, cy + 32, '#8fa383', true);
+    this.drawText(ctx, 'F INTERACT   E POTION   I BAG   M MAP', cx, cy + 41, '#8fa383', true);
+  },
+
   // 자동 저장 직후 잠깐 뜨는 표시
   drawSaved(ctx) {
     this.drawText(ctx, 'SAVED', CONFIG.VIEW_W - 8 - this.textWidth('SAVED'), 26, '#9be564');

@@ -29,6 +29,7 @@ const Game = {
   lairBanner: 0,     // 보스 방에 들어섰음을 알리는 표시
   shopPrompt: false, // 상인 앞에 서 있어서 안내가 떠 있는가
   soundFlash: 0,     // 소리를 켜고 끌 때 뜨는 표시
+  title: true,       // 시작 화면 — 아무 키나 누르면 시작 (첫 입력이 있어야 브라우저가 소리를 허락한다)
   heartbeat: 0,      // 체력이 낮을 때 심장 소리 간격
 
   init() {
@@ -41,7 +42,9 @@ const Game = {
     Sound.init();
 
     // 저장된 게임이 있으면 이어서 시작한다
+    this.hasSave = Save.has();
     this.startGame(Save.read());
+    this.title = true;
 
     // 탭을 닫기 직전에 마지막 상태를 한 번 더 저장한다
     window.addEventListener('beforeunload', () => Save.write(this));
@@ -411,6 +414,14 @@ const Game = {
 
     // 개발 중 에러 하나로 게임이 통째로 멈추지 않도록 감싼다 (에러는 콘솔에 남는다)
     try {
+      // 시작 화면 — 아무 키나 누르면 시작한다. 그 전까지는 세상이 멈춰 있다
+      if (this.title) {
+        if (Object.keys(Input.pressed).length) { this.title = false; }
+        Input.endFrame();
+        this.render();
+        requestAnimationFrame(this.frame.bind(this));
+        return;
+      }
       // 입력은 시간이 멈춘 프레임에도 사라지면 안 되므로 가장 먼저 받아둔다
       this.handleMenuInput();
       this.player.bufferInput();
@@ -525,6 +536,7 @@ const Game = {
     if (this.soundFlash > 0) UI.drawSoundState(ctx, Sound.enabled);
     // 장면 전환은 맨 위를 덮는다
     if (this.transition) UI.drawFade(ctx, this.fadeAlpha());
+    if (this.title) UI.drawTitle(ctx, this.hasSave);
   },
 };
 

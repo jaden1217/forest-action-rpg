@@ -41,6 +41,7 @@ const Input = {
   // 스크롤 등 브라우저 기본 동작을 막을 키
   CAPTURED: {
     Space: 1, Tab: 1,
+    ArrowUp: 1, ArrowDown: 1, ArrowLeft: 1, ArrowRight: 1,   // 상점 고르기에 쓴다 — 페이지가 스크롤되면 안 된다
   },
 
   // -1 / 0 / 1 형태의 이동 입력 (WASD)
