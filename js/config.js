@@ -40,11 +40,16 @@ function buildLevels(base, growth, extra) {
 }
 
 /* 레벨당 증가율 — 세 몬스터가 같은 곡선을 쓰고 시작값만 다르다.
-   체력 +11.5%/레벨, 공격력 +8.5%/레벨 정도로 완만하다.
-   (1레벨 대비 23레벨은 체력 약 11배, 공격력 약 6배) */
+   체력 +11.5%/레벨, 공격력 +9%/레벨 정도로 완만하다.
+   (1레벨 대비 23레벨은 체력 약 11배, 공격력 약 6.7배)
+
+   11주차 밸런싱: 공격력 시작값을 올리고 증가율도 조금 높였다.
+   전에는 같은 레벨 슬라임에게 20번을 맞아야 죽어서 위협이 없었다.
+   목표는 '같은 레벨 슬라임 기준 1레벨 12번 -> 12레벨 11번 -> 23레벨 7번' —
+   초반은 여유 있게 배우고, 깊이 갈수록 둘러싸이면 정말 위험해지도록. */
 const ENEMY_GROWTH = {
   hp: 1.115,
-  atk: 1.085,
+  atk: 1.09,
   speed: 1.010,       // 너무 빨라지면 도망칠 수 없으므로 아주 조금만
   detect: 1.012,
   scale: 1.022,       // 덩치로도 레벨이 보이게
@@ -251,7 +256,7 @@ const CONFIG = {
 
   slime: {
     levels: buildLevels(
-      { hp: 28, atk: 3, speed: 21, detect: 62, scale: 0.78, xp: 6, knockback: 62 },
+      { hp: 28, atk: 5, speed: 21, detect: 62, scale: 0.78, xp: 6, knockback: 62 },
       ENEMY_GROWTH
     ),
     hopCycle: 0.85,         // 한 번 통통 튀는 주기 (초)
@@ -263,7 +268,7 @@ const CONFIG = {
      "다가가서 빨리 없앨까 / 피해서 지나갈까"를 고르게 만드는 몬스터. */
   mushroom: {
     levels: buildLevels(
-      { hp: 40, atk: 4, detect: 82, scale: 0.85, xp: 8, knockback: 26 },
+      { hp: 40, atk: 5, detect: 82, scale: 0.85, xp: 8, knockback: 26 },   // 포자 한 발의 위력. 고레벨은 5발이라 슬라임과 같게
       ENEMY_GROWTH,
       (lv) => ({
         // 레벨이 오를수록 자주, 여러 발을 쏜다
@@ -285,7 +290,7 @@ const CONFIG = {
        다만 웅크리는 예고를 보기도 전에 죽어버리면 돌진을 피하는 재미가 사라지므로
        너무 낮게는 잡지 않았다. */
     levels: buildLevels(
-      { hp: 32, atk: 5, speed: 34, detect: 96, scale: 0.92, xp: 7, knockback: 70 },
+      { hp: 32, atk: 8, speed: 34, detect: 96, scale: 0.92, xp: 7, knockback: 70 },   // 슬라임의 1.6배 — 돌진을 피하는 게 답이다
       ENEMY_GROWTH,
       (lv) => ({ lunge: Math.round(150 + (lv - 1) / (LEVEL_MAX - 1) * 62) })
     ),
@@ -371,7 +376,10 @@ const CONFIG = {
     // 2주차: 슬라임이 떨구는 건 회복 포션 한 종류. 레벨이 높을수록 잘 나온다
     potionDropChance: [0.10, 0.13, 0.17, 0.22, 0.30], // 색 등급별 드랍 확률
     potionDoubleChance: 0.25, // 높은 등급이 2개를 떨굴 확률
-    potionHeal: 30,           // 포션 1개 회복량
+    /* 포션 1개 회복량 — 최대 체력의 비율로 잰다 (최소 30).
+       11주차 밸런싱: 고정 30이면 23레벨(체력 236)에서는 13%밖에 안 채워 쓸모가 없었다 */
+    potionHealRatio: 0.30,
+    potionHealMin: 30,
     potionMax: 5,             // 최대 소지 수 (인벤토리)
     potionStart: 2,           // 게임 시작 지급 수
     potionCooldown: 0.5,      // 연속 마시기 방지

@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>밸런스 표 — 숲의 모험</title>
+<style>
+  body { background: #151a14; color: #d8e6cf; font: 13px/1.5 system-ui, sans-serif; margin: 0; padding: 24px 32px 60px; }
+  h1 { font-size: 20px; margin: 0 0 4px; color: #9be564; }
+  h2 { font-size: 15px; margin: 34px 0 8px; color: #ffe066; border-bottom: 1px solid #2c3627; padding-bottom: 4px; }
+  p.note { color: #8fa383; margin: 0 0 12px; max-width: 900px; }
+  table { border-collapse: collapse; margin-bottom: 8px; }
+  th, td { border: 1px solid #2c3627; padding: 3px 8px; text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+  th { background: #1f261c; color: #c9d8bd; font-weight: 600; }
+  td.l, th.l { text-align: left; }
+  td.good { color: #9be564; }
+  td.warn { color: #ffb35c; }
+  td.bad  { color: #ff6b6b; }
+  td.dim  { color: #5f7159; }
+  .wrap { overflow-x: auto; }
+  code { color: #ffd93d; }
+</style>
+</head>
+<body>
+<h1>밸런스 표</h1>
+<p class="note">
+  <code>js/config.js</code> 의 값을 그대로 읽어 계산한다 — 설정을 바꾸고 새로고침하면 바로 반영된다.
+  게임을 실행하지 않고도 "몇 레벨이 어느 지역에서 몇 대에 죽는지"를 한눈에 볼 수 있다.
+  무기는 <b>플레이어 레벨과 같은 레벨의 검</b>을 든 것으로 가정한다 (성장 단검과 같다).
+</p>
+
+<div id="out"></div>
+
+<script src="../js/config.js"></script>
+<script>
+(function () {
+  const out = document.getElementById('out');
+  const el = (tag, cls, html) => { const e = document.createElement(tag); if (cls) e.className = cls; if (html !== undefined) e.innerHTML = html; return e; };
+  const section = (title, note) => { out.appendChild(el('h2', '', title)); if (note) out.appendChild(el('p', 'note', note)); };
+  const table = (head, rows) => {
+    const wrap = el('div', 'wrap'), t = el('table');
+    const tr = el('tr'); head.forEach((h, i) => tr.appendChild(el('th', i === 0 ? 'l' : '', h))); t.appendChild(tr);
+    for (const r of rows) {
+      const row = el('tr');
+      r.forEach((c, i) => {
+        const cell = el('td', i === 0 ? 'l' : '');
+        if (c && typeof c === 'object') { cell.textContent = c.v; if (c.cls) cell.classList.add(c.cls); }
+        else cell.textContent = c;
+        row.appendChild(cell);
+      });
+      t.appendChild(row);
+    }
+    wrap.appendChild(t); out.appendChild(wrap);
+  };
+
+  /* ── 플레이어 ── */
+  const P = CONFIG.player, LU = CONFIG.levelUp, WL = CONFIG.weapons.levelMult;
+  const pHp = L => P.maxHp + (L - 1) * LU.hpGain;
+  const pBase = L => P.attackDamage + (L - 1) * LU.damageGain;
+  const pDmg = L => Math.round(pBase(L) * WL[Math.min(L, LEVEL_MAX) - 1]);
+  const potion = L => Math.max(CONFIG.items.potionHealMin, Math.round(pHp(L) * CONFIG.items.potionHealRatio));
+  const levels = [1, 2, 3, 4, 5, 6, 8, 10, 12, 14, 16, 18, 20, 23, 26, 30];
+
+  section('플레이어 성장', '공격력 = 기본(레벨당 +' + LU.damageGain + ') × 같은 레벨 무기 배수. 체력은 레벨당 +' + LU.hpGain + '. 포션은 최대 체력의 ' + (CONFIG.items.potionHealRatio * 100) + '% (최소 ' + CONFIG.items.potionHealMin + ').');
+  table(['레벨', '체력', '기본 공격', '무기 배수', '실제 공격', '포션 회복', '다음 레벨까지 XP'],
+    levels.map(L => [L, pHp(L), pBase(L), WL[Math.min(L, LEVEL_MAX) - 1].toFixed(3), pDmg(L), potion(L), LU.xpNeed(L)]));
+
+  /* ── 몬스터 ── */
+  const types = [['슬라임', CONFIG.slime.levels], ['버섯', CONFIG.mushroom.levels], ['늑대', CONFIG.wolf.levels]];
+  const mLevels = [1, 3, 6, 8, 10, 12, 15, 17, 19, 21, 23];
+  section('몬스터 능력치', '색 등급: 1~4 초록 / 5~8 청록 / 9~13 파랑 / 14~18 보라 / 19~23 빨강. 버섯 공격력은 포자 한 발의 위력이고 발수는 레벨에 따라 1 / 3 / 5.');
+  table(['레벨', '등급', '슬라임 체력', '공격', 'XP', '버섯 체력', '공격', '발수', 'XP', '늑대 체력', '공격', 'XP', '골드'],
+    mLevels.map(M => {
+      const s = types[0][1][M - 1], m = types[1][1][M - 1], w = types[2][1][M - 1];
+      return [M, levelTier(M), s.hp, s.atk, s.xp, m.hp, m.atk, m.shots, m.xp, w.hp, w.atk, w.xp, CONFIG.gold.amountByTier[levelTier(M)]];
+    }));
+
+  /* ── 대결 표 ── */
+  const cls = (v, good, warn) => ({ v: v, cls: v <= good ? 'good' : (v <= warn ? 'warn' : 'bad') });
+  const clsDie = (v) => ({ v: v, cls: v >= 10 ? 'good' : (v >= 5 ? 'warn' : 'bad') });
+  const pL = [1, 3, 5, 8, 10, 12, 15, 18, 20, 23, 26, 30];
+  const mL = [1, 3, 6, 9, 12, 15, 18, 21, 23];
+
+  section('때려서 죽이기 — 몇 대 (슬라임 / 버섯 / 늑대)', '초록 ≤3대, 주황 ≤6대, 빨강 그 이상. 같은 레벨끼리는 3~6대가 목표. 자기 레벨보다 한참 위 지역에 가면 빨갛게 된다.');
+  table(['플레이어 \\ 몬스터'].concat(mL.map(M => 'M' + M)),
+    pL.map(L => [ 'L' + L + ' (공격 ' + pDmg(L) + ')' ].concat(mL.map(M => {
+      const d = pDmg(L);
+      const s = Math.ceil(types[0][1][M - 1].hp / d), m = Math.ceil(types[1][1][M - 1].hp / d), w = Math.ceil(types[2][1][M - 1].hp / d);
+      const worst = Math.max(s, m, w);
+      return { v: s + '/' + m + '/' + w, cls: worst <= 3 ? 'good' : (worst <= 6 ? 'warn' : 'bad') };
+    }))));
+
+  section('맞아서 죽기 — 몇 대 (슬라임 / 늑대), 포션 없이', '초록 ≥10대, 주황 5~9대, 빨강 <5대. 같은 레벨 슬라임에게 7~12대가 목표 — 둘러싸이면 위험하고 하나쯤은 여유 있게.');
+  table(['플레이어 \\ 몬스터'].concat(mL.map(M => 'M' + M)),
+    pL.map(L => [ 'L' + L + ' (체력 ' + pHp(L) + ')' ].concat(mL.map(M => {
+      const hp = pHp(L);
+      const s = Math.ceil(hp / types[0][1][M - 1].atk), w = Math.ceil(hp / types[2][1][M - 1].atk);
+      return { v: s + '/' + w, cls: s >= 10 ? 'good' : (s >= 5 ? 'warn' : 'bad') };
+    }))));
+
+  /* ── 지역별 성장 속도 ── */
+  section('지역별 레벨업 속도', '그 지역 몬스터 평균(레벨·종류 비율 반영)을 잡을 때 XP와, 플레이어 레벨별로 다음 레벨까지 몇 마리를 잡아야 하는지. 상주 몬스터가 250마리라 화면에 늘 여럿이므로 20~40마리는 몇 분 거리다.');
+  const regions = CONFIG.regions.list.map(r => {
+    const names = Object.keys(r.typeWeights), total = names.reduce((s, n) => s + r.typeWeights[n], 0);
+    let xp = 0, gold = 0, n = 0;
+    for (let M = r.levelMin; M <= r.levelMax; M++) {
+      for (const t of names) {
+        const w = r.typeWeights[t] / total;
+        xp += CONFIG[t].levels[M - 1].xp * w; gold += CONFIG.gold.amountByTier[levelTier(M)] * w;
+      }
+      n++;
+    }
+    return { name: r.name, range: r.levelMin + '~' + r.levelMax, xp: xp / n, gold: gold / n };
+  });
+  table(['플레이어 레벨', '다음 레벨까지'].concat(regions.map(r => r.name + ' (M' + r.range + ', 평균 ' + r.xp.toFixed(1) + 'XP, ' + r.gold.toFixed(1) + 'G)')),
+    pL.map(L => [ 'L' + L, LU.xpNeed(L) ].concat(regions.map(r => {
+      const k = Math.ceil(LU.xpNeed(L) / r.xp);
+      return { v: k + '마리', cls: k <= 15 ? 'good' : (k <= 40 ? 'warn' : 'bad') };
+    }))));
+
+  /* ── 골드 ── */
+  section('상점 — 강화 값과 필요한 처치 수', '깊은 숲 평균 골드(' + regions[1].gold.toFixed(1) + 'G/마리) 기준. 처음 몇 랭크는 몇 마리면 되고, 끝 랭크는 오래 모아야 한다.');
+  const up = CONFIG.shop.upgrades;
+  const maxRank = Math.max.apply(null, up.map(u => u.maxRank));
+  const rows = [];
+  for (let r = 0; r < maxRank; r++) {
+    const row = ['랭크 ' + (r + 1)];
+    for (const u of up) {
+      if (r >= u.maxRank) { row.push({ v: '-', cls: 'dim' }); row.push({ v: '', cls: 'dim' }); continue; }
+      const price = Math.round(u.basePrice * Math.pow(u.priceMult, r));
+      row.push(price + 'G'); row.push(Math.ceil(price / regions[1].gold) + '마리');
+    }
+    rows.push(row);
+  }
+  const head = ['']; for (const u of up) { head.push(u.name); head.push('처치'); }
+  table(head, rows);
+  const totals = up.map(u => { let s = 0; for (let r = 0; r < u.maxRank; r++) s += Math.round(u.basePrice * Math.pow(u.priceMult, r)); return u.name + ' 전부 ' + s + 'G'; });
+  out.appendChild(el('p', 'note', totals.join(' · ') + ' · 포션 ' + CONFIG.shop.potionPrice + 'G'));
+
+  /* ── 보스 ── */
+  const B = CONFIG.boss, bs = CONFIG.slime.levels[B.level - 1];
+  const bHp = Math.round(bs.hp * B.hpMult), bAtk = Math.round(bs.atk * B.atkMult);
+  section('보스 — 거대 슬라임 (Lv' + B.level + ')', '체력 ' + bHp + ', 몸통 공격 ' + bAtk + ', 내려찍기 ' + Math.round(bAtk * B.slam.damageMult) + ', 구르기 ' + Math.round(bAtk * B.roll.damageMult) + ', 뱉기 ' + Math.round(bAtk * B.spit.damageMult) + '/발. 재도전 ' + (B.respawnDelay / 60) + '분.');
+  table(['플레이어', '체력', '공격', '평타 몇 대', '검으로 몇 초 (쿨 ' + CONFIG.weapons.sword.cooldown + 's)', '몸통에 몇 대', '내려찍기 몇 대', '포션 회복'],
+    [8, 10, 12, 14, 16, 18, 20].map(L => {
+      const hits = Math.ceil(bHp / pDmg(L));
+      return ['L' + L, pHp(L), pDmg(L), hits, (hits * CONFIG.weapons.sword.cooldown).toFixed(0) + 's',
+        clsDie(Math.ceil(pHp(L) / bAtk)), clsDie(Math.ceil(pHp(L) / Math.round(bAtk * B.slam.damageMult))), potion(L)];
+    }));
+
+  /* ── 스킬 ── */
+  const sk = CONFIG.skills.list;
+  section('스킬', '위력은 평타 대비 배수. 회전베기는 도는 동안 hitInterval 마다 다시 맞으므로 대략 (판정 시간 / 간격) 번 맞는다.');
+  table(['스킬', '해금', '쿨다운', '배수', '지속', '판정', '대략 타수', '마리당 총 배수'],
+    sk.map(s => {
+      const hits = s.hitInterval ? Math.floor((s.hitWindow[1] - s.hitWindow[0]) / s.hitInterval) + 1 : 1;
+      return [s.name + ' (' + s.key + ')', 'Lv' + s.unlockLevel, s.cooldown + 's', 'x' + s.damageMult, s.duration + 's', s.hitWindow.join('~') + 's', hits, 'x' + (s.damageMult * hits).toFixed(2)];
+    }));
+})();
+</script>
+</body>
+</html>

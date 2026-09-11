@@ -507,6 +507,12 @@ class Player {
     return taken;
   }
 
+  // 포션 한 개가 채우는 양 — 최대 체력의 30%, 최소 30
+  potionHeal() {
+    const cfg = CONFIG.items;
+    return Math.max(cfg.potionHealMin, Math.round(this.maxHp * cfg.potionHealRatio));
+  }
+
   usePotion() {
     if (this.dead || this.potionCooldown > 0) return;
     const cfg = CONFIG.items;
@@ -522,7 +528,7 @@ class Player {
     }
     this.potions--;
     this.potionCooldown = cfg.potionCooldown;
-    const healed = Math.min(cfg.potionHeal, this.maxHp - this.hp);
+    const healed = Math.min(this.potionHeal(), this.maxHp - this.hp);
     this.hp += healed;
     Sound.play('potion');
     FX.number(this.x, this.y - 20, '+' + healed, '#7dff8a');

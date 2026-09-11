@@ -222,7 +222,7 @@ const UI = {
       ctx.drawImage(SPRITES.potion, x + 14, y + 22);
     }
     this.drawText(ctx, 'POTION X' + player.potions + '/' + player.maxPotions, x + 30, y + 24, '#ffd93d');
-    this.drawText(ctx, 'HEALS ' + CONFIG.items.potionHeal + ' HP', x + 30, y + 33, '#7fa86a');
+    this.drawText(ctx, 'HEALS ' + player.potionHeal() + ' HP', x + 30, y + 33, '#7fa86a');
 
     // ── 장착 무기. 숫자는 픽셀 폰트에 맞춰 단어로 보여준다.
     //    DPS 를 같이 띄우는 이유: 세 무기의 초당 데미지가 같다는 걸 직접 확인할 수 있다
