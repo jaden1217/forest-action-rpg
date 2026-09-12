@@ -135,14 +135,12 @@ const UI = {
     this.drawText(ctx, player.xp + '/' + player.xpNeed, 32, 31, '#7fa86a');
 
     // ── 처치 수
-    const kills = 'KILLS ' + player.kills;
-    this.drawText(ctx, kills, CONFIG.VIEW_W - 8 - this.textWidth(kills), 8, '#f0d9b5');
-    // 9주차: 골드
+    // 오른쪽 위: 골드 (KILLS 가 있던 자리 — 처치 수는 인벤토리에서 본다). 그 아래는 HTML 패치 노트가 겹친다
     if (player.gold !== undefined) {
       const g = String(player.gold);
       const gx = CONFIG.VIEW_W - 8 - this.textWidth(g);
-      ctx.drawImage(SPRITES.coin, gx - 9, 16);
-      this.drawText(ctx, g, gx, 17, CONFIG.gold.color);
+      ctx.drawImage(SPRITES.coin, gx - 9, 7);
+      this.drawText(ctx, g, gx, 8, CONFIG.gold.color);
     }
 
     // ── 대시 충전 — 남은 칸은 밝게, 채워지는 중인 칸은 게이지로 보여준다
@@ -240,6 +238,7 @@ const UI = {
       const dps = Math.round(player.attackDamage() / spec.cooldown);
       this.drawText(ctx, 'SPD ' + this.speedWord(spec.cooldown) + ' DPS ' + dps, x + 14, y + 70, '#7fa86a');
     }
+    this.drawText(ctx, 'KILLS ' + player.kills + '   DEATHS ' + player.deaths, x + 100, y + 24, '#7fa86a');
     this.drawText(ctx, 'E DRINK POTION', x + 14, y + 82, '#f0d9b5');
     this.drawText(ctx, 'F ON WEAPON TO SWAP', x + 14, y + 91, '#7fa86a');
     this.drawText(ctx, 'PAUSED - I TO CLOSE', x + 14, y + 100, '#7fa86a');
@@ -419,7 +418,7 @@ const UI = {
 
   // 자동 저장 직후 잠깐 뜨는 표시
   drawSaved(ctx) {
-    this.drawText(ctx, 'SAVED', CONFIG.VIEW_W - 8 - this.textWidth('SAVED'), 26, '#9be564');
+    this.drawText(ctx, 'SAVED', CONFIG.VIEW_W - 8 - this.textWidth('SAVED'), 17, '#9be564');
   },
 
   // 새 게임 확인 — 저장을 지우는 되돌릴 수 없는 동작이라 한 번 묻는다

@@ -23,6 +23,7 @@ html, body {
 
 #stage {
   /* 게임 캔버스는 384x216 내부 해상도를 정수배로 확대해서 도트를 또렷하게 유지 */
+  position: relative;   /* 패치 노트를 캔버스 위에 겹치기 위해 */
   line-height: 0;
   border: 3px solid #2b3327;
   border-radius: 4px;
@@ -40,6 +41,43 @@ html, body {
   background: #2c5c2f;
   cursor: none;   /* 조준점은 게임이 캔버스 안에 직접 그린다 */
 }
+
+/* 패치 노트 — 캔버스 오른쪽 위(골드 아래)에 겹치는 작은 상자. 한글이라 HTML 로 그린다 */
+#patchnotes {
+  position: absolute;
+  top: 7%;
+  right: 1.4%;
+  width: 21%;
+  min-width: 150px;
+  line-height: 1.35;
+  font-size: 11px;
+  color: #c9d8bd;
+  background: rgba(10, 14, 10, .78);
+  border: 1px solid #3a442f;
+  border-radius: 3px;
+  padding: 5px 7px 6px;
+  pointer-events: none;      /* 조준·클릭은 그대로 캔버스로 간다 */
+}
+#patchnotes .pn-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 3px;
+}
+#patchnotes .pn-title { color: #9be564; font-weight: 600; letter-spacing: .3px; }
+#patchnotes .pn-close {
+  pointer-events: auto;
+  background: none;
+  border: none;
+  color: #7fa86a;
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0 2px;
+}
+#patchnotes .pn-close:hover { color: #ffffff; }
+#patchnotes ul { margin: 0; padding-left: 14px; }
+#patchnotes li { margin: 1px 0; }
 
 #controls {
   display: flex;
@@ -70,11 +108,12 @@ html, body {
 }
 
 </style>
-<!-- built 2026-09-12 14:46 by tools/build.js -->
+<!-- built 2026-09-12 14:56 by tools/build.js -->
 </head>
 <body>
   <div id="stage">
     <canvas id="game" width="384" height="216"></canvas>
+    <div id="patchnotes" hidden></div>
   </div>
   <div id="controls">
     <span><b>WASD</b> 이동</span>
@@ -261,6 +300,7 @@ const CONFIG = {
         duration: 1.65,      // 1.65초 동안 계속 돈다
         hitWindow: [0.08, 1.58],
         hitInterval: 0.17,   // 도는 동안 이 간격으로 다시 맞는다 (약 9번)
+        moveScale: 0.45,     // 도는 동안 걸을 수 있는 속도 (평소의 45%) — 오래 도는 만큼 자리를 옮길 수 있어야 한다
         knockMult: 1.4,
         shake: 3,
         color: '#7ec8ff',
@@ -3747,9 +3787,11 @@ class Player {
       this.moveWithCollision(Math.cos(this.dashDir) * d.speed * dt, Math.sin(this.dashDir) * d.speed * dt);
       this.trail.push({ x: this.x, y: this.y, life: 0.2, facing: this.facing });
     } else {
-      // 스킬을 쓰는 동안은 제자리에 묶이고(강공격은 스스로 앞으로 나간다),
-      // 평타 중에는 속도가 크게 줄어든다
-      const speedScale = this.activeSkill ? 0 : (this.attackTimer > 0 ? 0.35 : 1);
+      // 스킬을 쓰는 동안은 그 스킬의 moveScale 만큼만 걷는다 (강공격 0 — 스스로 앞으로 나간다,
+      // 회전베기 0.45 — 돌면서 천천히 자리를 옮긴다). 평타 중에는 속도가 크게 줄어든다
+      const speedScale = this.activeSkill
+        ? (this.skillSpec(this.activeSkill).moveScale || 0)
+        : (this.attackTimer > 0 ? 0.35 : 1);
       const vx = ix * c.speed * speedScale + this.kx;
       const vy = iy * c.speed * speedScale + this.ky;
       this.moveWithCollision(vx * dt, vy * dt);
@@ -6244,14 +6286,12 @@ const UI = {
     this.drawText(ctx, player.xp + '/' + player.xpNeed, 32, 31, '#7fa86a');
 
     // ── 처치 수
-    const kills = 'KILLS ' + player.kills;
-    this.drawText(ctx, kills, CONFIG.VIEW_W - 8 - this.textWidth(kills), 8, '#f0d9b5');
-    // 9주차: 골드
+    // 오른쪽 위: 골드 (KILLS 가 있던 자리 — 처치 수는 인벤토리에서 본다). 그 아래는 HTML 패치 노트가 겹친다
     if (player.gold !== undefined) {
       const g = String(player.gold);
       const gx = CONFIG.VIEW_W - 8 - this.textWidth(g);
-      ctx.drawImage(SPRITES.coin, gx - 9, 16);
-      this.drawText(ctx, g, gx, 17, CONFIG.gold.color);
+      ctx.drawImage(SPRITES.coin, gx - 9, 7);
+      this.drawText(ctx, g, gx, 8, CONFIG.gold.color);
     }
 
     // ── 대시 충전 — 남은 칸은 밝게, 채워지는 중인 칸은 게이지로 보여준다
@@ -6349,6 +6389,7 @@ const UI = {
       const dps = Math.round(player.attackDamage() / spec.cooldown);
       this.drawText(ctx, 'SPD ' + this.speedWord(spec.cooldown) + ' DPS ' + dps, x + 14, y + 70, '#7fa86a');
     }
+    this.drawText(ctx, 'KILLS ' + player.kills + '   DEATHS ' + player.deaths, x + 100, y + 24, '#7fa86a');
     this.drawText(ctx, 'E DRINK POTION', x + 14, y + 82, '#f0d9b5');
     this.drawText(ctx, 'F ON WEAPON TO SWAP', x + 14, y + 91, '#7fa86a');
     this.drawText(ctx, 'PAUSED - I TO CLOSE', x + 14, y + 100, '#7fa86a');
@@ -6528,7 +6569,7 @@ const UI = {
 
   // 자동 저장 직후 잠깐 뜨는 표시
   drawSaved(ctx) {
-    this.drawText(ctx, 'SAVED', CONFIG.VIEW_W - 8 - this.textWidth('SAVED'), 26, '#9be564');
+    this.drawText(ctx, 'SAVED', CONFIG.VIEW_W - 8 - this.textWidth('SAVED'), 17, '#9be564');
   },
 
   // 새 게임 확인 — 저장을 지우는 되돌릴 수 없는 동작이라 한 번 묻는다
@@ -6554,6 +6595,73 @@ const UI = {
     return 'SLOW';
   },
 
+};
+
+</script>
+  <script>
+// ── js/patchnotes.js
+'use strict';
+
+/* 패치 노트 — 게임 화면 오른쪽 위에 "오늘 바뀐 것"을 띄운다.
+
+   픽셀 폰트는 영문 대문자뿐이라 한글을 찍을 수 없으므로, 캔버스가 아니라
+   캔버스 위에 겹친 HTML 조각(#patchnotes)으로 그린다.
+   맨 위 항목(가장 최근 날짜)만 보여주고, X 로 닫으면 그 날짜는 다시 뜨지 않는다.
+   새 날짜의 노트가 생기면 다시 나타난다.
+
+   새 작업을 올릴 때 맨 앞에 한 항목을 추가하면 된다. */
+
+const PATCH_NOTES = [
+  {
+    date: '2026-09-12',
+    notes: [
+      '회전베기 중에 천천히 움직일 수 있다',
+      '자연 회복: 6초간 안 맞으면 체력이 조금씩 찬다',
+      '보스 판정을 몸통으로 (그림자 제외)',
+      '보스 돌진 경로·착지 범위를 붉게 표시',
+      '조준점을 또렷하게 (십자, 적 위에선 붉게)',
+    ],
+  },
+  {
+    date: '2026-09-11',
+    notes: [
+      '지역 보스 둘 추가: 우두머리 늑대, 늙은 버섯',
+      '동굴마다 그 지역 보스 방으로',
+      '상점·골드·강화, 효과음·배경음악',
+      '시작 화면, 한 파일 빌드',
+    ],
+  },
+];
+
+const PatchNotes = {
+  KEY: 'forest-rpg-notes-seen',
+
+  render() {
+    const box = document.getElementById('patchnotes');
+    if (!box || !PATCH_NOTES.length) return;
+    const latest = PATCH_NOTES[0];
+
+    let seen = null;
+    try { seen = localStorage.getItem(this.KEY); } catch (e) { /* 무시 */ }
+    if (seen === latest.date) { box.hidden = true; return; }
+
+    const d = latest.date.slice(5).replace('-', '.');   // 2026-09-12 -> 09.12
+    box.innerHTML =
+      '<div class="pn-head"><span class="pn-title">업데이트 ' + d + '</span>' +
+      '<button class="pn-close" type="button" aria-label="닫기">×</button></div>' +
+      '<ul>' + latest.notes.map(n => '<li>' + this.escape(n) + '</li>').join('') + '</ul>';
+    box.hidden = false;
+
+    box.querySelector('.pn-close').addEventListener('click', (e) => {
+      e.stopPropagation();
+      box.hidden = true;
+      try { localStorage.setItem(this.KEY, latest.date); } catch (err) { /* 무시 */ }
+    });
+  },
+
+  escape(s) {
+    return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  },
 };
 
 </script>
@@ -6601,6 +6709,7 @@ const Game = {
     buildSprites();
     Input.init(this.canvas);
     Sound.init();
+    PatchNotes.render();
 
     // 저장된 게임이 있으면 이어서 시작한다
     this.hasSave = Save.has();

@@ -166,6 +166,7 @@ const CONFIG = {
         duration: 1.65,      // 1.65초 동안 계속 돈다
         hitWindow: [0.08, 1.58],
         hitInterval: 0.17,   // 도는 동안 이 간격으로 다시 맞는다 (약 9번)
+        moveScale: 0.45,     // 도는 동안 걸을 수 있는 속도 (평소의 45%) — 오래 도는 만큼 자리를 옮길 수 있어야 한다
         knockMult: 1.4,
         shake: 3,
         color: '#7ec8ff',

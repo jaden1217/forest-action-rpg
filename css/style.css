@@ -16,6 +16,7 @@ html, body {
 
 #stage {
   /* 게임 캔버스는 384x216 내부 해상도를 정수배로 확대해서 도트를 또렷하게 유지 */
+  position: relative;   /* 패치 노트를 캔버스 위에 겹치기 위해 */
   line-height: 0;
   border: 3px solid #2b3327;
   border-radius: 4px;
@@ -33,6 +34,43 @@ html, body {
   background: #2c5c2f;
   cursor: none;   /* 조준점은 게임이 캔버스 안에 직접 그린다 */
 }
+
+/* 패치 노트 — 캔버스 오른쪽 위(골드 아래)에 겹치는 작은 상자. 한글이라 HTML 로 그린다 */
+#patchnotes {
+  position: absolute;
+  top: 7%;
+  right: 1.4%;
+  width: 21%;
+  min-width: 150px;
+  line-height: 1.35;
+  font-size: 11px;
+  color: #c9d8bd;
+  background: rgba(10, 14, 10, .78);
+  border: 1px solid #3a442f;
+  border-radius: 3px;
+  padding: 5px 7px 6px;
+  pointer-events: none;      /* 조준·클릭은 그대로 캔버스로 간다 */
+}
+#patchnotes .pn-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 3px;
+}
+#patchnotes .pn-title { color: #9be564; font-weight: 600; letter-spacing: .3px; }
+#patchnotes .pn-close {
+  pointer-events: auto;
+  background: none;
+  border: none;
+  color: #7fa86a;
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0 2px;
+}
+#patchnotes .pn-close:hover { color: #ffffff; }
+#patchnotes ul { margin: 0; padding-left: 14px; }
+#patchnotes li { margin: 1px 0; }
 
 #controls {
   display: flex;

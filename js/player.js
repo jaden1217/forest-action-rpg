@@ -299,9 +299,11 @@ class Player {
       this.moveWithCollision(Math.cos(this.dashDir) * d.speed * dt, Math.sin(this.dashDir) * d.speed * dt);
       this.trail.push({ x: this.x, y: this.y, life: 0.2, facing: this.facing });
     } else {
-      // 스킬을 쓰는 동안은 제자리에 묶이고(강공격은 스스로 앞으로 나간다),
-      // 평타 중에는 속도가 크게 줄어든다
-      const speedScale = this.activeSkill ? 0 : (this.attackTimer > 0 ? 0.35 : 1);
+      // 스킬을 쓰는 동안은 그 스킬의 moveScale 만큼만 걷는다 (강공격 0 — 스스로 앞으로 나간다,
+      // 회전베기 0.45 — 돌면서 천천히 자리를 옮긴다). 평타 중에는 속도가 크게 줄어든다
+      const speedScale = this.activeSkill
+        ? (this.skillSpec(this.activeSkill).moveScale || 0)
+        : (this.attackTimer > 0 ? 0.35 : 1);
       const vx = ix * c.speed * speedScale + this.kx;
       const vy = iy * c.speed * speedScale + this.ky;
       this.moveWithCollision(vx * dt, vy * dt);

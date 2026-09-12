@@ -40,6 +40,7 @@ const Game = {
     buildSprites();
     Input.init(this.canvas);
     Sound.init();
+    PatchNotes.render();
 
     // 저장된 게임이 있으면 이어서 시작한다
     this.hasSave = Save.has();
