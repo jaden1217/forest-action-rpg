@@ -92,6 +92,17 @@ function makeSilhouette(src, color) {
   return cv;
 }
 
+/* 같은 도트를 다른 색으로 — 성장 무기의 무지개 궤적에 쓴다.
+   궤적 도트 48장 x 일곱 색 정도라 캔버스마다 한 번씩만 만들고 기억해 둔다. */
+const TINT_CACHE = new WeakMap();
+function tinted(src, color) {
+  let byColor = TINT_CACHE.get(src);
+  if (!byColor) { byColor = new Map(); TINT_CACHE.set(src, byColor); }
+  let cv = byColor.get(color);
+  if (!cv) { cv = makeSilhouette(src, color); byColor.set(color, cv); }
+  return cv;
+}
+
 // 픽셀 단위 원 채우기 (안티앨리어싱 없음 = 도트 느낌 유지)
 function fillCircle(ctx, cx, cy, r, color) {
   ctx.fillStyle = color;
