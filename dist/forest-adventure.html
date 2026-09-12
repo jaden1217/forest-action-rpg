@@ -108,7 +108,7 @@ html, body {
 }
 
 </style>
-<!-- built 2026-09-12 14:56 by tools/build.js -->
+<!-- built 2026-09-12 15:01 by tools/build.js -->
 </head>
 <body>
   <div id="stage">
@@ -3380,7 +3380,6 @@ const Save = {
         x: Math.round(x), y: Math.round(y),
         hp: Math.round(p.hp), maxHp: p.maxHp, damage: p.damage,
         level: p.level, xp: p.xp, xpNeed: p.xpNeed,
-        kills: p.kills, deaths: p.deaths,
         potions: p.potions,
         weapon: p.weapon, weaponLevel: p.weaponLevel, weaponGrowing: p.weaponGrowing,
         gold: p.gold, upgrades: p.upgrades,
@@ -3437,8 +3436,6 @@ const Save = {
     player.level = Math.max(1, s.level || 1);
     player.xp = Math.max(0, s.xp || 0);
     player.xpNeed = s.xpNeed || CONFIG.levelUp.xpNeed(player.level);
-    player.kills = s.kills || 0;
-    player.deaths = s.deaths || 0;
     // 9주차: 골드와 강화 랭크. 가방 크기는 랭크에서 다시 계산한다 (maxHp/damage 는 값 자체가 저장돼 있다)
     player.gold = Math.max(0, s.gold || 0);
     player.upgrades = Object.assign({}, s.upgrades || {});
@@ -3502,8 +3499,6 @@ class Player {
     this.level = 1;
     this.xp = 0;
     this.xpNeed = CONFIG.levelUp.xpNeed(1);
-    this.kills = 0;
-    this.deaths = 0;
 
     // 2주차 인벤토리 — 지금은 포션 한 종류만 든다
     this.potions = CONFIG.items.potionStart;
@@ -3939,7 +3934,6 @@ class Player {
   die() {
     this.hp = 0;
     this.dead = true;
-    this.deaths++;
     this.deadTimer = 1.6;
     FX.burst(this.x, this.y, 22, ['#ff6b6b', '#ffffff', '#f3c99b'], { speed: 80, life: 0.7 });
     FX.addShake(6);
@@ -4402,7 +4396,6 @@ class Enemy {
     FX.ring(this.x, this.y + 2, this.radius + 2, pal.n);
     Sound.play('kill');
     FX.number(this.x, this.y - 18, '+' + this.stats.xp + 'XP', '#9be564');
-    player.kills++;
     player.gainXp(this.stats.xp);
   }
 
@@ -5858,7 +5851,9 @@ const Items = {
         continue;
       }
 
-      // ── 포션: 가까우면 끌려와서 자동으로 주워진다
+      // ── 포션: 가까우면 끌려와서 자동으로 주워진다.
+      //    가방이 꽉 찼으면 끌려오지도 않고 그 자리에 그대로 둔다 — 한 칸 비면 그때 끌려온다
+      if (player.potions >= player.maxPotions) continue;
       if (dist < cfg.magnetRadius && dist > 1) {
         const pull = 130 * (1 - dist / cfg.magnetRadius) + 40;
         d.x += (player.x - d.x) / dist * pull * dt;
@@ -6389,7 +6384,6 @@ const UI = {
       const dps = Math.round(player.attackDamage() / spec.cooldown);
       this.drawText(ctx, 'SPD ' + this.speedWord(spec.cooldown) + ' DPS ' + dps, x + 14, y + 70, '#7fa86a');
     }
-    this.drawText(ctx, 'KILLS ' + player.kills + '   DEATHS ' + player.deaths, x + 100, y + 24, '#7fa86a');
     this.drawText(ctx, 'E DRINK POTION', x + 14, y + 82, '#f0d9b5');
     this.drawText(ctx, 'F ON WEAPON TO SWAP', x + 14, y + 91, '#7fa86a');
     this.drawText(ctx, 'PAUSED - I TO CLOSE', x + 14, y + 100, '#7fa86a');
@@ -6612,6 +6606,13 @@ const UI = {
    새 작업을 올릴 때 맨 앞에 한 항목을 추가하면 된다. */
 
 const PATCH_NOTES = [
+  {
+    date: '2026-09-13',
+    notes: [
+      '가방이 꽉 차면 포션이 끌려오지 않는다',
+      '처치/사망 수 표시 제거',
+    ],
+  },
   {
     date: '2026-09-12',
     notes: [

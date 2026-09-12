@@ -170,7 +170,9 @@ const Items = {
         continue;
       }
 
-      // ── 포션: 가까우면 끌려와서 자동으로 주워진다
+      // ── 포션: 가까우면 끌려와서 자동으로 주워진다.
+      //    가방이 꽉 찼으면 끌려오지도 않고 그 자리에 그대로 둔다 — 한 칸 비면 그때 끌려온다
+      if (player.potions >= player.maxPotions) continue;
       if (dist < cfg.magnetRadius && dist > 1) {
         const pull = 130 * (1 - dist / cfg.magnetRadius) + 40;
         d.x += (player.x - d.x) / dist * pull * dt;

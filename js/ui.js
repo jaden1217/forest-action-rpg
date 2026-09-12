@@ -238,7 +238,6 @@ const UI = {
       const dps = Math.round(player.attackDamage() / spec.cooldown);
       this.drawText(ctx, 'SPD ' + this.speedWord(spec.cooldown) + ' DPS ' + dps, x + 14, y + 70, '#7fa86a');
     }
-    this.drawText(ctx, 'KILLS ' + player.kills + '   DEATHS ' + player.deaths, x + 100, y + 24, '#7fa86a');
     this.drawText(ctx, 'E DRINK POTION', x + 14, y + 82, '#f0d9b5');
     this.drawText(ctx, 'F ON WEAPON TO SWAP', x + 14, y + 91, '#7fa86a');
     this.drawText(ctx, 'PAUSED - I TO CLOSE', x + 14, y + 100, '#7fa86a');

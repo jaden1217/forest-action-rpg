@@ -14,8 +14,6 @@ class Player {
     this.level = 1;
     this.xp = 0;
     this.xpNeed = CONFIG.levelUp.xpNeed(1);
-    this.kills = 0;
-    this.deaths = 0;
 
     // 2주차 인벤토리 — 지금은 포션 한 종류만 든다
     this.potions = CONFIG.items.potionStart;
@@ -451,7 +449,6 @@ class Player {
   die() {
     this.hp = 0;
     this.dead = true;
-    this.deaths++;
     this.deadTimer = 1.6;
     FX.burst(this.x, this.y, 22, ['#ff6b6b', '#ffffff', '#f3c99b'], { speed: 80, life: 0.7 });
     FX.addShake(6);

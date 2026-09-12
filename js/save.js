@@ -33,7 +33,6 @@ const Save = {
         x: Math.round(x), y: Math.round(y),
         hp: Math.round(p.hp), maxHp: p.maxHp, damage: p.damage,
         level: p.level, xp: p.xp, xpNeed: p.xpNeed,
-        kills: p.kills, deaths: p.deaths,
         potions: p.potions,
         weapon: p.weapon, weaponLevel: p.weaponLevel, weaponGrowing: p.weaponGrowing,
         gold: p.gold, upgrades: p.upgrades,
@@ -90,8 +89,6 @@ const Save = {
     player.level = Math.max(1, s.level || 1);
     player.xp = Math.max(0, s.xp || 0);
     player.xpNeed = s.xpNeed || CONFIG.levelUp.xpNeed(player.level);
-    player.kills = s.kills || 0;
-    player.deaths = s.deaths || 0;
     // 9주차: 골드와 강화 랭크. 가방 크기는 랭크에서 다시 계산한다 (maxHp/damage 는 값 자체가 저장돼 있다)
     player.gold = Math.max(0, s.gold || 0);
     player.upgrades = Object.assign({}, s.upgrades || {});

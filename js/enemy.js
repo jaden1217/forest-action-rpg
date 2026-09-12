@@ -150,7 +150,6 @@ class Enemy {
     FX.ring(this.x, this.y + 2, this.radius + 2, pal.n);
     Sound.play('kill');
     FX.number(this.x, this.y - 18, '+' + this.stats.xp + 'XP', '#9be564');
-    player.kills++;
     player.gainXp(this.stats.xp);
   }
 
