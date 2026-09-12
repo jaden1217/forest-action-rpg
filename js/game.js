@@ -14,7 +14,6 @@ const Game = {
   showInventory: false,
   showMap: false,
   confirmNewGame: false,
-  savedFlash: 0,     // 방금 저장했음을 알리는 표시가 남는 시간
   currentRegion: -1, // 지금 서 있는 지역
   regionBanner: 0,   // 새 지역에 들어섰음을 알리는 표시가 남는 시간
   boss: null,        // 살아있는 보스
@@ -67,7 +66,6 @@ const Game = {
     this.showInventory = false;
     this.showMap = false;
     this.confirmNewGame = false;
-    this.savedFlash = 0;
     Save.timer = Save.interval;
 
     // 시작 지점은 숲 가장자리 한복판 (맵마다 위치가 다르다)
@@ -429,7 +427,6 @@ const Game = {
       if (Input.pickupPressed()) Items.pickupRequested = true;
 
       Save.tick(dt, this);
-      this.savedFlash = Math.max(0, this.savedFlash - dt);
       this.soundFlash = Math.max(0, this.soundFlash - dt);
 
       // 동굴을 드나드는 장면 전환 중에도 시간이 멈춘다 (전환 도중에 맞으면 억울하다)
@@ -535,7 +532,6 @@ const Game = {
     if (this.lairBanner > 0) UI.drawBanner(ctx, this.bossSpec(this.arenaRegion).lairName, '#ff6b6b', this.lairBanner);
     if (this.regionBanner > 0 && !this.showMap) UI.drawRegionBanner(ctx, this.currentRegion, this.regionBanner);
     if (this.confirmNewGame) UI.drawConfirm(ctx);
-    if (this.savedFlash > 0) UI.drawSaved(ctx);
     if (this.soundFlash > 0) UI.drawSoundState(ctx, Sound.enabled);
     // 장면 전환은 맨 위를 덮는다
     if (this.transition) UI.drawFade(ctx, this.fadeAlpha());

@@ -415,11 +415,6 @@ const UI = {
     this.drawText(ctx, 'F INTERACT   E POTION   I BAG   M MAP', cx, cy + 41, '#8fa383', true);
   },
 
-  // 자동 저장 직후 잠깐 뜨는 표시
-  drawSaved(ctx) {
-    this.drawText(ctx, 'SAVED', CONFIG.VIEW_W - 8 - this.textWidth('SAVED'), 17, '#9be564');
-  },
-
   // 새 게임 확인 — 저장을 지우는 되돌릴 수 없는 동작이라 한 번 묻는다
   drawConfirm(ctx) {
     const w = 148, h = 52;
