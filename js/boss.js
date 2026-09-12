@@ -21,6 +21,16 @@ class GiantSlime extends Boss {
     this.rollDir = 0;
     this.shock = 0;          // 충격파 연출이 남은 시간
     this.shockMax = 0.42;
+    // 몸통: 도트 44x38, 아랫단은 y+12
+    this.bodyW = 40; this.bodyH = 34; this.bodyBottom = 12;
+  }
+
+  // 바닥 예고 — 구르기는 경로를, 내려찍기는 떨어질 자리를 붉게
+  drawGround(ctx, cam) {
+    const cfg = this.spec, player = Game.player;
+    if (this.state === 'rollWind') this.drawPathBand(ctx, cam, this.rollDir, this.bodyW);
+    else if (this.state === 'slamWind' && !player.dead) this.drawLandingCircle(ctx, cam, player.x, player.y, cfg.slam.radius, false);
+    else if (this.state === 'slamAir') this.drawLandingCircle(ctx, cam, this.target.x, this.target.y, cfg.slam.radius, true);
   }
 
   think(dt, player) {

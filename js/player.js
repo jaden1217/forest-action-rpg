@@ -401,9 +401,12 @@ class Player {
 
     for (const s of enemies) {
       if (s.dead || ids.has(s.id)) continue;
-      const dx = s.x - this.x, dy = s.y - this.y;
+      // 보스는 몸통 상자(그림자 제외)까지의 거리로, 일반 몬스터는 중심 원으로 잰다
+      const c = s.hitCenter ? s.hitCenter() : s;
+      const dx = c.x - this.x, dy = c.y - this.y;
       const d = Math.sqrt(dx * dx + dy * dy);
-      if (d > reach + s.radius) continue;
+      const gap = s.hitDistance ? s.hitDistance(this.x, this.y) : d - s.radius;
+      if (gap > reach) continue;
       const toEnemy = Math.atan2(dy, dx);
       if (!omni && d > 3 && Math.abs(Util.angleDiff(toEnemy, base)) > arc) continue;
 

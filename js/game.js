@@ -474,6 +474,8 @@ const Game = {
     ctx.clearRect(0, 0, CONFIG.VIEW_W, CONFIG.VIEW_H);
     World.drawGround(ctx, cam);
     Ambient.drawWater(ctx, cam);
+    // 보스의 바닥 예고(돌진 경로, 착지 범위, 포자비 표시)는 바닥 바로 위, 캐릭터 아래에
+    for (const e of this.enemies) if (e.drawGround && !e.dead) e.drawGround(ctx, cam);
 
     // ── 화면에 보이는 것만 모아서 y좌표 순으로 그린다 (아래쪽이 앞)
     const drawables = [];

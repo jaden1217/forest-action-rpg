@@ -23,6 +23,19 @@ class AlphaWolf extends Boss {
     this.airHeight = 0;
     this.target = { x: x, y: y };
     this.circleDir = 1;      // 도는 방향
+    // 몸통: 늑대 도트 x3, 아랫단은 y+7
+    const sp = SPRITES.wolf[0][0];
+    this.bodyW = Math.round(sp.width * this.scale * 0.85);
+    this.bodyH = Math.round(sp.height * this.scale * 0.9);
+    this.bodyBottom = 7;
+  }
+
+  // 바닥 예고 — 돌진은 경로를, 덮치기는 떨어질 자리를 붉게
+  drawGround(ctx, cam) {
+    const cfg = this.spec, player = Game.player;
+    if (this.state === 'lungeWind') this.drawPathBand(ctx, cam, this.lungeDir, this.bodyH * 0.8);
+    else if (this.state === 'pounceWind' && !player.dead) this.drawLandingCircle(ctx, cam, player.x, player.y, cfg.pounce.radius, false);
+    else if (this.state === 'pounceAir') this.drawLandingCircle(ctx, cam, this.target.x, this.target.y, cfg.pounce.radius, true);
   }
 
   face(dx) { if (Math.abs(dx) > 0.5) this.facing = dx > 0 ? 1 : -1; }

@@ -70,7 +70,7 @@ html, body {
 }
 
 </style>
-<!-- built 2026-09-11 16:37 by tools/build.js -->
+<!-- built 2026-09-12 13:26 by tools/build.js -->
 </head>
 <body>
   <div id="stage">
@@ -3845,9 +3845,12 @@ class Player {
 
     for (const s of enemies) {
       if (s.dead || ids.has(s.id)) continue;
-      const dx = s.x - this.x, dy = s.y - this.y;
+      // 보스는 몸통 상자(그림자 제외)까지의 거리로, 일반 몬스터는 중심 원으로 잰다
+      const c = s.hitCenter ? s.hitCenter() : s;
+      const dx = c.x - this.x, dy = c.y - this.y;
       const d = Math.sqrt(dx * dx + dy * dy);
-      if (d > reach + s.radius) continue;
+      const gap = s.hitDistance ? s.hitDistance(this.x, this.y) : d - s.radius;
+      if (gap > reach) continue;
       const toEnemy = Math.atan2(dy, dx);
       if (!omni && d > 3 && Math.abs(Util.angleDiff(toEnemy, base)) > arc) continue;
 
@@ -4726,6 +4729,13 @@ class Boss extends Enemy {
     this.name = spec.name;
     this.reward = spec.reward;
 
+    /* 몸통 상자 — 판정은 이걸로 한다. 그림자는 포함하지 않는다.
+       (x, y) 는 발 자리이고 몸은 그 위로 솟아 있으므로, 상자는 발에서 위로만 올라간다.
+       각 보스가 생성자에서 자기 도트 크기에 맞춰 덮어쓴다 */
+    this.bodyW = this.radius * 1.6;
+    this.bodyH = this.radius * 1.8;
+    this.bodyBottom = 7;     // 발 자리(y)에서 몸 아랫단까지
+
     this.state = 'intro';
     this.timer = 1.0;        // 등장 연출
     this.phase2 = false;
@@ -4737,6 +4747,74 @@ class Boss extends Enemy {
   get feetBox() {
     const r = this.radius;
     return { x: this.x - r * 0.65, y: this.y + 2, w: r * 1.3, h: 6 };
+  }
+
+  // 몸통 상자 — 몸에 닿아야 맞는다 (그림자 위에 서 있는 건 닿은 게 아니다)
+  bodyBox() {
+    const bottom = this.y + this.bodyBottom;
+    return { x: this.x - this.bodyW / 2, y: bottom - this.bodyH, w: this.bodyW, h: this.bodyH };
+  }
+
+  get hurtBox() { return this.bodyBox(); }
+
+  // 플레이어 공격 판정용 — 점에서 몸통 상자까지의 거리 (안이면 0)
+  hitDistance(px, py) {
+    const b = this.bodyBox();
+    const dx = Math.max(b.x - px, 0, px - (b.x + b.w));
+    const dy = Math.max(b.y - py, 0, py - (b.y + b.h));
+    return Math.sqrt(dx * dx + dy * dy);
+  }
+
+  hitCenter() {
+    const b = this.bodyBox();
+    return { x: b.x + b.w / 2, y: b.y + b.h / 2 };
+  }
+
+  /* ── 바닥 예고 — 돌진 경로와 착지 범위를 붉게 칠한다 ──
+     Game.render 가 캐릭터들보다 먼저 바닥 위에 그린다 (drawGround) */
+
+  // 이 방향으로 달리면 어디서 벽에 막히는가 (px)
+  castWall(angle, halfW) {
+    let d = 0;
+    for (let k = 0; k < 120; k++) {
+      d += 6;
+      const x = this.x + Math.cos(angle) * d, y = this.y + Math.sin(angle) * d;
+      if (World.blocked({ x: x - halfW, y: y + 2, w: halfW * 2, h: 6 })) return d;
+    }
+    return d;
+  }
+
+  // 붉은 띠 — 시작점에서 벽까지, 몸 폭만큼
+  drawPathBand(ctx, cam, angle, width) {
+    const len = this.castWall(angle, width * 0.3) + width * 0.4;
+    const pulse = 0.16 + Math.abs(Math.sin(World.time * 8)) * 0.1;
+    ctx.save();
+    ctx.translate(Math.round(this.x - cam.x), Math.round(this.y + 2 - cam.y));
+    ctx.rotate(angle);
+    ctx.globalAlpha = pulse;
+    ctx.fillStyle = '#ff3b3b';
+    ctx.fillRect(0, -width / 2, len, width);
+    ctx.globalAlpha = 0.55;
+    ctx.fillRect(0, -width / 2, len, 1);
+    ctx.fillRect(0, width / 2 - 1, len, 1);
+    ctx.fillRect(len - 1, -width / 2, 1, width);
+    ctx.restore();
+    ctx.globalAlpha = 1;
+  }
+
+  // 붉은 원판 — 착지 범위
+  drawLandingCircle(ctx, cam, x, y, r, urgent) {
+    const sx = Math.round(x - cam.x), sy = Math.round(y - cam.y);
+    ctx.globalAlpha = (urgent ? 0.3 : 0.18) + Math.abs(Math.sin(World.time * 8)) * 0.1;
+    fillCircle(ctx, sx, sy + 2, r, '#ff3b3b');
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = urgent ? '#ffffff' : '#ff8a8a';
+    const steps = Math.max(20, Math.round(r * 1.2));
+    for (let i = 0; i < steps; i++) {
+      const a = (i / steps) * Math.PI * 2;
+      ctx.fillRect(Math.round(sx + Math.cos(a) * r), Math.round(sy + 2 + Math.sin(a) * r), 1, 1);   // 판정이 정원이므로 테두리도 정원
+    }
+    ctx.fillRect(sx - 1, sy + 2, 3, 1); ctx.fillRect(sx, sy + 1, 1, 3);
   }
 
   // 페이즈에 따라 달라지는 값을 꺼내는 helper ([1페이즈, 2페이즈])
@@ -4849,6 +4927,16 @@ class GiantSlime extends Boss {
     this.rollDir = 0;
     this.shock = 0;          // 충격파 연출이 남은 시간
     this.shockMax = 0.42;
+    // 몸통: 도트 44x38, 아랫단은 y+12
+    this.bodyW = 40; this.bodyH = 34; this.bodyBottom = 12;
+  }
+
+  // 바닥 예고 — 구르기는 경로를, 내려찍기는 떨어질 자리를 붉게
+  drawGround(ctx, cam) {
+    const cfg = this.spec, player = Game.player;
+    if (this.state === 'rollWind') this.drawPathBand(ctx, cam, this.rollDir, this.bodyW);
+    else if (this.state === 'slamWind' && !player.dead) this.drawLandingCircle(ctx, cam, player.x, player.y, cfg.slam.radius, false);
+    else if (this.state === 'slamAir') this.drawLandingCircle(ctx, cam, this.target.x, this.target.y, cfg.slam.radius, true);
   }
 
   think(dt, player) {
@@ -5074,6 +5162,19 @@ class AlphaWolf extends Boss {
     this.airHeight = 0;
     this.target = { x: x, y: y };
     this.circleDir = 1;      // 도는 방향
+    // 몸통: 늑대 도트 x3, 아랫단은 y+7
+    const sp = SPRITES.wolf[0][0];
+    this.bodyW = Math.round(sp.width * this.scale * 0.85);
+    this.bodyH = Math.round(sp.height * this.scale * 0.9);
+    this.bodyBottom = 7;
+  }
+
+  // 바닥 예고 — 돌진은 경로를, 덮치기는 떨어질 자리를 붉게
+  drawGround(ctx, cam) {
+    const cfg = this.spec, player = Game.player;
+    if (this.state === 'lungeWind') this.drawPathBand(ctx, cam, this.lungeDir, this.bodyH * 0.8);
+    else if (this.state === 'pounceWind' && !player.dead) this.drawLandingCircle(ctx, cam, player.x, player.y, cfg.pounce.radius, false);
+    else if (this.state === 'pounceAir') this.drawLandingCircle(ctx, cam, this.target.x, this.target.y, cfg.pounce.radius, true);
   }
 
   face(dx) { if (Math.abs(dx) > 0.5) this.facing = dx > 0 ? 1 : -1; }
@@ -5311,6 +5412,10 @@ class ElderShroom extends Boss {
     this.waveTimer = 0;      // 두 번째 고리까지 남은 시간
     this.wavesLeft = 0;
     this.grow = 0;           // 부풂 연출 (0 ~ 1)
+    // 몸통: 버섯 도트 16x16 x3, 아랫단은 y+7
+    this.bodyW = Math.round(16 * this.scale * 0.8);
+    this.bodyH = Math.round(16 * this.scale * 0.9);
+    this.bodyBottom = 7;
   }
 
   think(dt, player) {
@@ -5459,14 +5564,14 @@ class ElderShroom extends Boss {
     Sound.play('split');
   }
 
-  drawBody(ctx, sx, sy) {
-    const tier = levelTier(this.level);
-    const pal = this.palette;
-    const cfg = this.spec;
+  // 바닥 표시 — 캐릭터들보다 먼저, 바닥 위에 그린다
+  drawGround(ctx, cam) {
+    const pal = this.palette, cfg = this.spec;
+    const sx = Math.round(this.x - cam.x), sy = Math.round(this.y - cam.y);
 
-    // 바닥 표시 — 포자비가 떨어질 자리. 붉은 원판이 점점 진해지고, 터지기 직전엔 빠르게 깜빡인다
+    // 포자비가 떨어질 자리. 붉은 원판이 점점 진해지고, 터지기 직전엔 빠르게 깜빡인다
     for (const m of this.marks) {
-      const mx = Math.round(m.x - (this.x - sx)), my = Math.round(m.y - (this.y - sy));
+      const mx = Math.round(m.x - cam.x), my = Math.round(m.y - cam.y);
       const urgent = m.t < 0.35;
       if (urgent && Math.floor(m.t * 20) % 2 === 0) continue;
       const r = cfg.rain.radius;
@@ -5491,7 +5596,10 @@ class ElderShroom extends Boss {
         ctx.fillRect(Math.round(sx + Math.cos(a) * (p.r - 2)), Math.round(sy + 2 + Math.sin(a) * (p.r - 2)), 1, 1);
       }
     }
+  }
 
+  drawBody(ctx, sx, sy) {
+    const tier = levelTier(this.level);
     this.drawShadow(ctx, sx, sy, 6 * this.scale);
     const set = this.hurtFlash > 0 ? SPRITES.mushroomEnemyFlash : SPRITES.mushroomEnemy;
     const sprite = set[tier];
@@ -6895,6 +7003,8 @@ const Game = {
     ctx.clearRect(0, 0, CONFIG.VIEW_W, CONFIG.VIEW_H);
     World.drawGround(ctx, cam);
     Ambient.drawWater(ctx, cam);
+    // 보스의 바닥 예고(돌진 경로, 착지 범위, 포자비 표시)는 바닥 바로 위, 캐릭터 아래에
+    for (const e of this.enemies) if (e.drawGround && !e.dead) e.drawGround(ctx, cam);
 
     // ── 화면에 보이는 것만 모아서 y좌표 순으로 그린다 (아래쪽이 앞)
     const drawables = [];

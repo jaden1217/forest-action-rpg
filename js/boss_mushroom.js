@@ -21,6 +21,10 @@ class ElderShroom extends Boss {
     this.waveTimer = 0;      // 두 번째 고리까지 남은 시간
     this.wavesLeft = 0;
     this.grow = 0;           // 부풂 연출 (0 ~ 1)
+    // 몸통: 버섯 도트 16x16 x3, 아랫단은 y+7
+    this.bodyW = Math.round(16 * this.scale * 0.8);
+    this.bodyH = Math.round(16 * this.scale * 0.9);
+    this.bodyBottom = 7;
   }
 
   think(dt, player) {
@@ -169,14 +173,14 @@ class ElderShroom extends Boss {
     Sound.play('split');
   }
 
-  drawBody(ctx, sx, sy) {
-    const tier = levelTier(this.level);
-    const pal = this.palette;
-    const cfg = this.spec;
+  // 바닥 표시 — 캐릭터들보다 먼저, 바닥 위에 그린다
+  drawGround(ctx, cam) {
+    const pal = this.palette, cfg = this.spec;
+    const sx = Math.round(this.x - cam.x), sy = Math.round(this.y - cam.y);
 
-    // 바닥 표시 — 포자비가 떨어질 자리. 붉은 원판이 점점 진해지고, 터지기 직전엔 빠르게 깜빡인다
+    // 포자비가 떨어질 자리. 붉은 원판이 점점 진해지고, 터지기 직전엔 빠르게 깜빡인다
     for (const m of this.marks) {
-      const mx = Math.round(m.x - (this.x - sx)), my = Math.round(m.y - (this.y - sy));
+      const mx = Math.round(m.x - cam.x), my = Math.round(m.y - cam.y);
       const urgent = m.t < 0.35;
       if (urgent && Math.floor(m.t * 20) % 2 === 0) continue;
       const r = cfg.rain.radius;
@@ -201,7 +205,10 @@ class ElderShroom extends Boss {
         ctx.fillRect(Math.round(sx + Math.cos(a) * (p.r - 2)), Math.round(sy + 2 + Math.sin(a) * (p.r - 2)), 1, 1);
       }
     }
+  }
 
+  drawBody(ctx, sx, sy) {
+    const tier = levelTier(this.level);
     this.drawShadow(ctx, sx, sy, 6 * this.scale);
     const set = this.hurtFlash > 0 ? SPRITES.mushroomEnemyFlash : SPRITES.mushroomEnemy;
     const sprite = set[tier];
