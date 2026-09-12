@@ -112,6 +112,10 @@ const CONFIG = {
     reach: 21,             // 무기 사거리 (px)
     arcHalfWidth: 0.95,    // 부채꼴 반각 (라디안)
     invulnTime: 0.75,      // 피격 후 무적 시간
+    /* 자연 회복 — 피해를 받지 않고 regenDelay 초가 지나면 초당 최대 체력의 regenRate 만큼 찬다.
+       포션을 아끼며 잠깐 물러나 숨을 고르는 선택지를 주되, 싸움 중에는 안 찬다 (맞을 때마다 다시 기다린다) */
+    regenDelay: 6,
+    regenRate: 0.02,       // 초당 2% — 0 에서 가득 차는 데 50초
     knockbackTaken: 95,
     critChance: 0.12,
     critMult: 1.8,

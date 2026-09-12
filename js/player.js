@@ -44,6 +44,8 @@ class Player {
     this.deadTimer = 0;
     this.potionQueued = false;
     this.stepTimer = 0;        // 발밑 먼지를 일정 간격으로 피우기 위한 타이머
+    this.sinceHurt = 0;        // 마지막으로 맞은 뒤 흐른 시간 — 자연 회복 판단
+    this.regenTick = 0;        // 회복 중 "+" 표시를 띄우는 간격
 
     // 겨냥 — 마우스를 쓰면 마우스 쪽, 아니면 마지막으로 걸어간 쪽을 본다
     this.aim = Math.PI / 2;    // 처음엔 아래를 본다
@@ -279,6 +281,7 @@ class Player {
     this.cooldown = Math.max(0, this.cooldown - dt);
     this.invuln = Math.max(0, this.invuln - dt);
     this.potionCooldown = Math.max(0, this.potionCooldown - dt);
+    this.updateRegen(dt);
 
     // ── 이동 입력
     let ix = Input.axisX(), iy = Input.axisY();
@@ -430,6 +433,7 @@ class Player {
     const c = CONFIG.player;
     this.hp -= amount;
     this.invuln = c.invulnTime;
+    this.sinceHurt = 0;        // 맞으면 자연 회복은 처음부터 다시 기다린다
     const a = Math.atan2(this.y - fromY, this.x - fromX);
     this.kx = Math.cos(a) * c.knockbackTaken;
     this.ky = Math.sin(a) * c.knockbackTaken;
@@ -458,6 +462,7 @@ class Player {
     this.dead = false;
     this.deadTimer = 0;
     this.hp = this.maxHp;
+    this.sinceHurt = 0;
     this.x = x; this.y = y;
     this.kx = this.ky = 0;
     this.invuln = 1.2;
@@ -468,6 +473,7 @@ class Player {
   respawn() {
     this.dead = false;
     this.hp = this.maxHp;
+    this.sinceHurt = 0;
     this.x = this.spawnX; this.y = this.spawnY;
     this.kx = this.ky = 0;
     this.invuln = 1.2;
@@ -508,6 +514,25 @@ class Player {
     const taken = Math.min(room, amount);
     this.potions += taken;
     return taken;
+  }
+
+  /* 자연 회복 — 피해 없이 regenDelay 초가 지나면 초당 최대 체력의 regenRate 만큼 조금씩 찬다.
+     싸움 중엔 맞을 때마다 시계가 되돌아가므로 실질적으로 물러나 있을 때만 찬다. */
+  updateRegen(dt) {
+    const c = CONFIG.player;
+    this.sinceHurt += dt;
+    if (this.sinceHurt < c.regenDelay || this.hp >= this.maxHp) { this.regenTick = 0; return; }
+    this.hp = Math.min(this.maxHp, this.hp + this.maxHp * c.regenRate * dt);
+    // 1.5초마다 작은 + 표시 — 지금 차고 있다는 걸 알려준다
+    this.regenTick -= dt;
+    if (this.regenTick <= 0) {
+      this.regenTick = 1.5;
+      FX.number(this.x, this.y - 16, '+', '#7dff8a');
+    }
+  }
+
+  regenerating() {
+    return !this.dead && this.sinceHurt >= CONFIG.player.regenDelay && this.hp < this.maxHp;
   }
 
   // 포션 한 개가 채우는 양 — 최대 체력의 30%, 최소 30

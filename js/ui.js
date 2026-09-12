@@ -123,6 +123,9 @@ const UI = {
   draw(ctx, player, showInventory) {
     // ── 체력
     this.bar(ctx, 8, 8, 72, 6, player.hp / player.maxHp, '#e5484d', '#4a1f1f');
+    if (player.regenerating && player.regenerating() && Math.floor(World.time * 3) % 2 === 0) {
+      this.drawText(ctx, '+', 83, 9, '#7dff8a');   // 자연 회복 중
+    }
     this.drawText(ctx, 'HP', 8, 16, '#f0d9b5');
     this.drawText(ctx, Math.max(0, Math.ceil(player.hp)) + '/' + player.maxHp, 20, 16, '#f0d9b5');
 
