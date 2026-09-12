@@ -570,7 +570,7 @@ class Player {
     growing = !!growing;
     // 성장하는 무기는 주운 순간부터 내 레벨을 그대로 따라간다
     level = growing ? this.level : level;
-    level = Util.clamp(Math.round(level || 1), 1, CONFIG.weapons.levelMult.length);
+    level = Util.clamp(Math.round(level || 1), 1, growing ? CONFIG.weapons.levelMult.length : LEVEL_MAX);
     if (this.weapon === id && this.weaponLevel === level && this.weaponGrowing === growing) return 'same';
     this.weapon = id;
     this.weaponLevel = level;

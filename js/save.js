@@ -97,8 +97,8 @@ const Save = {
 
     if (CONFIG.weapons[s.weapon]) {
       player.weapon = s.weapon;
-      player.weaponLevel = Util.clamp(s.weaponLevel || 1, 1, CONFIG.weapons.levelMult.length);
       player.weaponGrowing = !!s.weaponGrowing;
+      player.weaponLevel = Util.clamp(s.weaponLevel || 1, 1, player.weaponGrowing ? CONFIG.weapons.levelMult.length : LEVEL_MAX);
       player.syncWeaponLevel();   // 성장하는 무기는 레벨을 다시 맞춰둔다
     }
 

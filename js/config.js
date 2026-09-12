@@ -2,8 +2,11 @@
 
 /* 게임 밸런스 수치는 전부 여기 모아둔다. 다른 파일은 이 값을 읽기만 한다. */
 
-// 몬스터와 무기의 최대 레벨
+// 몬스터의 최대 레벨 (바닥에 떨어지는 무기도 잡은 몬스터 레벨을 따르므로 여기까지)
 const LEVEL_MAX = 23;
+/* 무기 레벨 표의 끝. 보스가 주는 '성장하는 무기'는 플레이어 레벨을 그대로 따라가므로
+   23을 넘어 계속 세져야 한다 — 그게 그 무기의 존재 이유다. 일반 드랍은 여전히 23이 끝이다. */
+const WEAPON_LEVEL_MAX = 60;
 
 /* 23단계나 되는 레벨을 색 5등급으로 묶는다.
    레벨 숫자를 읽지 않아도 색만 보고 위험도를 가늠할 수 있게 하기 위한 것이다.
@@ -184,12 +187,13 @@ const CONFIG = {
     sword:  { name: 'SWORD',  damageMult: 1.00, cooldown: 0.40, duration: 0.26, hitWindow: [0.04, 0.20], reach: 21, arc: 0.95, knockMult: 1.00 },
     axe:    { name: 'AXE',    damageMult: 1.55, cooldown: 0.62, duration: 0.36, hitWindow: [0.06, 0.28], reach: 23, arc: 1.04, knockMult: 1.55 },
 
-    /* 무기 레벨 1~23 — 레벨당 +2.5% 로 아주 완만하다 (L1 x1.00 -> L23 x1.55).
+    /* 무기 레벨 — 레벨당 +2.5% 로 아주 완만하다 (L1 x1.00 -> L23 x1.55 -> L36 x1.875 -> L60 x2.475).
+       바닥 드랍은 몬스터 레벨(최대 23)을 따르고, 성장하는 무기만 그 위로 올라간다.
        이 게임은 무기가 아니라 플레이어 레벨이 중심이므로, 무기는 거들 뿐이다.
        좋은 무기를 주우면 조금 수월해지지만, 진짜로 강해지는 건 레벨업이다. */
     levelMult: (function () {
       const a = [];
-      for (let lv = 1; lv <= LEVEL_MAX; lv++) a.push(+(1 + (lv - 1) * 0.025).toFixed(3));
+      for (let lv = 1; lv <= WEAPON_LEVEL_MAX; lv++) a.push(+(1 + (lv - 1) * 0.025).toFixed(3));
       return a;
     })(),
     // 칼날 색 — 레벨이 아니라 색 등급(levelTier)으로 고른다
