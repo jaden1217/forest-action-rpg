@@ -143,7 +143,7 @@ html, body {
 }
 
 </style>
-<!-- built 2026-09-12 15:10 by tools/build.js -->
+<!-- built 2026-09-12 15:17 by tools/build.js -->
 </head>
 <body>
   <div id="stage">
@@ -6662,20 +6662,12 @@ const PATCH_NOTES = [
       '조준점을 또렷하게 (십자, 적 위에선 붉게)',
     ],
   },
-  {
-    date: '2026-09-11',
-    notes: [
-      '지역 보스 둘 추가: 우두머리 늑대, 늙은 버섯',
-      '동굴마다 그 지역 보스 방으로',
-      '상점·골드·강화, 효과음·배경음악',
-      '시작 화면, 한 파일 빌드',
-    ],
-  },
 ];
 
 const PatchNotes = {
   KEY: 'forest-rpg-notes-seen',
   open: false,
+  seenMemory: null,    // 저장 공간을 못 쓰는 환경에서도 이번 세션 안에서는 기억한다
   box: null,
   button: null,
   badge: null,
@@ -6712,7 +6704,15 @@ const PatchNotes = {
   },
 
   seenDate() {
-    try { return localStorage.getItem(this.KEY); } catch (e) { return null; }
+    let v = null;
+    try { v = localStorage.getItem(this.KEY); } catch (e) { /* 무시 */ }
+    return v || this.seenMemory;
+  },
+
+  markSeen() {
+    this.seenMemory = PATCH_NOTES[0].date;
+    try { localStorage.setItem(this.KEY, this.seenMemory); } catch (e) { /* 무시 */ }
+    this.updateBadge();
   },
 
   // 아직 안 본 새 항목이 있는가
@@ -6721,7 +6721,10 @@ const PatchNotes = {
   },
 
   updateBadge() {
-    if (this.badge) this.badge.hidden = !this.hasUnread();
+    if (!this.badge) return;
+    const unread = this.hasUnread();
+    this.badge.hidden = !unread;
+    this.badge.style.display = unread ? '' : 'none';   // hidden 속성이 CSS 에 밀리는 일이 없도록 이중으로
   },
 
   toggle() {
@@ -6732,13 +6735,13 @@ const PatchNotes = {
     this.open = true;
     this.panel.hidden = false;
     // 펼쳐 봤으니 최신 날짜까지 본 것으로 기억한다 → 느낌표가 사라진다
-    try { localStorage.setItem(this.KEY, PATCH_NOTES[0].date); } catch (e) { /* 무시 */ }
-    this.updateBadge();
+    this.markSeen();
   },
 
   close() {
     this.open = false;
     this.panel.hidden = true;
+    this.markSeen();   // 닫을 때도 한 번 더 — 어떤 경로로 닫혀도 느낌표는 사라진다
   },
 
   escape(s) {
