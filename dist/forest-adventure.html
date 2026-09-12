@@ -42,31 +42,64 @@ html, body {
   cursor: none;   /* 조준점은 게임이 캔버스 안에 직접 그린다 */
 }
 
-/* 패치 노트 — 캔버스 오른쪽 위(골드 아래)에 겹치는 작은 상자. 한글이라 HTML 로 그린다 */
+/* 패치 노트 — 캔버스 오른쪽 위(골드 아래)의 작은 버튼. 누르면 목록이 펼쳐진다. 한글이라 HTML 로 그린다 */
 #patchnotes {
   position: absolute;
   top: 7%;
   right: 1.4%;
-  width: 21%;
-  min-width: 150px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
   line-height: 1.35;
   font-size: 11px;
   color: #c9d8bd;
-  background: rgba(10, 14, 10, .78);
+  pointer-events: none;      /* 빈 자리의 조준·클릭은 그대로 캔버스로 간다 */
+}
+#patchnotes .pn-btn {
+  pointer-events: auto;
+  position: relative;
+  background: rgba(10, 14, 10, .8);
   border: 1px solid #3a442f;
   border-radius: 3px;
-  padding: 5px 7px 6px;
-  pointer-events: none;      /* 조준·클릭은 그대로 캔버스로 간다 */
+  color: #9be564;
+  font: 600 11px/1 "Malgun Gothic", "맑은 고딕", system-ui, sans-serif;
+  padding: 4px 8px;
+  cursor: pointer;
+}
+#patchnotes .pn-btn:hover { border-color: #9be564; color: #d8e6cf; }
+/* 안 본 소식이 있으면 붉은 느낌표 */
+#patchnotes .pn-badge {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #e5484d;
+  color: #fff;
+  font: 700 10px/14px system-ui, sans-serif;
+  text-align: center;
+  box-shadow: 0 0 0 1px #10140f;
+}
+#patchnotes .pn-panel {
+  pointer-events: auto;
+  width: 240px;
+  max-height: 340px;
+  overflow-y: auto;
+  background: rgba(10, 14, 10, .9);
+  border: 1px solid #3a442f;
+  border-radius: 3px;
+  padding: 5px 8px 6px;
 }
 #patchnotes .pn-head {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 3px;
+  margin-bottom: 4px;
 }
 #patchnotes .pn-title { color: #9be564; font-weight: 600; letter-spacing: .3px; }
 #patchnotes .pn-close {
-  pointer-events: auto;
   background: none;
   border: none;
   color: #7fa86a;
@@ -76,6 +109,8 @@ html, body {
   padding: 0 2px;
 }
 #patchnotes .pn-close:hover { color: #ffffff; }
+#patchnotes .pn-entry + .pn-entry { margin-top: 6px; padding-top: 5px; border-top: 1px solid #2c3627; }
+#patchnotes .pn-date { color: #ffe066; font-weight: 600; margin-bottom: 1px; }
 #patchnotes ul { margin: 0; padding-left: 14px; }
 #patchnotes li { margin: 1px 0; }
 
@@ -108,7 +143,7 @@ html, body {
 }
 
 </style>
-<!-- built 2026-09-12 15:01 by tools/build.js -->
+<!-- built 2026-09-12 15:10 by tools/build.js -->
 </head>
 <body>
   <div id="stage">
@@ -3527,7 +3562,7 @@ class Player {
     this.deadTimer = 0;
     this.potionQueued = false;
     this.stepTimer = 0;        // 발밑 먼지를 일정 간격으로 피우기 위한 타이머
-    this.sinceHurt = 0;        // 마지막으로 맞은 뒤 흐른 시간 — 자연 회복 판단
+    this.sinceCombat = 0;      // 마지막으로 맞거나 맞힌 뒤 흐른 시간 — 자연 회복 판단
     this.regenTick = 0;        // 회복 중 "+" 표시를 띄우는 간격
 
     // 겨냥 — 마우스를 쓰면 마우스 쪽, 아니면 마지막으로 걸어간 쪽을 본다
@@ -3905,6 +3940,7 @@ class Player {
       dmg = Math.max(1, dmg);
       // 사방 공격은 바깥쪽으로, 베는 공격은 휘두른 방향으로 날린다
       s.takeHit(dmg, omni ? toEnemy : base, crit, this, knockMult);
+      this.sinceCombat = 0;   // 때리는 중에도 자연 회복은 멈춘다
       // 처치 > 치명타 > 보통 순으로 화면이 더 오래 멈춘다. 카메라도 휘두른 쪽으로 살짝 밀린다
       const fx = CONFIG.fx;
       FX.freeze(s.dead ? fx.hitStopKill : (crit ? fx.hitStopCrit : fx.hitStop));
@@ -3918,7 +3954,7 @@ class Player {
     const c = CONFIG.player;
     this.hp -= amount;
     this.invuln = c.invulnTime;
-    this.sinceHurt = 0;        // 맞으면 자연 회복은 처음부터 다시 기다린다
+    this.sinceCombat = 0;      // 맞으면 자연 회복은 처음부터 다시 기다린다
     const a = Math.atan2(this.y - fromY, this.x - fromX);
     this.kx = Math.cos(a) * c.knockbackTaken;
     this.ky = Math.sin(a) * c.knockbackTaken;
@@ -3946,7 +3982,7 @@ class Player {
     this.dead = false;
     this.deadTimer = 0;
     this.hp = this.maxHp;
-    this.sinceHurt = 0;
+    this.sinceCombat = 0;
     this.x = x; this.y = y;
     this.kx = this.ky = 0;
     this.invuln = 1.2;
@@ -3957,7 +3993,7 @@ class Player {
   respawn() {
     this.dead = false;
     this.hp = this.maxHp;
-    this.sinceHurt = 0;
+    this.sinceCombat = 0;
     this.x = this.spawnX; this.y = this.spawnY;
     this.kx = this.ky = 0;
     this.invuln = 1.2;
@@ -4000,12 +4036,12 @@ class Player {
     return taken;
   }
 
-  /* 자연 회복 — 피해 없이 regenDelay 초가 지나면 초당 최대 체력의 regenRate 만큼 조금씩 찬다.
-     싸움 중엔 맞을 때마다 시계가 되돌아가므로 실질적으로 물러나 있을 때만 찬다. */
+  /* 자연 회복 — 맞지도 맞히지도 않은 채 regenDelay 초가 지나면 초당 최대 체력의 regenRate 만큼 조금씩 찬다.
+     맞을 때도, 내가 공격을 맞힐 때도 시계가 되돌아가므로 싸움 중에는 안 차고 물러나 있을 때만 찬다. */
   updateRegen(dt) {
     const c = CONFIG.player;
-    this.sinceHurt += dt;
-    if (this.sinceHurt < c.regenDelay || this.hp >= this.maxHp) { this.regenTick = 0; return; }
+    this.sinceCombat += dt;
+    if (this.sinceCombat < c.regenDelay || this.hp >= this.maxHp) { this.regenTick = 0; return; }
     this.hp = Math.min(this.maxHp, this.hp + this.maxHp * c.regenRate * dt);
     // 1.5초마다 작은 + 표시 — 지금 차고 있다는 걸 알려준다
     this.regenTick -= dt;
@@ -4016,7 +4052,7 @@ class Player {
   }
 
   regenerating() {
-    return !this.dead && this.sinceHurt >= CONFIG.player.regenDelay && this.hp < this.maxHp;
+    return !this.dead && this.sinceCombat >= CONFIG.player.regenDelay && this.hp < this.maxHp;
   }
 
   // 포션 한 개가 채우는 양 — 최대 체력의 30%, 최소 30
@@ -6596,19 +6632,22 @@ const UI = {
 // ── js/patchnotes.js
 'use strict';
 
-/* 패치 노트 — 게임 화면 오른쪽 위에 "오늘 바뀐 것"을 띄운다.
+/* 패치 노트 — 게임 화면 오른쪽 위의 작은 버튼. 누르면 바뀐 내용 목록이 펼쳐진다.
 
    픽셀 폰트는 영문 대문자뿐이라 한글을 찍을 수 없으므로, 캔버스가 아니라
    캔버스 위에 겹친 HTML 조각(#patchnotes)으로 그린다.
-   맨 위 항목(가장 최근 날짜)만 보여주고, X 로 닫으면 그 날짜는 다시 뜨지 않는다.
-   새 날짜의 노트가 생기면 다시 나타난다.
+   마지막으로 본 날짜를 브라우저에 기억해 두고, 그보다 새 항목이 있으면
+   버튼에 붉은 느낌표를 붙인다. 한 번 펼쳐 보면 느낌표는 사라진다.
+   펼쳐 둔 동안은 게임이 멈춘다 (읽는 사이에 맞지 않도록).
 
-   새 작업을 올릴 때 맨 앞에 한 항목을 추가하면 된다. */
+   새 작업을 올릴 때 PATCH_NOTES 맨 앞에 한 항목을 추가하면 된다. */
 
 const PATCH_NOTES = [
   {
     date: '2026-09-13',
     notes: [
+      '패치 노트를 버튼으로 — 새 소식이 있으면 붉은 느낌표',
+      '자연 회복이 공격을 맞혔을 때도 끊긴다',
       '가방이 꽉 차면 포션이 끌려오지 않는다',
       '처치/사망 수 표시 제거',
     ],
@@ -6636,28 +6675,70 @@ const PATCH_NOTES = [
 
 const PatchNotes = {
   KEY: 'forest-rpg-notes-seen',
+  open: false,
+  box: null,
+  button: null,
+  badge: null,
+  panel: null,
 
-  render() {
-    const box = document.getElementById('patchnotes');
-    if (!box || !PATCH_NOTES.length) return;
-    const latest = PATCH_NOTES[0];
+  init() {
+    this.box = document.getElementById('patchnotes');
+    if (!this.box || !PATCH_NOTES.length) return;
 
-    let seen = null;
-    try { seen = localStorage.getItem(this.KEY); } catch (e) { /* 무시 */ }
-    if (seen === latest.date) { box.hidden = true; return; }
+    this.box.innerHTML =
+      '<button class="pn-btn" type="button">패치노트<span class="pn-badge" hidden>!</span></button>' +
+      '<div class="pn-panel" hidden>' +
+        '<div class="pn-head"><span class="pn-title">업데이트 내역</span>' +
+        '<button class="pn-close" type="button" aria-label="닫기">×</button></div>' +
+        '<div class="pn-list">' + this.listHtml() + '</div>' +
+      '</div>';
+    this.button = this.box.querySelector('.pn-btn');
+    this.badge = this.box.querySelector('.pn-badge');
+    this.panel = this.box.querySelector('.pn-panel');
+    this.box.hidden = false;
 
-    const d = latest.date.slice(5).replace('-', '.');   // 2026-09-12 -> 09.12
-    box.innerHTML =
-      '<div class="pn-head"><span class="pn-title">업데이트 ' + d + '</span>' +
-      '<button class="pn-close" type="button" aria-label="닫기">×</button></div>' +
-      '<ul>' + latest.notes.map(n => '<li>' + this.escape(n) + '</li>').join('') + '</ul>';
-    box.hidden = false;
+    this.button.addEventListener('click', (e) => { e.stopPropagation(); this.toggle(); });
+    this.box.querySelector('.pn-close').addEventListener('click', (e) => { e.stopPropagation(); this.close(); });
+    window.addEventListener('keydown', (e) => { if (e.code === 'Escape' && this.open) this.close(); });
+    this.updateBadge();
+  },
 
-    box.querySelector('.pn-close').addEventListener('click', (e) => {
-      e.stopPropagation();
-      box.hidden = true;
-      try { localStorage.setItem(this.KEY, latest.date); } catch (err) { /* 무시 */ }
-    });
+  listHtml() {
+    return PATCH_NOTES.map(entry => {
+      const d = entry.date.slice(5).replace('-', '.');
+      return '<div class="pn-entry"><div class="pn-date">' + d + '</div><ul>' +
+        entry.notes.map(n => '<li>' + this.escape(n) + '</li>').join('') + '</ul></div>';
+    }).join('');
+  },
+
+  seenDate() {
+    try { return localStorage.getItem(this.KEY); } catch (e) { return null; }
+  },
+
+  // 아직 안 본 새 항목이 있는가
+  hasUnread() {
+    return this.seenDate() !== PATCH_NOTES[0].date;
+  },
+
+  updateBadge() {
+    if (this.badge) this.badge.hidden = !this.hasUnread();
+  },
+
+  toggle() {
+    if (this.open) this.close(); else this.openPanel();
+  },
+
+  openPanel() {
+    this.open = true;
+    this.panel.hidden = false;
+    // 펼쳐 봤으니 최신 날짜까지 본 것으로 기억한다 → 느낌표가 사라진다
+    try { localStorage.setItem(this.KEY, PATCH_NOTES[0].date); } catch (e) { /* 무시 */ }
+    this.updateBadge();
+  },
+
+  close() {
+    this.open = false;
+    this.panel.hidden = true;
   },
 
   escape(s) {
@@ -6710,7 +6791,7 @@ const Game = {
     buildSprites();
     Input.init(this.canvas);
     Sound.init();
-    PatchNotes.render();
+    PatchNotes.init();
 
     // 저장된 게임이 있으면 이어서 시작한다
     this.hasSave = Save.has();
@@ -7017,7 +7098,7 @@ const Game = {
   },
 
   paused() {
-    return this.showInventory || this.showMap || this.confirmNewGame || Shop.open;
+    return this.showInventory || this.showMap || this.confirmNewGame || Shop.open || PatchNotes.open;
   },
 
   // 지역 이름표 — 보스 방은 겉맵의 지역이 아니므로 따로 띄운다

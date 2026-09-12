@@ -40,7 +40,7 @@ const Game = {
     buildSprites();
     Input.init(this.canvas);
     Sound.init();
-    PatchNotes.render();
+    PatchNotes.init();
 
     // 저장된 게임이 있으면 이어서 시작한다
     this.hasSave = Save.has();
@@ -347,7 +347,7 @@ const Game = {
   },
 
   paused() {
-    return this.showInventory || this.showMap || this.confirmNewGame || Shop.open;
+    return this.showInventory || this.showMap || this.confirmNewGame || Shop.open || PatchNotes.open;
   },
 
   // 지역 이름표 — 보스 방은 겉맵의 지역이 아니므로 따로 띄운다

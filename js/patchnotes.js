@@ -1,18 +1,21 @@
 'use strict';
 
-/* 패치 노트 — 게임 화면 오른쪽 위에 "오늘 바뀐 것"을 띄운다.
+/* 패치 노트 — 게임 화면 오른쪽 위의 작은 버튼. 누르면 바뀐 내용 목록이 펼쳐진다.
 
    픽셀 폰트는 영문 대문자뿐이라 한글을 찍을 수 없으므로, 캔버스가 아니라
    캔버스 위에 겹친 HTML 조각(#patchnotes)으로 그린다.
-   맨 위 항목(가장 최근 날짜)만 보여주고, X 로 닫으면 그 날짜는 다시 뜨지 않는다.
-   새 날짜의 노트가 생기면 다시 나타난다.
+   마지막으로 본 날짜를 브라우저에 기억해 두고, 그보다 새 항목이 있으면
+   버튼에 붉은 느낌표를 붙인다. 한 번 펼쳐 보면 느낌표는 사라진다.
+   펼쳐 둔 동안은 게임이 멈춘다 (읽는 사이에 맞지 않도록).
 
-   새 작업을 올릴 때 맨 앞에 한 항목을 추가하면 된다. */
+   새 작업을 올릴 때 PATCH_NOTES 맨 앞에 한 항목을 추가하면 된다. */
 
 const PATCH_NOTES = [
   {
     date: '2026-09-13',
     notes: [
+      '패치 노트를 버튼으로 — 새 소식이 있으면 붉은 느낌표',
+      '자연 회복이 공격을 맞혔을 때도 끊긴다',
       '가방이 꽉 차면 포션이 끌려오지 않는다',
       '처치/사망 수 표시 제거',
     ],
@@ -40,28 +43,70 @@ const PATCH_NOTES = [
 
 const PatchNotes = {
   KEY: 'forest-rpg-notes-seen',
+  open: false,
+  box: null,
+  button: null,
+  badge: null,
+  panel: null,
 
-  render() {
-    const box = document.getElementById('patchnotes');
-    if (!box || !PATCH_NOTES.length) return;
-    const latest = PATCH_NOTES[0];
+  init() {
+    this.box = document.getElementById('patchnotes');
+    if (!this.box || !PATCH_NOTES.length) return;
 
-    let seen = null;
-    try { seen = localStorage.getItem(this.KEY); } catch (e) { /* 무시 */ }
-    if (seen === latest.date) { box.hidden = true; return; }
+    this.box.innerHTML =
+      '<button class="pn-btn" type="button">패치노트<span class="pn-badge" hidden>!</span></button>' +
+      '<div class="pn-panel" hidden>' +
+        '<div class="pn-head"><span class="pn-title">업데이트 내역</span>' +
+        '<button class="pn-close" type="button" aria-label="닫기">×</button></div>' +
+        '<div class="pn-list">' + this.listHtml() + '</div>' +
+      '</div>';
+    this.button = this.box.querySelector('.pn-btn');
+    this.badge = this.box.querySelector('.pn-badge');
+    this.panel = this.box.querySelector('.pn-panel');
+    this.box.hidden = false;
 
-    const d = latest.date.slice(5).replace('-', '.');   // 2026-09-12 -> 09.12
-    box.innerHTML =
-      '<div class="pn-head"><span class="pn-title">업데이트 ' + d + '</span>' +
-      '<button class="pn-close" type="button" aria-label="닫기">×</button></div>' +
-      '<ul>' + latest.notes.map(n => '<li>' + this.escape(n) + '</li>').join('') + '</ul>';
-    box.hidden = false;
+    this.button.addEventListener('click', (e) => { e.stopPropagation(); this.toggle(); });
+    this.box.querySelector('.pn-close').addEventListener('click', (e) => { e.stopPropagation(); this.close(); });
+    window.addEventListener('keydown', (e) => { if (e.code === 'Escape' && this.open) this.close(); });
+    this.updateBadge();
+  },
 
-    box.querySelector('.pn-close').addEventListener('click', (e) => {
-      e.stopPropagation();
-      box.hidden = true;
-      try { localStorage.setItem(this.KEY, latest.date); } catch (err) { /* 무시 */ }
-    });
+  listHtml() {
+    return PATCH_NOTES.map(entry => {
+      const d = entry.date.slice(5).replace('-', '.');
+      return '<div class="pn-entry"><div class="pn-date">' + d + '</div><ul>' +
+        entry.notes.map(n => '<li>' + this.escape(n) + '</li>').join('') + '</ul></div>';
+    }).join('');
+  },
+
+  seenDate() {
+    try { return localStorage.getItem(this.KEY); } catch (e) { return null; }
+  },
+
+  // 아직 안 본 새 항목이 있는가
+  hasUnread() {
+    return this.seenDate() !== PATCH_NOTES[0].date;
+  },
+
+  updateBadge() {
+    if (this.badge) this.badge.hidden = !this.hasUnread();
+  },
+
+  toggle() {
+    if (this.open) this.close(); else this.openPanel();
+  },
+
+  openPanel() {
+    this.open = true;
+    this.panel.hidden = false;
+    // 펼쳐 봤으니 최신 날짜까지 본 것으로 기억한다 → 느낌표가 사라진다
+    try { localStorage.setItem(this.KEY, PATCH_NOTES[0].date); } catch (e) { /* 무시 */ }
+    this.updateBadge();
+  },
+
+  close() {
+    this.open = false;
+    this.panel.hidden = true;
   },
 
   escape(s) {
