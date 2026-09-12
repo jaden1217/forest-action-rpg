@@ -137,6 +137,13 @@ const Sound = {
     dash(S)    { S.noise({ dur: 0.14, filter: 'highpass', from: 2500, to: 400, gain: 0.14 }); },
     heavy(S)   { S.noise({ dur: 0.28, filter: 'lowpass', from: 600, to: 120, gain: 0.35 });
                  S.tone({ freq: 95, slide: 38, type: 'sine', dur: 0.3, gain: 0.4 }); },
+    flurry(S)  { for (let i = 0; i < 5; i++) S.noise({ dur: 0.07, from: 2600, to: 900, gain: 0.14, q: 1.2, delay: i * 0.1 }); },
+    shadow(S)  { S.noise({ dur: 0.22, filter: 'highpass', from: 3000, to: 300, gain: 0.18 });
+                 S.tone({ freq: 520, slide: 130, type: 'triangle', dur: 0.25, gain: 0.14 }); },
+    quake(S)   { S.tone({ freq: 70, slide: 30, type: 'sine', dur: 0.5, gain: 0.5, delay: 0.38 });
+                 S.noise({ dur: 0.4, filter: 'lowpass', from: 500, to: 60, gain: 0.45, delay: 0.38 }); },
+    rage(S)    { S.tone({ freq: 90, slide: 260, type: 'sawtooth', dur: 0.5, gain: 0.22, lowpass: 900, attack: 0.04 });
+                 S.arp([220, 330, 440], 'square', 0.08, 0.08); },
     spin(S)    { // 도는 내내 "휘이잉" — 소음 필터를 0.18초마다 오르내리게 한다
                  for (let i = 0; i < 9; i++) S.noise({ dur: 0.2, from: 500, to: 1800, gain: 0.12, q: 2, delay: i * 0.18 }); },
     roar(S)    { S.tone({ freq: 70, slide: 42, type: 'sawtooth', dur: 0.9, gain: 0.28, lowpass: 500, attack: 0.05 });

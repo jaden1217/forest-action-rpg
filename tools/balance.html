@@ -156,13 +156,17 @@
   }
 
   /* ── 스킬 ── */
-  const sk = CONFIG.skills.list;
-  section('스킬', '위력은 평타 대비 배수. 회전베기는 도는 동안 hitInterval 마다 다시 맞으므로 대략 (판정 시간 / 간격) 번 맞는다.');
-  table(['스킬', '해금', '쿨다운', '배수', '지속', '판정', '대략 타수', '마리당 총 배수'],
-    sk.map(s => {
+  section('스킬 — 무기별', '위력은 "무기 종류 배수를 뺀 평타(검 기준)" 대비 배수라 무기끼리 바로 비교된다. 연타 스킬은 (판정 시간 / 간격) 번 맞는다. 강제 치명타는 x1.8 을 더 곱한다.');
+  const skRows = [];
+  for (const w in CONFIG.skills.byWeapon) {
+    for (const s of CONFIG.skills.byWeapon[w]) {
+      if (s.buff) { skRows.push([CONFIG.weapons[w].name + ' ' + s.name + ' (' + s.key + ')', 'Lv' + s.unlockLevel, s.cooldown + 's', '-', s.buff.time + 's 강화', '공속 x' + s.buff.attackSpeed + ', 위력 x' + s.buff.damageMult, '-', '-']); continue; }
       const hits = s.hitInterval ? Math.floor((s.hitWindow[1] - s.hitWindow[0]) / s.hitInterval) + 1 : 1;
-      return [s.name + ' (' + s.key + ')', 'Lv' + s.unlockLevel, s.cooldown + 's', 'x' + s.damageMult, s.duration + 's', s.hitWindow.join('~') + 's', hits, 'x' + (s.damageMult * hits).toFixed(2)];
-    }));
+      const crit = s.forceCrit ? CONFIG.player.critMult : 1;
+      skRows.push([CONFIG.weapons[w].name + ' ' + s.name + ' (' + s.key + ')', 'Lv' + s.unlockLevel, s.cooldown + 's', 'x' + s.damageMult + (s.forceCrit ? ' 치명' : ''), s.duration + 's', s.hitWindow.join('~') + 's' + (s.arc >= Math.PI ? ' 사방' : ' 반각 ' + s.arc), hits, 'x' + (s.damageMult * hits * crit).toFixed(2)]);
+    }
+  }
+  table(['스킬', '해금', '쿨다운', '배수', '지속', '판정', '대략 타수', '마리당 총 배수'], skRows);
 })();
 </script>
 </body>

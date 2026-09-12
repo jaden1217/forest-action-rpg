@@ -71,10 +71,10 @@ const Input = {
     return !!(this.pressed.ShiftLeft || this.pressed.ShiftRight);
   },
 
-  // 7주차 스킬 — 어떤 키가 어떤 스킬인지는 CONFIG.skills.list 가 정한다
+  // 7주차 스킬 — 눌린 스킬 키('Q'/'R')를 돌려준다. 어느 스킬인지는 지금 든 무기가 정한다
   skillPressed() {
-    for (const spec of CONFIG.skills.list) {
-      if (this.pressed['Key' + spec.key]) return spec.id;
+    for (const k of CONFIG.skills.keys) {
+      if (this.pressed['Key' + k]) return k;
     }
     return null;
   },

@@ -246,7 +246,7 @@ const UI = {
   /* 스킬 칸 — 키, 이름, 쿨다운, 잠김 여부를 한 자리에서 보여준다.
      쿨다운은 칸이 아래에서 위로 밝아지며 차오른다. */
   drawSkillBar(ctx, player) {
-    const list = CONFIG.skills.list;
+    const list = player.currentSkills();   // 무기마다 다르다
     const slotW = 26, slotH = 16, gap = 5;
     const total = list.length * slotW + (list.length - 1) * gap;
     let x = Math.round((CONFIG.VIEW_W - total) / 2);
@@ -267,6 +267,12 @@ const UI = {
         const filled = Math.round(slotH * (1 - cd / spec.cooldown));
         ctx.fillStyle = '#38452f';
         ctx.fillRect(x, y + slotH - filled, slotW, filled);
+      }
+      // 강화가 도는 동안엔 남은 시간이 붉게 줄어든다
+      if (player.buff && player.buff.id === spec.id) {
+        const left = Math.round(slotW * player.buff.timeLeft / player.buff.time);
+        ctx.fillStyle = '#5a1f1f';
+        ctx.fillRect(x, y, left, slotH);
       }
 
       if (locked) {

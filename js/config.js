@@ -141,40 +141,108 @@ const CONFIG = {
     buffer: 0.18,        // 대시 입력도 잠깐 기억해둔다
   },
 
-  /* 스킬 — 평타 말고 따로 쓰는 공격 수단. 쿨다운이 있고 플레이어 레벨로 열린다.
-     위력을 고정값이 아니라 "평타 데미지 x 배수"로 정했기 때문에,
-     레벨이 오르면 스킬도 같이 세진다 (성장 축이 레벨이라는 원칙을 스킬에도 적용). */
+  /* 스킬 — 평타 말고 따로 쓰는 공격 수단. 쿨다운이 있고 플레이어 레벨로 열린다 (Q 10레벨, R 20레벨).
+
+     무기마다 자기한테 어울리는 스킬 둘을 따로 가진다.
+       검   HEAVY 강공격 / SPIN 회전베기      — 균형
+       단검 FLURRY 연속 찌르기 / SHADOW 그림자 밟기 — 빠르고 좁고, 치명타
+       도끼 QUAKE 땅 찍기 / RAGE 광폭화        — 무겁고 넓고, 밀어낸다
+
+     위력(damageMult)은 "무기 종류 배수를 뺀 평타" 에 곱한다 (기본 공격 x 무기 레벨 배수).
+     안 그러면 단검(0.7배) 스킬이 도끼(1.55배) 스킬보다 늘 약해진다 — 스킬은 무기 종류와 무관하게
+     각자의 수치로만 세기가 정해져야 공평하다. */
   skills: {
     buffer: 0.18,          // 스킬 입력도 잠깐 기억해둔다
-    list: [
-      {
-        id: 'heavy', name: 'HEAVY', key: 'Q', unlockLevel: 10,
-        cooldown: 6.0,
-        damageMult: 2.6,     // 평타의 2.6배
-        arc: 1.5,            // 평타(0.95)보다 훨씬 넓게 벤다
-        reachBonus: 6,
-        duration: 0.42,
-        hitWindow: [0.14, 0.30],
-        lunge: 95,           // 휘두르며 앞으로 밀고 나간다
-        knockMult: 2.2,
-        shake: 4.5,
-        color: '#ffb35c',
-      },
-      {
-        id: 'spin', name: 'SPIN', key: 'R', unlockLevel: 20,
-        cooldown: 10.5,
-        damageMult: 0.63,    // 한 번 맞는 위력은 평타의 6할 — 대신 오래 돌며 여러 번 맞힌다
-        arc: Math.PI,        // 360도 — 둘러싸였을 때 빠져나오는 기술
-        reachBonus: 22,      // 평타 사거리(21)의 두 배 가까이 — 넓게 쓸어낸다
-        duration: 1.65,      // 1.65초 동안 계속 돈다
-        hitWindow: [0.08, 1.58],
-        hitInterval: 0.17,   // 도는 동안 이 간격으로 다시 맞는다 (약 9번)
-        moveScale: 0.45,     // 도는 동안 걸을 수 있는 속도 (평소의 45%) — 오래 도는 만큼 자리를 옮길 수 있어야 한다
-        knockMult: 1.4,
-        shake: 3,
-        color: '#7ec8ff',
-      },
-    ],
+    keys: ['Q', 'R'],
+    byWeapon: {
+      sword: [
+        {
+          id: 'heavy', name: 'HEAVY', key: 'Q', unlockLevel: 10,
+          cooldown: 6.0,
+          damageMult: 2.6,
+          arc: 1.5,            // 평타(0.95)보다 훨씬 넓게 벤다
+          reachBonus: 6,
+          duration: 0.42,
+          hitWindow: [0.14, 0.30],
+          lunge: 95,           // 휘두르며 앞으로 밀고 나간다
+          knockMult: 2.2,
+          shake: 4.5,
+          color: '#ffb35c',
+        },
+        {
+          id: 'spin', name: 'SPIN', key: 'R', unlockLevel: 20,
+          cooldown: 10.5,
+          damageMult: 0.63,    // 한 번 맞는 위력은 낮다 — 대신 오래 돌며 여러 번 맞힌다
+          arc: Math.PI,        // 360도 — 둘러싸였을 때 빠져나오는 기술
+          reachBonus: 22,
+          duration: 1.65,
+          hitWindow: [0.08, 1.58],
+          hitInterval: 0.17,   // 도는 동안 이 간격으로 다시 맞는다 (약 9번)
+          moveScale: 0.45,     // 도는 동안 평소의 45% 속도로 걸을 수 있다
+          knockMult: 1.4,
+          shake: 3,
+          color: '#7ec8ff',
+        },
+      ],
+      dagger: [
+        {
+          // 연속 찌르기 — 한 방향으로 다섯 번 찌른다. 좁지만 한 상대에게 쏟아붓는 위력은 강공격보다 크다
+          id: 'flurry', name: 'FLURRY', key: 'Q', unlockLevel: 10,
+          cooldown: 6.0,
+          damageMult: 1.0,     // 한 번에 1배 x 5번
+          arc: 0.55,
+          reachBonus: 8,
+          duration: 0.5,
+          hitWindow: [0.04, 0.48],
+          hitInterval: 0.1,
+          stepForward: 55,     // 찌르는 동안 앞으로 조금씩 나간다 (px/s)
+          knockMult: 0.5,
+          shake: 2,
+          color: '#c8ffd8',
+        },
+        {
+          // 그림자 밟기 — 겨냥한 쪽으로 순간 이동하듯 파고들며 지나친 적을 전부 치명타로 벤다. 지나가는 동안 무적
+          id: 'shadow', name: 'SHADOW', key: 'R', unlockLevel: 20,
+          cooldown: 9.0,
+          damageMult: 2.4,
+          forceCrit: true,     // 반드시 치명타 (x1.8) — 실질 4.3배
+          arc: Math.PI,
+          reachBonus: -6,      // 몸에 스친 적만 (사거리 13 + 적 반지름)
+          duration: 0.26,
+          hitWindow: [0, 0.26],
+          dashSpeed: 420,      // 0.26초 x 420 = 약 110px
+          invuln: true,
+          knockMult: 0.4,
+          shake: 3,
+          color: '#c79ce8',
+        },
+      ],
+      axe: [
+        {
+          // 땅 찍기 — 도끼를 들어올렸다 내리찍어 주위 전체를 때리고 멀리 밀어낸다. 예고(들어올림)가 길다
+          id: 'quake', name: 'QUAKE', key: 'Q', unlockLevel: 10,
+          cooldown: 8.0,
+          damageMult: 2.4,
+          arc: Math.PI,
+          reachBonus: 23,      // 도끼 사거리 23 + 23 = 46 반경
+          duration: 0.7,
+          windup: 0.38,        // 들어올리는 시간 — 이 동안은 무방비
+          hitWindow: [0.38, 0.5],
+          knockMult: 2.6,
+          shake: 7,
+          color: '#ffb35c',
+        },
+        {
+          // 광폭화 — 잠깐 공격 속도와 위력이 오른다. 도끼의 느린 손을 한동안 잊게 해준다
+          id: 'rage', name: 'RAGE', key: 'R', unlockLevel: 20,
+          cooldown: 20.0,
+          duration: 0.3,       // 발동 동작
+          buff: { time: 7, attackSpeed: 1.6, damageMult: 1.25 },
+          shake: 3,
+          color: '#ff6b6b',
+        },
+      ],
+    },
   },
 
   /* 무기 3종. 세 무기의 성능은 서로 같다.
