@@ -127,8 +127,8 @@ const Minimap = {
       put(s.x, s.y, LEVEL_PALETTES[levelTier(s.level)].M, 1);
     }
 
-    // 플레이어는 깜빡이는 십자로 그려서 점들 사이에서도 바로 찾을 수 있다
-    if (Math.floor(World.time * 4) % 2 === 0) {
+    // 플레이어는 흰 십자로 늘 그려서 점들 사이에서도 바로 찾을 수 있다 (깜빡이지 않는다)
+    {
       const mx = Math.floor(player.x / T) - sx, my = Math.floor(player.y / T) - sy;
       if (mx < 0 || my < 0 || mx >= bw || my >= bh) return;
       const px = ox + mx * scale, py = oy + my * scale;

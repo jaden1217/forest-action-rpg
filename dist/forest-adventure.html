@@ -143,7 +143,7 @@ html, body {
 }
 
 </style>
-<!-- built 2026-09-12 16:06 by tools/build.js -->
+<!-- built 2026-09-12 16:15 by tools/build.js -->
 </head>
 <body>
   <div id="stage">
@@ -289,7 +289,7 @@ const CONFIG = {
     regenDelay: 6,
     regenRate: 0.02,       // 초당 2% — 0 에서 가득 차는 데 50초
     knockbackTaken: 95,
-    critChance: 0.12,
+    critChance: 0.10,
     critMult: 1.8,
     // 쿨다운이 끝나기 직전에 누른 공격을 이 시간만큼 기억했다가 바로 이어서 낸다.
     // 없으면 정확한 타이밍에 눌러야만 연속 공격이 되어 손맛이 나쁘다.
@@ -3452,8 +3452,8 @@ const Minimap = {
       put(s.x, s.y, LEVEL_PALETTES[levelTier(s.level)].M, 1);
     }
 
-    // 플레이어는 깜빡이는 십자로 그려서 점들 사이에서도 바로 찾을 수 있다
-    if (Math.floor(World.time * 4) % 2 === 0) {
+    // 플레이어는 흰 십자로 늘 그려서 점들 사이에서도 바로 찾을 수 있다 (깜빡이지 않는다)
+    {
       const mx = Math.floor(player.x / T) - sx, my = Math.floor(player.y / T) - sy;
       if (mx < 0 || my < 0 || mx >= bw || my >= bh) return;
       const px = ox + mx * scale, py = oy + my * scale;
@@ -4291,14 +4291,15 @@ class Player {
       ctx.globalAlpha = 1;
     }
 
-    // 무적 시간에는 한 프레임 걸러 그려서 깜빡이게 한다
-    if (this.invuln > 0 && Math.floor(this.invuln * 20) % 2 === 0) return;
+    // 무적 시간 동안 사라지지는 않는다 — 대신 잠깐 붉게 물들어 맞았음을 알린다 (아래 set 선택)
 
     // 그림자
     fillCircle(ctx, sx, sy + 7, 5, 'rgba(0,0,0,0.28)');
 
     const frame = this.moving && Math.floor(this.walkTime * 8) % 2 === 1 ? 1 : 0;
+    // 맞은 직후 0.25초는 붉은 실루엣, 그 뒤 무적이 남은 동안엔 한 프레임 걸러 살짝 옅어질 뿐 늘 보인다
     const set = this.invuln > CONFIG.player.invulnTime - 0.25 ? SPRITES.playerFlash : SPRITES.player;
+    if (this.invuln > 0 && Math.floor(this.invuln * 20) % 2 === 0) ctx.globalAlpha = 0.75;
     // 걸을 때 살짝 위아래로 흔들리면 발걸음이 살아난다
     const bob = frame === 1 ? -1 : 0;
     // 회전베기 중에는 바라보는 방향을 빠르게 돌려서 도는 것처럼 보이게 한다
@@ -4311,6 +4312,7 @@ class Player {
       ctx.globalAlpha = 1;
     }
     ctx.drawImage(set[facing][frame], sx - 8, sy - 8 + bob);
+    ctx.globalAlpha = 1;
 
     if (this.activeSkill) this.drawSkill(ctx, sx, sy);
     else if (this.attackTimer > 0) this.drawSwing(ctx, sx, sy);
@@ -6939,6 +6941,8 @@ const PATCH_NOTES = [
   {
     date: '2026-09-13',
     notes: [
+      '치명타 확률 12% → 10%',
+      '플레이어가 맞아도 사라지지 않고 계속 보인다 (지도 십자도 안 깜빡임)',
       '무기마다 스킬 둘 — 단검 FLURRY/SHADOW, 검 HEAVY/SPIN, 도끼 QUAKE/RAGE',
       '스킬 위력은 무기 종류와 무관하게 계산 (단검 스킬이 약하지 않다)',
       '치명타가 안 터지던 버그 수정',

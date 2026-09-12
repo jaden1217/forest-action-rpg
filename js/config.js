@@ -120,7 +120,7 @@ const CONFIG = {
     regenDelay: 6,
     regenRate: 0.02,       // 초당 2% — 0 에서 가득 차는 데 50초
     knockbackTaken: 95,
-    critChance: 0.12,
+    critChance: 0.10,
     critMult: 1.8,
     // 쿨다운이 끝나기 직전에 누른 공격을 이 시간만큼 기억했다가 바로 이어서 낸다.
     // 없으면 정확한 타이밍에 눌러야만 연속 공격이 되어 손맛이 나쁘다.

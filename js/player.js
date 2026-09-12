@@ -681,14 +681,15 @@ class Player {
       ctx.globalAlpha = 1;
     }
 
-    // 무적 시간에는 한 프레임 걸러 그려서 깜빡이게 한다
-    if (this.invuln > 0 && Math.floor(this.invuln * 20) % 2 === 0) return;
+    // 무적 시간 동안 사라지지는 않는다 — 대신 잠깐 붉게 물들어 맞았음을 알린다 (아래 set 선택)
 
     // 그림자
     fillCircle(ctx, sx, sy + 7, 5, 'rgba(0,0,0,0.28)');
 
     const frame = this.moving && Math.floor(this.walkTime * 8) % 2 === 1 ? 1 : 0;
+    // 맞은 직후 0.25초는 붉은 실루엣, 그 뒤 무적이 남은 동안엔 한 프레임 걸러 살짝 옅어질 뿐 늘 보인다
     const set = this.invuln > CONFIG.player.invulnTime - 0.25 ? SPRITES.playerFlash : SPRITES.player;
+    if (this.invuln > 0 && Math.floor(this.invuln * 20) % 2 === 0) ctx.globalAlpha = 0.75;
     // 걸을 때 살짝 위아래로 흔들리면 발걸음이 살아난다
     const bob = frame === 1 ? -1 : 0;
     // 회전베기 중에는 바라보는 방향을 빠르게 돌려서 도는 것처럼 보이게 한다
@@ -701,6 +702,7 @@ class Player {
       ctx.globalAlpha = 1;
     }
     ctx.drawImage(set[facing][frame], sx - 8, sy - 8 + bob);
+    ctx.globalAlpha = 1;
 
     if (this.activeSkill) this.drawSkill(ctx, sx, sy);
     else if (this.attackTimer > 0) this.drawSwing(ctx, sx, sy);
