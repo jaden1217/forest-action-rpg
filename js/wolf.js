@@ -114,8 +114,9 @@ class Wolf extends Enemy {
     if (this.state === 'windup') { syScale = 0.82; sxScale = 1.06; }
     else if (this.state === 'lunge') { syScale = 0.92; sxScale = 1.12; }
 
-    const w = Math.round(sprite.width * this.scale * sxScale);
-    const h = Math.round(sprite.height * this.scale * syScale);
+    const draw = this.scale * CONFIG.wolf.spriteScale;
+    const w = Math.round(sprite.width * draw * sxScale);
+    const h = Math.round(sprite.height * draw * syScale);
 
     this.drawShadow(ctx, sx, sy, 6.5 * this.scale);
     ctx.drawImage(sprite, sx - Math.round(w / 2), Math.round(sy + 7 - h), w, h);

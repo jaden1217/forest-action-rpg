@@ -17,12 +17,12 @@ const Minimap = {
   /* 타일 색 — [지역][타일종류]. 지역마다 바닥색이 달라서
      지도만 봐도 "여기부터 깊은 숲, 저기부터 포자 골짜기"가 바로 보인다.
      (TILE_GRASS, TILE_DIRT, TILE_SAND, TILE_WATER, TILE_MEADOW 순서) */
+  // [그늘 여부][타일 종류] — 볕 드는 바닥 / 빽빽한 숲의 그늘진 바닥
   TILE_RGB: [
     [[63, 139, 64], [125, 95, 60], [194, 168, 119], [47, 111, 158], [86, 163, 90]],
     [[44, 100, 49], [110, 84, 53], [194, 168, 119], [47, 111, 158], [52, 112, 57]],
-    [[103, 99, 93], [90, 84, 77], [194, 168, 119], [47, 111, 158], [110, 106, 99]],
   ],
-  TREE_RGB: ['#1f5a2a', '#173f1f', '#3d4a3a'],
+  TREE_RGB: ['#1f5a2a', '#173f1f'],
 
   build() {
     const W = World.cols, H = World.rows;
@@ -32,8 +32,8 @@ const Minimap = {
 
     const img = ctx.createImageData(W, H);
     for (let i = 0; i < W * H; i++) {
-      const byRegion = this.TILE_RGB[World.regions[i]] || this.TILE_RGB[0];
-      const c = byRegion[World.tiles[i]] || byRegion[0];
+      const byShade = this.TILE_RGB[World.shade[i]] || this.TILE_RGB[0];
+      const c = byShade[World.tiles[i]] || byShade[0];
       img.data[i * 4] = c[0];
       img.data[i * 4 + 1] = c[1];
       img.data[i * 4 + 2] = c[2];
@@ -45,7 +45,7 @@ const Minimap = {
     for (const p of World.props) {
       if (!p.tree) continue;
       const tx = Math.floor(p.x / CONFIG.TILE), ty = Math.floor(p.y / CONFIG.TILE);
-      ctx.fillStyle = this.TREE_RGB[World.regions[ty * W + tx]] || this.TREE_RGB[0];
+      ctx.fillStyle = this.TREE_RGB[World.shade[ty * W + tx]] || this.TREE_RGB[0];
       ctx.fillRect(tx, ty, 1, 1);
     }
 
@@ -78,9 +78,10 @@ const Minimap = {
 
     this.drawDots(ctx, x, y, sx, sy, bw, bh, 1, player, enemies);
 
-    // 지금 서 있는 지역 이름을 지도 위에 붙여둔다
-    const spec = World.regionSpec(player.x, player.y);
-    if (spec) UI.drawText(ctx, spec.name, x + bw - UI.textWidth(spec.name), y - 7, spec.color, false);
+    // 지역 이름 대신 이 자리의 몬스터 기준 레벨을 붙여둔다 — 어디까지 왔는지 한눈에 보인다
+    const lv = World.levelAt(player.x, player.y);
+    const label = 'LV ' + lv + ' AREA';
+    UI.drawText(ctx, label, x + bw - UI.textWidth(label), y - 7, LEVEL_PALETTES[levelTier(lv)].n, false);
   },
 
   /* ── 전체 지도 ─────────────────────────────────────────── */

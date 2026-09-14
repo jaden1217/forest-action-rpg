@@ -764,7 +764,7 @@ class Player {
       if (!up) {
         const t = Util.clamp((elapsedAll - spec.windup) / 0.32, 0, 0.999);
         const ring = SPRITES.shockRing[Math.floor(t * 4)];
-        const r = (this.weaponSpec().reach + spec.reachBonus) / CONFIG.bosses.edge.slam.radius;   // 충격파 도트(반경 62)를 내 반경에 맞춘다
+        const r = (this.weaponSpec().reach + spec.reachBonus) / CONFIG.bosses.slime.slam.radius;   // 충격파 도트(반경 62)를 내 반경에 맞춘다
         const w = Math.round(ring.width * r), h = Math.round(ring.height * r);
         if (grow) { ctx.globalAlpha = 0.7; ctx.drawImage(tinted(ring, this.rainbowNow(0)), sx - Math.round(w / 2) - 1, sy + 4 - Math.round(h / 2) - 1, w + 2, h + 2); ctx.globalAlpha = 1; }
         ctx.drawImage(ring, sx - Math.round(w / 2), sy + 4 - Math.round(h / 2), w, h);

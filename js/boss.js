@@ -14,7 +14,7 @@
 
 class GiantSlime extends Boss {
   constructor(x, y) {
-    super(x, y, CONFIG.bosses.edge, CONFIG.slime.levels);
+    super(x, y, CONFIG.bosses.slime, CONFIG.slime.levels);
     this.hopTimer = 0;       // 평소 통통 튀는 연출
     this.airHeight = 0;      // 내려찍기로 떠오른 높이
     this.target = { x: x, y: y };

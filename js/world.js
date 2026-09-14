@@ -11,14 +11,10 @@
 
 const TILE_GRASS = 0, TILE_DIRT = 1, TILE_SAND = 2, TILE_WATER = 3, TILE_MEADOW = 4;
 
-// 지역 (CONFIG.regions.list 의 순서와 같다)
-const REGION_EDGE = 0, REGION_DEEP = 1, REGION_CAVE = 2;
-
-// 타일 경계를 흐릴 때 쓰는 대표색 — [지역][타일종류]
+// 타일 경계를 흐릴 때 쓰는 대표색 — [그늘 여부][타일종류]
 const TILE_BASE_COLOR = [
-  ['#3f8b40', '#7d5f3c', '#c2a877', '#2f6f9e', '#3f8b40'],   // 숲 가장자리
-  ['#2c6431', '#7d5f3c', '#c2a877', '#2f6f9e', '#2c6431'],   // 깊은 숲
-  ['#67635d', '#5a544d', '#c2a877', '#2f6f9e', '#67635d'],   // 포자 골짜기
+  ['#3f8b40', '#7d5f3c', '#c2a877', '#2f6f9e', '#3f8b40'],   // 볕이 드는 숲 바닥
+  ['#2c6431', '#7d5f3c', '#c2a877', '#2f6f9e', '#2c6431'],   // 빽빽한 숲의 그늘진 바닥
 ];
 
 const World = {
@@ -44,10 +40,10 @@ const World = {
     this.props = [];
     this.solids = [];
     this.time = 0;
-    this.caves = [null, null, null];   // 지역별 동굴 입구 — 각자 그 지역 보스 방으로 이어진다
+    this.caves = CONFIG.forest.caves.map(() => null);   // 동굴 입구 셋 — 각자 자기 보스 방으로 이어진다
     this.merchant = null;   // 상인 (Shop.place 가 채운다)
 
-    this.buildRegions(seed);
+    this.buildDanger(seed);
     this.buildTiles(seed);
     this.bakeGround(Util.makeRng(seed + 5));
     this.placeTrees(Util.makeRng(seed + 17));
@@ -67,7 +63,7 @@ const World = {
      만들어 둔 것을 그냥 들고 있는 편이 낫다. (바닥 캔버스가 커봐야 20MB 남짓) */
   STATE_KEYS: [
     'cols', 'rows', 'w', 'h', 'ground', 'props', 'solids', 'grid',
-    'tiles', 'tileBlocked', 'regions', 'regionCenters',
+    'tiles', 'tileBlocked', 'shade', 'dangerNoise',
     'startX', 'startY', 'wetNoise', 'openNoise', 'caves', 'arenaExit', 'merchant',
     'time', 'isArena',
   ],
@@ -87,7 +83,7 @@ const World = {
      남쪽 벽에 나가는 굴이 하나 뚫려 있다.
      겉맵과 달리 지형을 뽑아내지 않고 손으로 짠 방이라 매번 같은 모양이다 —
      보스와 싸우는 자리는 예측 가능해야 패턴을 외워 대응할 수 있기 때문이다. */
-  initArena(seed, region) {
+  initArena(seed, caveIndex) {
     const T = CONFIG.TILE, a = CONFIG.arena, WALL = 2;
     this.cols = a.w;
     this.rows = a.h;
@@ -96,21 +92,20 @@ const World = {
     this.props = [];
     this.solids = [];
     this.time = 0;
-    this.caves = [null, null, null];
+    this.caves = [];
     this.merchant = null;
     this.isArena = true;
-    this.arenaRegion = region || 0;
+    this.arenaCave = caveIndex || 0;
 
     const rng = Util.makeRng(seed);
     const N = this.cols * this.rows;
     this.tiles = new Uint8Array(N);
     this.tileBlocked = new Uint8Array(N);
-    this.regions = new Uint8Array(N);
-    for (let i = 0; i < N; i++) this.regions[i] = REGION_CAVE;   // 포자 골짜기 = 돌바닥 색
-    this.regionCenters = [{ x: this.cols / 2, y: this.rows / 2 }];
+    this.shade = new Uint8Array(N);
     // 겉맵 전용 노이즈를 참조하다 터지지 않도록 밋밋한 값으로 채워둔다
     this.wetNoise = () => 0;
     this.openNoise = () => 0.5;
+    this.dangerNoise = () => 0.5;
 
     for (let ty = 0; ty < this.rows; ty++) {
       for (let tx = 0; tx < this.cols; tx++) {
@@ -121,7 +116,7 @@ const World = {
       }
     }
 
-    this.bakeArena(rng, WALL, region || 0);
+    this.bakeArena(rng, WALL, caveIndex || 0);
 
     // 나가는 굴은 남쪽 벽 한가운데. 들어온 자리이자 나가는 자리다
     const ex = Math.floor(this.cols / 2) * T;
@@ -154,11 +149,11 @@ const World = {
   },
 
   // 보스 방 바닥 굽기 — 벽은 캄캄하게, 바닥은 자갈이 굴러다니는 돌바닥
-  bakeArena(rng, WALL, region) {
+  bakeArena(rng, WALL, caveIndex) {
     const T = CONFIG.TILE;
-    // 지역마다 벽 색조가 조금 다르다 — 가장자리는 흙빛, 깊은 숲은 이끼빛, 골짜기는 포자빛
-    const WALL_TINT = ['rgba(14,11,8,0.88)', 'rgba(8,14,10,0.88)', 'rgba(14,9,16,0.88)'][region] || 'rgba(12,11,10,0.88)';
-    const WALL_GRAIN = ['#2b2620', '#20301f', '#2e2033'][region] || '#2b2620';
+    // 동굴마다 벽 색조가 조금 다르다 — 슬라임 굴은 흙빛, 늑대 굴은 이끼빛, 버섯 굴은 포자빛
+    const WALL_TINT = ['rgba(14,11,8,0.88)', 'rgba(8,14,10,0.88)', 'rgba(14,9,16,0.88)'][caveIndex] || 'rgba(12,11,10,0.88)';
+    const WALL_GRAIN = ['#2b2620', '#20301f', '#2e2033'][caveIndex] || '#2b2620';
     this.ground = makeCanvas(this.w, this.h);
     const ctx = this.ground.getContext('2d');
     ctx.imageSmoothingEnabled = false;
@@ -167,7 +162,7 @@ const World = {
       for (let tx = 0; tx < this.cols; tx++) {
         const i = ty * this.cols + tx;
         const x = tx * T, y = ty * T;
-        const set = this.groundSet(this.tiles[i], REGION_CAVE);
+        const set = this.groundSet(this.tiles[i], 'stone');
         ctx.drawImage(set[Math.floor(rng() * set.length)], x, y);
 
         if (this.tileBlocked[i]) {
@@ -223,59 +218,46 @@ const World = {
     };
   },
 
-  /* 지역 나누기 — 세 구역이 삼각형으로 모여 서로 전부 맞닿는다.
-
-     세 지역의 중심을 맵 한가운데를 둘러싸고 120도씩 벌려 놓은 뒤,
-     모든 타일을 "가장 가까운 중심"에 배정한다.
-     그러면 세 구역이 각자 자기 자리를 차지하면서 서로서로 경계를 맞대고,
-     셋이 만나는 지점이 맵 한가운데에 생긴다.
-     경계 거리에 노이즈를 더해 직선이 아니라 울퉁불퉁하게 만들고,
-     삼각형이 놓이는 방향은 맵마다 달라 매번 다른 배치가 나온다. */
-  buildRegions(seed) {
-    const W = this.cols, H = this.rows, cfg = CONFIG.regions;
-    this.regions = new Uint8Array(W * H);
-    const rng = Util.makeRng(seed + 71);
-
-    const cx = W / 2, cy = H / 2;
-    const base = rng() * Math.PI * 2;          // 삼각형이 놓이는 방향
-    const rx = W * cfg.clusterRadius, ry = H * cfg.clusterRadius;
-    // 순서 = REGION_EDGE, REGION_DEEP, REGION_CAVE
-    this.regionCenters = [0, 1, 2].map(i => {
-      const a = base + i * (Math.PI * 2 / 3);
-      return { x: cx + Math.cos(a) * rx, y: cy + Math.sin(a) * ry };
-    });
-
-    // 지역마다 다른 노이즈를 써야 경계가 서로 다른 모양으로 흔들린다
-    const wobble = this.regionCenters.map((_, i) => this.makeNoise(seed + 131 + i * 37, 9, 7));
-
-    for (let ty = 0; ty < H; ty++) {
-      for (let tx = 0; tx < W; tx++) {
-        let best = 0, bestD = Infinity;
-        for (let i = 0; i < this.regionCenters.length; i++) {
-          const c = this.regionCenters[i];
-          const d = Util.dist(tx, ty, c.x, c.y) +
-                    (wobble[i](tx / W, ty / H) - 0.5) * cfg.borderWobble;
-          if (d < bestD) { bestD = d; best = i; }
-        }
-        this.regions[ty * W + tx] = best;
-      }
-    }
-
-    // 플레이어는 숲 가장자리 한복판에서 시작한다
-    const s = this.regionCenters[REGION_EDGE];
-    this.startX = Util.clamp(s.x * CONFIG.TILE, 70, this.w - 70);
-    this.startY = Util.clamp(s.y * CONFIG.TILE, 70, this.h - 70);
+  /* ── 위험도 — 시작점(맵 한가운데)에서 얼마나 멀리 왔는가 (0~1) ──
+     맵 하나가 통째로 "태초의 숲"이고, 지역 경계 대신 이 값이 몬스터 레벨·종류, 나무, 소품을 정한다.
+     거리는 맵 모양을 따르는 둥근 사각형(4제곱 노름)으로 재서 가장자리 어디서나 1에 닿고,
+     노이즈를 조금 섞어 같은 레벨대가 완벽한 고리로 보이지 않게 한다. */
+  buildDanger(seed) {
+    this.dangerNoise = this.makeNoise(seed + 71, 9, 7);
+    // 플레이어는 숲 한가운데서 시작한다 — 사방 어디로 가든 점점 위험해진다
+    this.startX = this.w / 2;
+    this.startY = this.h / 2;
   },
 
-  regionAt(x, y) {
-    const T = CONFIG.TILE;
-    const tx = Math.floor(x / T), ty = Math.floor(y / T);
-    if (tx < 0 || ty < 0 || tx >= this.cols || ty >= this.rows) return REGION_EDGE;
-    return this.regions[ty * this.cols + tx];
+  dangerAt(x, y) {
+    if (this.isArena) return 0;
+    const dx = Math.abs(x - this.startX) / (this.w / 2), dy = Math.abs(y - this.startY) / (this.h / 2);
+    const d = Math.pow(dx * dx * dx * dx + dy * dy * dy * dy, 0.25);
+    const wob = (this.dangerNoise(x / this.w, y / this.h) - 0.5) * CONFIG.forest.wobble;
+    return Util.clamp(d + wob, 0, 1);
   },
 
-  regionSpec(x, y) {
-    return CONFIG.regions.list[this.regionAt(x, y)] || CONFIG.regions.list[0];
+  // 그 자리의 기준 몬스터 레벨 (1 ~ LEVEL_MAX). 안전 반경 안은 1, 가장자리에서 최대
+  levelAt(x, y) {
+    const f = CONFIG.forest;
+    const t = Util.clamp((this.dangerAt(x, y) - f.safeRadius) / (1 - f.safeRadius), 0, 1);
+    return 1 + Math.round(Math.pow(t, f.curve) * (LEVEL_MAX - 1));
+  },
+
+  // 그 자리에 어떤 몬스터가 잘 나오는가 — 세 기준점(t = 0 / 0.5 / 1) 사이를 보간
+  typeWeightsAt(x, y) {
+    const list = CONFIG.forest.typeWeights;
+    const t = this.dangerAt(x, y) * (list.length - 1);
+    const i = Math.min(list.length - 2, Math.floor(t)), u = t - i;
+    const out = {};
+    for (const k in list[i]) out[k] = Util.lerp(list[i][k], list[i + 1][k] || 0, u);
+    return out;
+  },
+
+  // [t=0 값, t=1 값] 사이를 위험도로 보간 (나무 밀도, 침엽수 비율 등)
+  forestAt(key, x, y) {
+    const pair = CONFIG.forest[key];
+    return Util.lerp(pair[0], pair[1], this.dangerAt(x, y));
   },
 
   buildTiles(seed) {
@@ -285,7 +267,8 @@ const World = {
     this.wetNoise = this.makeNoise(seed + 11, 7, 5);
     this.openNoise = this.makeNoise(seed + 29, 10, 8);
     const bloom = this.makeNoise(seed + 53, 12, 9);
-    // 시작 지점(숲 가장자리 한복판) 주변은 물 없이 비워둔다
+    this.shade = new Uint8Array(W * H);   // 빽빽한 숲 바닥은 그늘져서 잔디가 어둡다
+    // 시작 지점(숲 한가운데) 주변은 물 없이 비워둔다
     const cx = this.startX / CONFIG.TILE, cy = this.startY / CONFIG.TILE;
 
     for (let ty = 0; ty < H; ty++) {
@@ -304,6 +287,7 @@ const World = {
           else if (bloom(fx, fy) > cfg.meadowLevel) t = TILE_MEADOW;
         }
         this.tiles[ty * W + tx] = t;
+        if (this.openNoise(fx, fy) > CONFIG.forest.shadeLevel && !nearStart) this.shade[ty * W + tx] = 1;
       }
     }
 
@@ -365,7 +349,7 @@ const World = {
     for (let ty = 0; ty < H; ty++) {
       for (let tx = 0; tx < W; tx++) {
         const i = ty * W + tx;
-        const set = this.groundSet(this.tiles[i], this.regions[i]);
+        const set = this.groundSet(this.tiles[i], this.shade[i] ? 'shade' : 'forest');
         ctx.drawImage(set[Math.floor(rng() * set.length)], tx * T, ty * T);
       }
     }
@@ -374,21 +358,21 @@ const World = {
     this.bakeDetails(ctx, rng);
   },
 
-  // 타일 종류 + 지역 -> 실제로 쓸 바닥 타일 묶음
-  groundSet(tile, region) {
-    const g = SPRITES.regionGround[region] || SPRITES.regionGround[0];
+  // 타일 종류 + 바닥 묶음 이름(forest / shade / stone) -> 실제로 쓸 바닥 타일들
+  groundSet(tile, setName) {
+    const g = SPRITES.groundSets[setName] || SPRITES.groundSets.forest;
     if (tile === TILE_DIRT) return g.dirt;
-    if (tile === TILE_SAND) return SPRITES.sand;    // 물가 모래는 지역과 무관하다
+    if (tile === TILE_SAND) return SPRITES.sand;    // 물가 모래는 어디서나 같다
     if (tile === TILE_WATER) return SPRITES.water;
     if (tile === TILE_MEADOW) return g.meadow;
     return g.grass;
   },
 
   // 경계에 서로의 색을 흩뿌려 칼같은 직선을 없앤다.
-  // 타일 종류가 같아도 지역이 다르면 색이 다르므로 지역 경계도 함께 흐려진다.
+  // 타일 종류가 같아도 그늘 여부가 다르면 색이 다르므로 그늘 경계도 함께 흐려진다.
   ditherEdges(ctx, rng) {
     const T = CONFIG.TILE, W = this.cols, H = this.rows;
-    const colorAt = (i) => TILE_BASE_COLOR[this.regions[i]][this.tiles[i]];
+    const colorAt = (i) => TILE_BASE_COLOR[this.shade[i]][this.tiles[i]];
     const sprinkle = (x, y, w, h, color, n) => {
       ctx.fillStyle = color;
       for (let i = 0; i < n; i++) {
@@ -423,17 +407,12 @@ const World = {
     for (let ty = 0; ty < H; ty++) {
       for (let tx = 0; tx < W; tx++) {
         const i = ty * W + tx;
-        const t = this.tiles[i], region = this.regions[i];
+        const t = this.tiles[i], shaded = this.shade[i];
         const x = tx * T, y = ty * T;
 
-        // 포자 골짜기는 돌바닥이라 꽃이 자라지 않는다 — 대신 자갈이 굴러다닌다
-        if (region === REGION_CAVE && (t === TILE_GRASS || t === TILE_MEADOW || t === TILE_DIRT)) {
-          if (rng() < 0.10) ctx.drawImage(SPRITES.rock[0], x + Math.floor(rng() * 5), y + Math.floor(rng() * 6));
-          continue;
-        }
-        // 깊은 숲은 그늘져서 꽃이 훨씬 드물다
-        const flowerRate = region === REGION_DEEP ? 0.05 : 0.16;
-        const meadowFlowers = region === REGION_DEEP ? 2 : 4;
+        // 그늘진 바닥은 꽃이 훨씬 드물다
+        const flowerRate = shaded ? 0.05 : 0.16;
+        const meadowFlowers = shaded ? 2 : 4;
 
         if (t === TILE_MEADOW) {
           for (let k = 0; k < meadowFlowers; k++) {
@@ -507,13 +486,11 @@ const World = {
       if (!buckets.has(k)) buckets.set(k, []);
       buckets.get(k).push({ x: x, y: y });
 
-      // 지역마다 자라는 나무가 다르다 — 깊은 숲은 침엽수, 포자 골짜기는 고사목이 많다
-      const spec = this.regionSpec(x, y);
-      const region = this.regionAt(x, y);
+      // 시작점에서 멀어질수록 침엽수와 고사목이 늘어난다 — 숲이 점점 험해 보인다
       let sprite, solid;
-      if (rng() < spec.pineChance) {
+      if (rng() < this.forestAt('pineChance', x, y)) {
         sprite = Util.choice(SPRITES.pine); solid = [5, 5, 8];
-      } else if (rng() < (region === REGION_CAVE ? 0.35 : 0.06)) {
+      } else if (rng() < this.forestAt('deadChance', x, y)) {
         sprite = Util.choice(SPRITES.deadTree); solid = [4, 4, 7];
       } else {
         sprite = Util.choice(SPRITES.tree); solid = [6, 5, 8];
@@ -531,13 +508,13 @@ const World = {
       tryPlace(this.w - 24 - rng() * 10, y + rng() * 8, true);
     }
 
-    // 안쪽 — 개방도가 높을수록, 그리고 지역의 나무 밀도가 높을수록 빽빽해진다
+    // 안쪽 — 개방도가 높을수록, 그리고 시작점에서 멀수록 빽빽해진다
     const attempts = this.scaled(5000);
     for (let i = 0; i < attempts; i++) {
       const x = rng() * this.w, y = rng() * this.h;
       const open = this.openNoise(x / this.w, y / this.h);
       if (open < cfg.treeLevel) continue;
-      const density = this.regionSpec(x, y).treeDensity;
+      const density = this.forestAt('treeDensity', x, y);
       if (rng() > (open - cfg.treeLevel) * 3.2 * density) continue;
       tryPlace(x, y);
     }
@@ -558,40 +535,46 @@ const World = {
       return null;
     };
 
-    // 흔들리는 풀 — 숲을 살아있게 만드는 가장 큰 요소. 돌바닥에는 자라지 않는다
+    // 흔들리는 풀 — 숲을 살아있게 만드는 가장 큰 요소
     for (let i = 0, n = this.scaled(260); i < n; i++) {
       const s = spot();
       if (!s) continue;
       const t = this.tileAt(s.x, s.y);
       if (t === TILE_DIRT || t === TILE_SAND) continue;
-      if (this.regionAt(s.x, s.y) === REGION_CAVE) continue;
       this.addProp(SPRITES.tuft[0][1], s.x, s.y, { frames: Util.choice(SPRITES.tuft), footHeight: 1 });
     }
     for (let i = 0, n = this.scaled(90); i < n; i++) {   // 수풀
       const s = spot();
       if (s) this.addProp(Util.choice(SPRITES.bush), s.x, s.y, { footHeight: 3 });
     }
-    for (let i = 0, n = this.scaled(70); i < n; i++) {   // 바위 — 부딪힌다. 포자 골짜기에 특히 많다
+    for (let i = 0, n = this.scaled(70); i < n; i++) {   // 바위 — 부딪힌다. 가장자리로 갈수록 많다
       const s = spot();
       if (!s) continue;
-      if (rng() > this.regionSpec(s.x, s.y).boulders * 0.4) continue;
+      if (rng() > this.forestAt('boulders', s.x, s.y) * 0.4) continue;
       this.addProp(Util.choice(SPRITES.boulder), s.x, s.y, { solid: [7, 4, 6], footHeight: 3 });
     }
 
-    /* 동굴 입구 — 지역마다 딱 하나씩, 그 지역 안 아무 데나 세운다.
+    /* 동굴 입구 셋 — 위험도 고리 위에 하나씩 (가까운 슬라임 굴 -> 중간 늑대 굴 -> 가장자리 버섯 굴).
+       방향은 120도씩 벌려 서로 다른 쪽에 두고, 맵마다 돌아가는 각도가 달라 매번 다른 자리다.
        흔하면 이정표 구실을 못 하므로 희소하게 두었다. 미니맵에 따로 찍힌다. */
-    for (let region = 0; region < CONFIG.regions.list.length; region++) {
-      for (let i = 0; i < 600; i++) {
-        const x = 40 + rng() * (this.w - 80), y = 50 + rng() * (this.h - 90);
-        if (this.regionAt(x, y) !== region) continue;
+    const base = rng() * Math.PI * 2;
+    CONFIG.forest.caves.forEach((spec, index) => {
+      const want = base + index * (Math.PI * 2 / 3);
+      for (let i = 0; i < 3000; i++) {
+        // 원하는 방향 ±30도, 원하는 고리 ±0.05 안에서 빈자리를 찾는다
+        const a = want + (rng() - 0.5) * (Math.PI / 3);
+        const t = spec.t + (rng() - 0.5) * 0.1;
+        const x = Util.clamp(this.startX + Math.cos(a) * t * this.w / 2, 40, this.w - 40);
+        const y = Util.clamp(this.startY + Math.sin(a) * t * this.h / 2, 50, this.h - 40);
+        if (Math.abs(this.dangerAt(x, y) - spec.t) > 0.06) continue;
         if (!this.isFreeSpot(x, y, 22)) continue;
         const p = this.addProp(Util.choice(SPRITES.caveEntrance), x, y, { solid: [12, 6, 9], footHeight: 3 });
         p.landmark = true;
-        p.caveRegion = region;
-        this.caves[region] = p;   // 이 지역 보스 방의 입구
+        p.caveIndex = index;
+        this.caves[index] = p;   // 이 보스 방의 입구
         break;
       }
-    }
+    });
     for (let i = 0, n = this.scaled(22); i < n; i++) {   // 그루터기 — 부딪힌다
       const s = spot();
       if (s) this.addProp(SPRITES.stump[0], s.x, s.y, { solid: [5, 3, 5], footHeight: 3 });
@@ -600,13 +583,13 @@ const World = {
       const s = spot();
       if (s) this.addProp(Util.choice(SPRITES.log), s.x, s.y, { footHeight: 2 });
     }
-    // 버섯은 그늘진 숲과 눅눅한 포자 골짜기에 모여난다
+    // 버섯은 시작점에서 먼 그늘진 숲에 모여난다
     for (let i = 0, n = this.scaled(90); i < n; i++) {
       const s = spot();
       if (!s) continue;
-      const region = this.regionAt(s.x, s.y);
-      if (region === REGION_EDGE) continue;
-      if (region === REGION_DEEP && this.openNoise(s.x / this.w, s.y / this.h) < 0.55) continue;
+      const t = this.dangerAt(s.x, s.y);
+      if (t < 0.4) continue;
+      if (t < 0.75 && this.openNoise(s.x / this.w, s.y / this.h) < 0.55) continue;
       this.addProp(Util.choice(SPRITES.mushroom), s.x, s.y, { footHeight: 1 });
     }
     for (let i = 0, n = this.scaled(60); i < n; i++) {   // 부들 — 물가에만

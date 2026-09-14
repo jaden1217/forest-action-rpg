@@ -15,7 +15,7 @@
 
 class AlphaWolf extends Boss {
   constructor(x, y) {
-    super(x, y, CONFIG.bosses.deep, CONFIG.wolf.levels);
+    super(x, y, CONFIG.bosses.wolf, CONFIG.wolf.levels);
     this.facing = 1;         // 1 오른쪽 / -1 왼쪽
     this.stepTime = 0;       // 다리 움직임
     this.lungeDir = 0;
@@ -235,11 +235,12 @@ class AlphaWolf extends Boss {
     const h = Math.round(sprite.height * this.scale * (1 + sq * 0.5));
     ctx.drawImage(sprite, sx - Math.round(w / 2), Math.round(y + 7 - h), w, h);
 
-    // 우두머리 표시 — 등에 붉은 눈빛 한 점 (도트를 새로 그리지 않고도 구별된다)
+    // 우두머리 표시 — 눈 도트 자리에 붉은 눈을 덧그린다 (도트를 새로 그리지 않고도 구별된다)
     if (!flash) {
       ctx.fillStyle = '#ff5c5c';
-      const ex = sx + this.facing * Math.round(w * 0.22);
-      ctx.fillRect(ex, Math.round(y + 7 - h * 0.62), 2, 1);
+      const px = this.facing >= 0 ? WOLF_EYE.x : sprite.width - 1 - WOLF_EYE.x;
+      const cw = w / sprite.width, ch = h / sprite.height;
+      ctx.fillRect(Math.round(sx - w / 2 + px * cw), Math.round(y + 7 - h + WOLF_EYE.y * ch), Math.max(1, Math.round(cw)), Math.max(1, Math.round(ch)));
     }
 
     const topY = Math.round(y + 7 - h);

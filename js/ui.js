@@ -336,15 +336,8 @@ const UI = {
     ctx.fillRect(0, 0, CONFIG.VIEW_W, CONFIG.VIEW_H);
   },
 
-  /* 새 지역에 들어섰을 때 잠깐 뜨는 이름표.
+  /* 화면 위쪽에 잠깐 떴다 사라지는 이름표 (숲 이름, 보스 방 이름).
      끝날 때 깜빡이며 사라져서 화면에 계속 남아 있지 않다. */
-  drawRegionBanner(ctx, regionId, timeLeft) {
-    const spec = CONFIG.regions.list[regionId];
-    if (!spec) return;
-    this.drawBanner(ctx, spec.name, spec.color, timeLeft);
-  },
-
-  // 화면 위쪽에 잠깐 떴다 사라지는 이름표 (지역 이름, 보스 방 이름)
   drawBanner(ctx, text, color, timeLeft) {
     if (timeLeft < 0.6 && Math.floor(timeLeft * 12) % 2 === 0) return;
 

@@ -24,7 +24,7 @@
 <h1>밸런스 표</h1>
 <p class="note">
   <code>js/config.js</code> 의 값을 그대로 읽어 계산한다 — 설정을 바꾸고 새로고침하면 바로 반영된다.
-  게임을 실행하지 않고도 "몇 레벨이 어느 지역에서 몇 대에 죽는지"를 한눈에 볼 수 있다.
+  게임을 실행하지 않고도 "몇 레벨이 어느 구간에서 몇 대에 죽는지"를 한눈에 볼 수 있다.
   무기는 <b>플레이어 레벨과 같은 레벨의 검</b>을 든 것으로 가정한다 (성장 단검과 같다).
 </p>
 
@@ -80,7 +80,7 @@
   const pL = [1, 3, 5, 8, 10, 12, 15, 18, 20, 23, 26, 30];
   const mL = [1, 3, 6, 9, 12, 15, 18, 21, 23];
 
-  section('때려서 죽이기 — 몇 대 (슬라임 / 버섯 / 늑대)', '초록 ≤3대, 주황 ≤6대, 빨강 그 이상. 같은 레벨끼리는 3~6대가 목표. 자기 레벨보다 한참 위 지역에 가면 빨갛게 된다.');
+  section('때려서 죽이기 — 몇 대 (슬라임 / 버섯 / 늑대)', '초록 ≤3대, 주황 ≤6대, 빨강 그 이상. 같은 레벨끼리는 3~6대가 목표. 자기 레벨보다 한참 위 구간에 가면 빨갛게 된다.');
   table(['플레이어 \\ 몬스터'].concat(mL.map(M => 'M' + M)),
     pL.map(L => [ 'L' + L + ' (공격 ' + pDmg(L) + ')' ].concat(mL.map(M => {
       const d = pDmg(L);
@@ -97,19 +97,25 @@
       return { v: s + '/' + w, cls: s >= 10 ? 'good' : (s >= 5 ? 'warn' : 'bad') };
     }))));
 
-  /* ── 지역별 성장 속도 ── */
-  section('지역별 레벨업 속도', '그 지역 몬스터 평균(레벨·종류 비율 반영)을 잡을 때 XP와, 플레이어 레벨별로 다음 레벨까지 몇 마리를 잡아야 하는지. 상주 몬스터가 250마리라 화면에 늘 여럿이므로 20~40마리는 몇 분 거리다.');
-  const regions = CONFIG.regions.list.map(r => {
-    const names = Object.keys(r.typeWeights), total = names.reduce((s, n) => s + r.typeWeights[n], 0);
+  /* ── 위험도 구간별 성장 속도 ──
+     태초의 숲은 지역 대신 위험도 t(시작점에서의 거리, 0~1)가 몬스터 레벨과 종류를 정한다.
+     세 구간(가까운 곳 / 중간 / 가장자리)으로 잘라 예전 지역 표와 같은 꼴로 보여준다. */
+  section('위험도 구간별 레벨업 속도', '그 구간 몬스터 평균(레벨·종류 비율 반영)을 잡을 때 XP와, 플레이어 레벨별로 다음 레벨까지 몇 마리를 잡아야 하는지. 상주 몬스터가 250마리라 화면에 늘 여럿이므로 20~40마리는 몇 분 거리다.');
+  const F = CONFIG.forest;
+  const levelAtT = (t) => 1 + Math.round(Math.pow(Math.max(0, (t - F.safeRadius) / (1 - F.safeRadius)), F.curve) * (LEVEL_MAX - 1));
+  const weightsAtT = (t) => {
+    const list = F.typeWeights, u = t * (list.length - 1), i = Math.min(list.length - 2, Math.floor(u)), k = u - i;
+    const out = {}; for (const n in list[i]) out[n] = list[i][n] + ((list[i + 1][n] || 0) - list[i][n]) * k; return out;
+  };
+  const ZONES = [['NEAR (t 0~0.4)', 0, 0.4], ['MID (t 0.4~0.75)', 0.4, 0.75], ['FAR (t 0.75~1)', 0.75, 1]];
+  const regions = ZONES.map(([name, t0, t1]) => {
     let xp = 0, gold = 0, n = 0;
-    for (let M = r.levelMin; M <= r.levelMax; M++) {
-      for (const t of names) {
-        const w = r.typeWeights[t] / total;
-        xp += CONFIG[t].levels[M - 1].xp * w; gold += CONFIG.gold.amountByTier[levelTier(M)] * w;
-      }
+    for (let t = t0; t <= t1 + 1e-9; t += 0.05) {
+      const M = levelAtT(t), w = weightsAtT(t), names = Object.keys(w), total = names.reduce((s, k) => s + w[k], 0);
+      for (const k of names) { xp += CONFIG[k].levels[M - 1].xp * w[k] / total; gold += CONFIG.gold.amountByTier[levelTier(M)] * w[k] / total; }
       n++;
     }
-    return { name: r.name, range: r.levelMin + '~' + r.levelMax, xp: xp / n, gold: gold / n };
+    return { name, range: levelAtT(t0) + '~' + levelAtT(t1), xp: xp / n, gold: gold / n };
   });
   table(['플레이어 레벨', '다음 레벨까지'].concat(regions.map(r => r.name + ' (M' + r.range + ', 평균 ' + r.xp.toFixed(1) + 'XP, ' + r.gold.toFixed(1) + 'G)')),
     pL.map(L => [ 'L' + L, LU.xpNeed(L) ].concat(regions.map(r => {
@@ -118,7 +124,7 @@
     }))));
 
   /* ── 골드 ── */
-  section('상점 — 강화 값과 필요한 처치 수', '깊은 숲 평균 골드(' + regions[1].gold.toFixed(1) + 'G/마리) 기준. 처음 몇 랭크는 몇 마리면 되고, 끝 랭크는 오래 모아야 한다.');
+  section('상점 — 강화 값과 필요한 처치 수', '중간 구간 평균 골드(' + regions[1].gold.toFixed(1) + 'G/마리) 기준. 처음 몇 랭크는 몇 마리면 되고, 끝 랭크는 오래 모아야 한다.');
   const up = CONFIG.shop.upgrades;
   const maxRank = Math.max.apply(null, up.map(u => u.maxRank));
   const rows = [];
@@ -138,14 +144,15 @@
 
   /* ── 보스 셋 ── */
   const BASES = { slime: CONFIG.slime.levels, wolf: CONFIG.wolf.levels, mushroom: CONFIG.mushroom.levels };
-  const BIG = { edge: ['slam', '내려찍기'], deep: ['pounce', '덮치기'], cave: ['pulse', '맥동'] };
-  const PLV = { edge: [8, 10, 12, 14, 16, 18], deep: [14, 16, 18, 20, 22, 24], cave: [20, 23, 26, 28, 30, 34] };
+  const BIG = { slime: ['slam', '내려찍기'], wolf: ['pounce', '덮치기'], mushroom: ['pulse', '맥동'] };
+  const PLV = { slime: [8, 10, 12, 14, 16, 18], wolf: [14, 16, 18, 20, 22, 24], mushroom: [20, 23, 26, 28, 30, 34] };
+  const CAVE_NAME = { slime: '가까운 굴', wolf: '중간 굴', mushroom: '가장자리 굴' };
   for (const key in CONFIG.bosses) {
     const B = CONFIG.bosses[key], bs = enemyStatsAt(BASES[B.type], B.level);
     const bHp = Math.round(bs.hp * B.hpMult), bAtk = Math.round(bs.atk * B.atkMult);
     const big = BIG[key];
     const patterns = Object.keys(B).filter(k => B[k] && B[k].damageMult).map(k => k + ' ' + Math.round(bAtk * B[k].damageMult)).join(', ');
-    section('보스 — ' + B.name + ' (Lv' + B.level + ', ' + CONFIG.regions.list.find(r => r.id === key).name + ')',
+    section('보스 — ' + B.name + ' (Lv' + B.level + ', ' + CAVE_NAME[key] + ' t≈' + CONFIG.forest.caves.find(c => c.boss === key).t + ')',
       '체력 ' + bHp + ', 몸통 공격 ' + bAtk + '. 패턴 위력: ' + patterns + '. 재도전 ' + (CONFIG.arena.respawnDelay / 60) + '분.');
     table(['플레이어', '체력', '공격', '평타 몇 대', '검으로 몇 초 (쿨 ' + CONFIG.weapons.sword.cooldown + 's)', '몸통에 몇 대', big[1] + ' 몇 대', '포션 회복'],
       PLV[key].map(L => {

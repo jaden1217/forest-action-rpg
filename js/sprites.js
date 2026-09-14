@@ -293,24 +293,46 @@ const ENEMY_MUSHROOM = [
   '..oooooooooooo..',
 ];
 
-// 늑대 (20x14, 오른쪽을 본다). 몸통 0~9줄 + 다리 10~13줄을 갈아 끼운다
-// g = 등쪽 밝은 털, G = 몸통, d = 배쪽 그늘, D = 발, S = 주둥이
+/* 늑대 (28x20, 오른쪽을 본다). 몸통 0~13줄 + 다리 14~19줄을 갈아 끼운다.
+   쫑긋한 귀 둘, 앞으로 뻗은 주둥이, 노란 눈, 몸통과 떨어진 꼬리, 앞뒤로 모인 다리 —
+   옆에서 본 늑대의 윤곽을 그대로 따랐다 (예전 도트는 납작한 슬라임처럼 보였다).
+   g = 등쪽 밝은 털, G = 몸통, d = 배쪽 그늘·먼 쪽 다리, D = 발, S = 코, Y = 눈 */
 const WOLF_BODY = [
-  '...............oo...',
-  '..............ogGo..',
-  '.o............ogGGo.',
-  'ogo..........oggGGGo',
-  '.ogo........oggGGGGo',
-  '..ogggggggggggkGGGGo',
-  '.oGGGGGGGGGGGGGGGGSo',
-  'oGGGGGGGGGGGGGGGGGo.',
-  'oddGGGGGGGGGGGGGdo..',
-  '.oddddddddddddddo...',
+  '..................o..o......',
+  '.................ogo.oGo....',
+  '.................oGgGGGo....',
+  '................oGGGGGGGo...',
+  '................oGGYGGGGoooo',
+  '..........ooooo.oGGGGGGGGGSo',
+  '........ooggggggGGGGGGGGGSSo',
+  '......ooGGGGGGGGGGGGGGGooooo',
+  '....ooGGGGGGGGGGGGGGGGGo....',
+  '..ooGGGGGGGGGGGGGGGGGGGo....',
+  '.oGGoGGGGGGGGGGGGGGGGGGo....',
+  'oGGGGoGGGGGGGGGGGGGGGGdo....',
+  'oGgGGoodddGGGGGGGGGGGddo....',
+  '.oooo..oddddGGGGGGGGdddo....',
 ];
+const WOLF_EYE = { x: 19, y: 4 };   // 눈 도트 자리 (우두머리는 여기에 붉은 눈을 덧그린다)
 
+// 먼 쪽 다리(d)는 가까운 다리(G) 뒤에 반 칸 어긋나게 — 걸을 때 앞뒤 다리가 번갈아 벌어진다
 const WOLF_LEGS = [
-  ['..oGo.oGo..oGo.oGo..', '..odo.odo..odo.odo..', '..oDo.oDo..oDo.oDo..', '..ooo.ooo..ooo.ooo..'],
-  ['.oGo..oGo..oGo..oGo.', '.odo..odo..odo..odo.', '.oDo..oDo..oDo..oDo.', '.ooo..ooo..ooo..ooo.'],
+  [
+    '.......oddoGGo..oddoGGo.....',
+    '.......oddoGGo..oddoGGo.....',
+    '.......oddoGGo..oddoGGo.....',
+    '.......oddoGGo..oddoGGo.....',
+    '.......oddoDDo..oddoDDo.....',
+    '.......ooooooo..ooooooo.....',
+  ],
+  [
+    '......oGGo.oddo..oddo.oGGo..',
+    '......oGGo.oddo..oddo.oGGo..',
+    '.....oGGo..oddo..oddo..oGGo.',
+    '.....oGGo..oddo..oddo..oGGo.',
+    '.....oDDo..oddo..oddo..oDDo.',
+    '.....oooo..oooo..oooo..oooo.',
+  ],
 ];
 
 // 포자 (5x5) — 버섯이 쏘는 탄
@@ -982,7 +1004,7 @@ function buildSprites() {
   // 보스 — 레벨 색 등급별 5종 + 피격 실루엣, 착지 충격파 4프레임
   SPRITES.giantSlime = LEVEL_PALETTES.map(makeGiantSlime);
   SPRITES.giantSlimeFlash = SPRITES.giantSlime.map(s => makeSilhouette(s, '#ffffff'));
-  SPRITES.shockRing = [0, 0.34, 0.67, 1].map(t => makeShockRing(t, CONFIG.bosses.edge.slam.radius));
+  SPRITES.shockRing = [0, 0.34, 0.67, 1].map(t => makeShockRing(t, CONFIG.bosses.slime.slam.radius));
   SPRITES.playerFlash = {};
   for (const dir in SPRITES.player) {
     SPRITES.playerFlash[dir] = SPRITES.player[dir].map(s => makeSilhouette(s, '#ff9a9a'));
@@ -997,13 +1019,13 @@ function buildSprites() {
   SPRITES.stone = [0, 1, 2, 3].map(i => makeStoneTile(6000 + i * 571));
   SPRITES.gravel = [0, 1, 2].map(i => makeGravelTile(7000 + i * 487));
 
-  /* 지역별 바닥 타일 묶음 — [숲 가장자리, 깊은 숲, 포자 골짜기] 순서.
-     같은 "풀"이라도 어느 지역이냐에 따라 밝은 잔디 / 그늘진 잔디 / 돌바닥이 된다. */
-  SPRITES.regionGround = [
-    { grass: SPRITES.grass, dirt: SPRITES.dirt, meadow: SPRITES.grass },
-    { grass: SPRITES.darkGrass, dirt: SPRITES.dirt, meadow: SPRITES.darkGrass },
-    { grass: SPRITES.stone, dirt: SPRITES.gravel, meadow: SPRITES.stone },
-  ];
+  /* 바닥 타일 묶음 — 볕 드는 숲 바닥 / 빽빽한 숲의 그늘진 바닥 / 보스 방의 돌바닥.
+     같은 "풀"이라도 어느 묶음이냐에 따라 밝은 잔디 / 그늘진 잔디 / 돌바닥이 된다. */
+  SPRITES.groundSets = {
+    forest: { grass: SPRITES.grass, dirt: SPRITES.dirt, meadow: SPRITES.grass },
+    shade:  { grass: SPRITES.darkGrass, dirt: SPRITES.dirt, meadow: SPRITES.darkGrass },
+    stone:  { grass: SPRITES.stone, dirt: SPRITES.gravel, meadow: SPRITES.stone },
+  };
 
   // 나무 — 활엽수 / 침엽수 / 고사목
   SPRITES.tree = [0, 1, 2, 3].map(i => makeTree(31 + i * 613));

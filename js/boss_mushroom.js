@@ -15,7 +15,7 @@
 
 class ElderShroom extends Boss {
   constructor(x, y) {
-    super(x, y, CONFIG.bosses.cave, CONFIG.mushroom.levels);
+    super(x, y, CONFIG.bosses.mushroom, CONFIG.mushroom.levels);
     this.marks = [];         // 포자비 표시 [{x, y, t}]
     this.pulses = [];        // 퍼져나가는 고리 [{r, hit}]
     this.waveTimer = 0;      // 두 번째 고리까지 남은 시간
