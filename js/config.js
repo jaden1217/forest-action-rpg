@@ -617,7 +617,7 @@ const CONFIG = {
      "잡은 만큼 가방이 차고, 마을(상인)에 돌아와 판다"는 RPG 의 순환을 만든다.
      양은 색 등급이 정한다 (1~4레벨 1개 … 19~23레벨 3개). 보스는 자기 전리품을 하나 확정으로 준다. */
   loot: {
-    dropChance: 0.38,
+    dropChance: 0.20,
     amountByTier: [1, 1, 2, 2, 3],
     byType: { slime: 'gel', wolf: 'fang', mushroom: 'cap' },
     items: {

@@ -143,7 +143,7 @@ html, body {
 }
 
 </style>
-<!-- built 2026-09-14 12:17 by tools/build.js -->
+<!-- built 2026-09-14 12:51 by tools/build.js -->
 </head>
 <body>
   <div id="stage">
@@ -786,7 +786,7 @@ const CONFIG = {
      "잡은 만큼 가방이 차고, 마을(상인)에 돌아와 판다"는 RPG 의 순환을 만든다.
      양은 색 등급이 정한다 (1~4레벨 1개 … 19~23레벨 3개). 보스는 자기 전리품을 하나 확정으로 준다. */
   loot: {
-    dropChance: 0.38,
+    dropChance: 0.20,
     amountByTier: [1, 1, 2, 2, 3],
     byType: { slime: 'gel', wolf: 'fang', mushroom: 'cap' },
     items: {
@@ -4399,8 +4399,9 @@ class Player {
     }
     this.potions--;
     this.potionCooldown = cfg.potionCooldown;
-    const healed = Math.min(this.potionHeal(), this.maxHp - this.hp);
-    this.hp += healed;
+    // 자연 회복으로 체력에 소수점이 붙어 있을 수 있다 — 회복량은 정수로 맞추고, 차오른 뒤엔 상한에 딱 붙인다
+    const healed = Math.min(this.potionHeal(), Math.ceil(this.maxHp - this.hp));
+    this.hp = Math.min(this.maxHp, this.hp + healed);
     Sound.play('potion');
     FX.number(this.x, this.y - 20, '+' + healed, '#7dff8a');
     FX.burst(this.x, this.y, 14, ['#7dff8a', '#ffffff', '#e5484d'], { speed: 45, life: 0.5, gravity: 30 });
@@ -7496,6 +7497,8 @@ const PATCH_NOTES = [
   {
     date: '2026-09-14',
     notes: [
+      '전리품 드랍 확률 38% → 20%',
+      '포션을 마셨을 때 회복량에 소수점이 찍히던 버그 수정',
       '인벤토리가 여러 칸짜리 가방이 됐다 (20칸, 상점 강화로 35칸) — 무기를 여럿 들고 다니며 바꿔 낄 수 있다',
       '전리품: 슬라임 젤 / 늑대 이빨 / 포자 갓 + 보스 전리품 셋. 모아서 상인에게 판다 (SELL LOOT)',
       '바닥 무기는 F 로 가방에 넣고, 인벤토리에서 Space 로 낀다. X 로 버리기',

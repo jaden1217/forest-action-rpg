@@ -650,8 +650,9 @@ class Player {
     }
     this.potions--;
     this.potionCooldown = cfg.potionCooldown;
-    const healed = Math.min(this.potionHeal(), this.maxHp - this.hp);
-    this.hp += healed;
+    // 자연 회복으로 체력에 소수점이 붙어 있을 수 있다 — 회복량은 정수로 맞추고, 차오른 뒤엔 상한에 딱 붙인다
+    const healed = Math.min(this.potionHeal(), Math.ceil(this.maxHp - this.hp));
+    this.hp = Math.min(this.maxHp, this.hp + healed);
     Sound.play('potion');
     FX.number(this.x, this.y - 20, '+' + healed, '#7dff8a');
     FX.burst(this.x, this.y, 14, ['#7dff8a', '#ffffff', '#e5484d'], { speed: 45, life: 0.5, gravity: 30 });
