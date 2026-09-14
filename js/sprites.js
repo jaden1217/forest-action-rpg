@@ -919,6 +919,79 @@ const COIN = [
   '..ooo..',
 ];
 
+/* 전리품 — 몬스터가 떨구는 수집품 (가방에 쌓이고 상인에게 판다).
+   슬라임 젤 / 늑대 이빨 / 포자 갓, 그리고 보스 셋의 전리품(핵 / 우두머리 이빨 / 늙은 포자). */
+const LOOT_GEL = [
+  '..ooooo..',
+  '.onnMMMo.',
+  'onMMMMMMo',
+  'oMMMMMMMo',
+  'oMMMMMMMo',
+  'omMMMMmo.',
+  '.ommmmmo.',
+  '..ooooo..',
+];
+const LOOT_FANG = [
+  '.oooo..',
+  'oWWWWo.',
+  'oWwWWWo',
+  '.oWwWWo',
+  '.oWwWo.',
+  '.oWwWo.',
+  '..oWWo.',
+  '..oWo..',
+  '..oWo..',
+  '...o...',
+];
+const LOOT_CAP = [
+  '...oooo...',
+  '..oRRRRo..',
+  '.oRnRRRRo.',
+  'oRRRRRnRRo',
+  'oRnRRRRRRo',
+  '.oooooooo.',
+  '...oSSo...',
+  '...oooo...',
+];
+const LOOT_CORE = [
+  '...oooo...',
+  '..onnnno..',
+  '.onMMMMno.',
+  'onMMnnMMno',
+  'onMnnnnMno',
+  'onMnnnnMno',
+  'onMMnnMMno',
+  '.onMMMMno.',
+  '..onnnno..',
+  '...oooo...',
+];
+const LOOT_ALPHA_FANG = [
+  '.ooooo...',
+  'oWWWWWo..',
+  'oWwWWWWo.',
+  '.oWwWWWWo',
+  '.oWwWWWWo',
+  '..oWwWWo.',
+  '..oWwWWo.',
+  '...oWwWo.',
+  '...oWWo..',
+  '....oWo..',
+  '....oWo..',
+  '.....o...',
+];
+const LOOT_SPORE = [
+  '...oooo...',
+  '..oMMMMo..',
+  '.oMnMMnMo.',
+  'oMMMMMMMMo',
+  'oMnMMnMMMo',
+  'oMMMMMMnMo',
+  'oMnMMMMMMo',
+  '.oMMnMMMo.',
+  '..oMMMMo..',
+  '...oooo...',
+];
+
 /* 9주차: 상인 (16x16) — 두건을 쓴 보라 로브. 시작 지점 옆 가판대에 서 있다.
    두 번째 그림은 눈을 감은 것(깜빡임)이라 살아 있는 느낌이 난다. */
 const MERCHANT = [
@@ -974,6 +1047,15 @@ function buildSprites() {
   }
   SPRITES.potion = makeSprite('potion', POTION);
   SPRITES.coin = makeSprite('coin', COIN);
+  // 전리품 — 슬라임 젤은 슬라임 초록, 포자 갓은 주황 갓에 밝은 점, 보스 전리품은 각자의 색
+  SPRITES.loot = {
+    gel: makeSprite('loot_gel', LOOT_GEL),
+    fang: makeSprite('loot_fang', LOOT_FANG),
+    cap: makeSprite('loot_cap', LOOT_CAP, { R: '#c96a3a', n: '#f0d9b5', S: '#e8dcc0' }),
+    slimeCore: makeSprite('loot_core', LOOT_CORE, { M: '#35a0b0', n: '#8fe6f0' }),
+    alphaFang: makeSprite('loot_alpha', LOOT_ALPHA_FANG, { W: '#ffd0d0', w: '#c05a5a' }),
+    elderSpore: makeSprite('loot_spore', LOOT_SPORE, { M: '#8055ae', n: '#dfc0f5' }),
+  };
   SPRITES.merchant = [makeSprite('merchant', MERCHANT), makeSprite('merchant_blink', MERCHANT_BLINK)];
   SPRITES.stall = makeStall(1201);
 

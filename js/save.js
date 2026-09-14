@@ -4,7 +4,7 @@
 
    맵 전체를 저장하지 않고 **맵을 만든 시드**만 저장한다.
    같은 시드로 다시 생성하면 지형이 그대로 재현되므로 저장 용량이 아주 작다.
-   슬라임은 어차피 계속 재등장하므로 저장하지 않고, 바닥 드랍은 저장한다. 저장은 화면에 표시하지 않고 조용히 한다.
+   슬라임은 어차피 계속 재등장하므로 저장하지 않고, 바닥 드랍과 가방 속 물건은 저장한다. 저장은 화면에 표시하지 않고 조용히 한다.
 
    형식이 바뀌면 VERSION 을 올린다 — 옛 저장은 조용히 무시되고 새 게임이 시작된다. */
 
@@ -36,9 +36,10 @@ const Save = {
         potions: p.potions,
         weapon: p.weapon, weaponLevel: p.weaponLevel, weaponGrowing: p.weaponGrowing,
         gold: p.gold, upgrades: p.upgrades,
+        bag: Inventory.serialize(p),
       },
       drops: drops.map(d => ({
-        kind: d.kind, weapon: d.weapon, level: d.level, amount: d.amount,
+        kind: d.kind, weapon: d.weapon, level: d.level, amount: d.amount, id: d.id,
         growing: !!d.growing,
         x: Math.round(d.x), y: Math.round(d.y), life: Math.round(d.life),
       })),
@@ -94,6 +95,11 @@ const Save = {
     player.upgrades = Object.assign({}, s.upgrades || {});
     player.maxPotions = CONFIG.items.potionMax + (player.upgrades.bag || 0);
     player.potions = Util.clamp(s.potions || 0, 0, player.maxPotions);
+    // 가방 — 칸 수는 강화 랭크에서 다시 계산하고, 들어 있던 것을 되살린다
+    const slotSpec = CONFIG.shop.upgrades.find(u => u.id === 'slots');
+    player.bagSlots = CONFIG.inventory.baseSlots + (player.upgrades.slots || 0) * (slotSpec ? slotSpec.gain : 5);
+    Inventory.create(player);
+    Inventory.deserialize(player, s.bag);
 
     if (CONFIG.weapons[s.weapon]) {
       player.weapon = s.weapon;
@@ -112,6 +118,7 @@ const Save = {
     Items.reset();
     for (const d of (data.drops || [])) {
       if (d.kind === 'weapon') Items.spawnWeapon(d.x, d.y, d.weapon, d.level, { growing: d.growing });
+      else if (d.kind === 'loot') Items.spawnLoot(d.x, d.y, d.id, d.amount);
       else Items.spawn(d.x, d.y, d.amount);
       // spawn 은 빈 자리를 찾아 위치를 흔들므로 저장된 자리로 되돌린다
       const nd = Items.drops[Items.drops.length - 1];

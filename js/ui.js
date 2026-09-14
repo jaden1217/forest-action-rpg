@@ -167,6 +167,12 @@ const UI = {
       this.drawText(ctx, 'DASH', 8 + d.charges * 12 + 2, 76, '#7ec8ff');
     }
 
+    // ── 가방 — 몇 칸이 찼는지. 꽉 차면 붉게 (전리품이 더 안 끌려온다는 뜻)
+    if (player.bag) {
+      const used = Inventory.count(player), total = player.bag.length - 1;
+      this.drawText(ctx, 'BAG ' + used + '/' + total + ' I', 8, 86, used >= total ? '#ff6b6b' : '#7fa86a');
+    }
+
     // ── 공격 쿨다운 (짧아서 눈에 잘 안 띄지만 리듬 파악에 도움이 된다)
     if (player.cooldown > 0) {
       const wcd = (player.weaponSpec ? player.weaponSpec().cooldown : CONFIG.player.attackCooldown);
@@ -196,7 +202,7 @@ const UI = {
       this.drawText(ctx, hint, CONFIG.VIEW_W / 2, 8, '#ff6b6b', true);
     }
 
-    if (showInventory) this.drawInventory(ctx, player);
+    if (showInventory) Inventory.draw(ctx, player);   // 여러 칸짜리 가방 창
 
     // ── 스킬 바 (화면 아래 가운데)
     if (player.skillCooldowns) this.drawSkillBar(ctx, player);
@@ -208,39 +214,6 @@ const UI = {
       this.drawText(ctx, 'YOU DIED', CONFIG.VIEW_W / 2, CONFIG.VIEW_H / 2 - 8, '#ff6b6b', true);
       this.drawText(ctx, 'RESPAWNING', CONFIG.VIEW_W / 2, CONFIG.VIEW_H / 2 + 4, '#c9a0a0', true);
     }
-  },
-
-  drawInventory(ctx, player) {
-    const w = 172, h = 112;
-    const x = Math.round((CONFIG.VIEW_W - w) / 2), y = Math.round((CONFIG.VIEW_H - h) / 2);
-    ctx.fillStyle = 'rgba(10,12,10,0.88)';
-    ctx.fillRect(x, y, w, h);
-    ctx.strokeStyle = '#3a442f';
-    ctx.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1);
-
-    this.drawText(ctx, 'INVENTORY I', x + w / 2, y + 7, '#9be564', true);
-    if (typeof SPRITES !== 'undefined' && SPRITES.potion) {
-      ctx.drawImage(SPRITES.potion, x + 14, y + 22);
-    }
-    this.drawText(ctx, 'POTION X' + player.potions + '/' + player.maxPotions, x + 30, y + 24, '#ffd93d');
-    this.drawText(ctx, 'HEALS ' + player.potionHeal() + ' HP', x + 30, y + 33, '#7fa86a');
-
-    // ── 장착 무기. 숫자는 픽셀 폰트에 맞춰 단어로 보여준다.
-    //    DPS 를 같이 띄우는 이유: 세 무기의 초당 데미지가 같다는 걸 직접 확인할 수 있다
-    if (player.weaponSpec) {
-      const spec = player.weaponSpec();
-      const set = typeof SPRITES !== 'undefined' && SPRITES.weapons && SPRITES.weapons[player.weapon];
-      const icon = set && set[levelTier(player.weaponLevel)];
-      if (icon) ctx.drawImage(icon, x + 14, y + 46);
-      if (player.weaponGrowing) this.drawRainbowText(ctx, player.weaponLabel(), x + 30, y + 48);
-      else this.drawText(ctx, player.weaponLabel(), x + 30, y + 48, player.weaponColor());
-      this.drawText(ctx, 'DMG ' + player.attackDamage() + ' RNG ' + spec.reach, x + 30, y + 57, '#f0d9b5');
-      const dps = Math.round(player.attackDamage() / spec.cooldown);
-      this.drawText(ctx, 'SPD ' + this.speedWord(spec.cooldown) + ' DPS ' + dps, x + 14, y + 70, '#7fa86a');
-    }
-    this.drawText(ctx, 'E DRINK POTION', x + 14, y + 82, '#f0d9b5');
-    this.drawText(ctx, 'F ON WEAPON TO SWAP', x + 14, y + 91, '#7fa86a');
-    this.drawText(ctx, 'PAUSED - I TO CLOSE', x + 14, y + 100, '#7fa86a');
   },
 
   /* 스킬 칸 — 키, 이름, 쿨다운, 잠김 여부를 한 자리에서 보여준다.

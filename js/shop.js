@@ -7,7 +7,8 @@
      Space/Enter 사기
      F / Esc     닫기
 
-   파는 것은 포션과 '강화' 셋. 강화는 살 때마다 랭크가 오르고 값이 뛴다.
+   파는 것은 포션과 '강화' 넷(체력 / 공격 / 포션 상한 / 가방 칸). 강화는 살 때마다 랭크가 오르고 값이 뛴다.
+   가방에 든 전리품은 'SELL LOOT' 한 줄로 한꺼번에 판다.
    골드는 몬스터가 떨구므로, 상점은 "싸운 만큼 조금 더 튼튼해지는" 보조 성장축이다. */
 
 const Shop = {
@@ -64,6 +65,12 @@ const Shop = {
       detail: 'X' + player.potions + '/' + player.maxPotions,
       soldOut: player.potions >= player.maxPotions,
     }];
+    // 전리품 팔기 — 가방 속 전리품 전부를 한 번에
+    const lv = Inventory.lootValue(player);
+    list.push({
+      id: 'loot', name: 'SELL LOOT', sell: true, price: lv.value,
+      detail: lv.items + ' ITEMS', soldOut: lv.items === 0,
+    });
     for (const u of CONFIG.shop.upgrades) {
       const rank = player.upgrades[u.id] || 0;
       list.push({
@@ -103,7 +110,17 @@ const Shop = {
   },
 
   buy(item, player) {
-    if (item.soldOut) { this.say(item.id === 'potion' ? 'BAG IS FULL' : 'MAX RANK'); Sound.play('error'); return; }
+    if (item.soldOut) {
+      this.say(item.id === 'potion' ? 'POUCH IS FULL' : (item.sell ? 'NO LOOT TO SELL' : 'MAX RANK'));
+      Sound.play('error');
+      return;
+    }
+    if (item.sell) {
+      const v = Inventory.sellLoot(player);
+      Sound.play('gold');
+      this.say('SOLD ' + v.items + ' FOR ' + v.value + ' G');
+      return;
+    }
     if (player.gold < item.price) { this.say('NOT ENOUGH GOLD'); Sound.play('error'); return; }
     player.gold -= item.price;
     Sound.play('buy');
@@ -118,6 +135,7 @@ const Shop = {
     player[u.stat] += u.gain;
     // 체력 강화는 늘어난 만큼 바로 채워준다 — 사자마자 체감이 있어야 한다
     if (u.stat === 'maxHp') player.hp += u.gain;
+    if (u.stat === 'bagSlots') Inventory.resize(player);   // 가방 칸이 늘면 바로 빈 칸이 붙는다
     this.say(u.name + '  RANK ' + player.upgrades[u.id]);
   },
 
@@ -140,7 +158,7 @@ const Shop = {
 
   /* ── 창 ──────────────────────────────────────────────── */
   draw(ctx, player) {
-    const w = 190, h = 104;
+    const w = 190, h = 130;
     const x = Math.round((CONFIG.VIEW_W - w) / 2), y = Math.round((CONFIG.VIEW_H - h) / 2);
     ctx.fillStyle = 'rgba(10,12,10,0.88)';
     ctx.fillRect(x, y, w, h);
@@ -164,9 +182,9 @@ const Shop = {
       const canBuy = !it.soldOut && player.gold >= it.price;
       UI.drawText(ctx, it.name, x + 20, ry, it.soldOut ? '#6f7a68' : '#f0d9b5');
       UI.drawText(ctx, it.detail, x + 92, ry, '#7fa86a');
-      const priceText = it.soldOut ? 'MAX' : it.price + ' G';
+      const priceText = it.sell ? (it.soldOut ? '-' : '+' + it.price + ' G') : (it.soldOut ? 'MAX' : it.price + ' G');
       UI.drawText(ctx, priceText, x + w - 12 - UI.textWidth(priceText), ry,
-        it.soldOut ? '#6f7a68' : (canBuy ? '#ffe066' : '#c05a5a'));
+        it.soldOut ? '#6f7a68' : (it.sell ? '#9be564' : (canBuy ? '#ffe066' : '#c05a5a')));
     }
 
     // 안내 / 방금 산 것

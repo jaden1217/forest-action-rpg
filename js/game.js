@@ -374,10 +374,11 @@ const Game = {
       }
       return;
     }
-    // 상점이 열려 있으면 상점이 키를 다 가져간다
+    // 상점이나 인벤토리가 열려 있으면 그쪽이 키를 다 가져간다
     if (Shop.open) { Shop.handleInput(this.player); return; }
+    if (this.showInventory) { Inventory.handleInput(this.player); return; }
     if (Input.pressed.KeyV) { Sound.toggle(); Sound.play('toggle'); this.soundFlash = 1.4; }
-    if (Input.inventoryPressed()) this.showInventory = !this.showInventory;
+    if (Input.inventoryPressed()) { this.showInventory = true; Inventory.message = ''; }
     // 보스 방에서는 겉맵 지도를 펼칠 수 없다 (여기는 그 지도에 없는 곳이다)
     if (Input.mapPressed() && !this.inArena) this.showMap = !this.showMap;
     if (Input.newGamePressed()) this.confirmNewGame = true;
@@ -554,7 +555,7 @@ const Game = {
     if (this.shopPrompt && !this.showMap) Shop.drawPrompt(ctx, cam);
     if (Shop.open) Shop.draw(ctx, this.player);
     if (this.lairBanner > 0) UI.drawBanner(ctx, this.bossSpec(this.arenaCave).lairName, '#ff6b6b', this.lairBanner);
-    if (this.forestBanner > 0 && !this.showMap && !this.title) UI.drawBanner(ctx, CONFIG.forest.name, CONFIG.forest.color, this.forestBanner);
+    if (this.forestBanner > 0 && !this.showMap && !this.showInventory && !Shop.open && !this.title) UI.drawBanner(ctx, CONFIG.forest.name, CONFIG.forest.color, this.forestBanner);
     if (this.confirmNewGame) UI.drawConfirm(ctx);
     if (this.soundFlash > 0) UI.drawSoundState(ctx, Sound.enabled);
     // 장면 전환은 맨 위를 덮는다

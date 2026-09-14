@@ -424,7 +424,7 @@ const CONFIG = {
      체력이 절반 아래로 내려가면 2페이즈 — 빨라지고 패턴이 독해진다.
 
      레벨은 그 동굴 주변 몬스터보다 위로 잡았다 (가까운 동굴 12, 중간 20, 가장자리 30).
-     처치 보상은 포션 6개 확정 + 10% 확률로 '성장하는 무기' (weapons.growNames 참고). */
+     처치 보상은 포션 6개 확정 + 전리품(trophy) 하나 + 10% 확률로 '성장하는 무기' (weapons.growNames 참고). */
   bosses: {
     // 가까운 동굴 — 거대 슬라임: 느리지만 덩치와 분열로 밀어붙인다
     slime: {
@@ -437,7 +437,7 @@ const CONFIG = {
       speed: 26,              // 평소엔 느릿느릿 다가온다
       detect: 260,
       contactCooldown: 1.0,
-      reward: { weapon: 'dagger', chance: 0.10, potions: 6 },
+      reward: { weapon: 'dagger', chance: 0.10, potions: 6, trophy: 'slimeCore' },
 
       phase2At: 0.5,
       phase2Speed: 1.35,
@@ -477,7 +477,7 @@ const CONFIG = {
       speed: 58,              // 평소에도 플레이어만큼 빠르다
       detect: 300,
       contactCooldown: 0.8,
-      reward: { weapon: 'sword', chance: 0.10, potions: 6 },
+      reward: { weapon: 'sword', chance: 0.10, potions: 6, trophy: 'alphaFang' },
 
       phase2At: 0.5,
       phase2Speed: 1.3,
@@ -519,7 +519,7 @@ const CONFIG = {
       speed: 12,              // 뿌리를 끌며 아주 천천히 다가온다 (2페이즈에서 빨라진다)
       detect: 300,
       contactCooldown: 1.0,
-      reward: { weapon: 'axe', chance: 0.10, potions: 6 },
+      reward: { weapon: 'axe', chance: 0.10, potions: 6, trophy: 'elderSpore' },
 
       phase2At: 0.5,
       phase2Speed: 1.3,
@@ -595,9 +595,40 @@ const CONFIG = {
     interactRange: 26,      // 상인에게서 이 거리 안이면 말을 걸 수 있다
     potionPrice: 20,
     upgrades: [
-      { id: 'hp',  name: 'MAX HP +10',     stat: 'maxHp',      gain: 10, basePrice: 40, priceMult: 1.4, maxRank: 10 },
-      { id: 'atk', name: 'ATTACK +1',      stat: 'damage',     gain: 1,  basePrice: 60, priceMult: 1.4, maxRank: 10 },
-      { id: 'bag', name: 'POTION BAG +1',  stat: 'maxPotions', gain: 1,  basePrice: 50, priceMult: 1.5, maxRank: 5 },
+      { id: 'hp',    name: 'MAX HP +10',    stat: 'maxHp',      gain: 10, basePrice: 40, priceMult: 1.4, maxRank: 10 },
+      { id: 'atk',   name: 'ATTACK +1',     stat: 'damage',     gain: 1,  basePrice: 60, priceMult: 1.4, maxRank: 10 },
+      { id: 'bag',   name: 'POTIONS +1',    stat: 'maxPotions', gain: 1,  basePrice: 50, priceMult: 1.5, maxRank: 5 },
+      { id: 'slots', name: 'BAG +5 SLOTS',  stat: 'bagSlots',   gain: 5,  basePrice: 80, priceMult: 1.6, maxRank: 3 },
     ],
+  },
+
+  /* ── 인벤토리 — 여러 칸짜리 가방 ──────────────────────────
+     첫 칸은 늘 포션 주머니(개수는 player.potions, 상한은 maxPotions 그대로)이고,
+     나머지 칸에 무기와 전리품이 하나씩 들어간다. 전리품은 같은 종류끼리 한 칸에 쌓인다.
+     칸 수는 상점의 'BAG +5 SLOTS' 강화로 늘어난다 (20 -> 35). */
+  inventory: {
+    cols: 5,
+    baseSlots: 20,
+    lootStack: 20,          // 전리품 한 칸에 쌓이는 최대 개수
+    trophyStack: 5,         // 보스 전리품은 귀하니 조금만 쌓인다
+  },
+
+  /* ── 전리품 — 몬스터가 떨구는 수집품. 쓸모는 상인에게 파는 것 하나뿐이지만
+     "잡은 만큼 가방이 차고, 마을(상인)에 돌아와 판다"는 RPG 의 순환을 만든다.
+     양은 색 등급이 정한다 (1~4레벨 1개 … 19~23레벨 3개). 보스는 자기 전리품을 하나 확정으로 준다. */
+  loot: {
+    dropChance: 0.38,
+    amountByTier: [1, 1, 2, 2, 3],
+    byType: { slime: 'gel', wolf: 'fang', mushroom: 'cap' },
+    items: {
+      gel:        { name: 'SLIME GEL',   value: 4,   color: '#8fe098' },
+      fang:       { name: 'WOLF FANG',   value: 6,   color: '#e9f1f7' },
+      cap:        { name: 'SPORE CAP',   value: 5,   color: '#e08a4f' },
+      slimeCore:  { name: 'SLIME CORE',  value: 150, color: '#7ec8ff', trophy: true },
+      alphaFang:  { name: 'ALPHA FANG',  value: 250, color: '#ff6b6b', trophy: true },
+      elderSpore: { name: 'ELDER SPORE', value: 400, color: '#c79ce8', trophy: true },
+    },
+    magnetRadius: 30,       // 이 거리 안이면 끌려온다 (포션과 같다)
+    lifetime: 60,           // 바닥에 남아있는 시간 (초)
   },
 };

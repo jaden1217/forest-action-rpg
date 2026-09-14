@@ -1,8 +1,9 @@
 'use strict';
 
 /* 2주차: 바닥 드랍, 자석 끌림, 자동 줍기 (포션)
-   3주차: 무기 드랍. 무기는 발밑에서 F 를 눌러야 교체된다.
-          (지나가다 실수로 좋은 무기가 나쁜 무기로 바뀌면 안 되므로 자동 교체는 하지 않는다) */
+   3주차: 무기 드랍. 무기는 발밑에서 F 를 눌러야 가방에 들어간다.
+          (지나가다 실수로 좋은 무기가 나쁜 무기로 바뀌면 안 되므로 자동으로는 줍지 않는다)
+   인벤토리: 전리품 드랍 — 포션처럼 끌려와 가방에 쌓인다. 가방이 차면 그 자리에 남는다. */
 
 const Items = {
   drops: [],
@@ -31,6 +32,7 @@ const Items = {
       const r = enemy.reward;   // 보스마다 다르다 (CONFIG.bosses[*].reward)
       this.giveGold(enemy, CONFIG.gold.amountByTier[tier] * CONFIG.gold.bossMult);
       for (let i = 0; i < r.potions; i++) this.spawn(enemy.x, enemy.y, 1);
+      if (r.trophy) this.spawnLoot(enemy.x, enemy.y, r.trophy, 1);   // 보스 전리품은 확정
       if (Math.random() < r.chance) {
         this.spawnWeapon(enemy.x, enemy.y, r.weapon, Game.player.level, { growing: true });
       }
@@ -42,6 +44,10 @@ const Items = {
       this.spawn(enemy.x, enemy.y, amount);
     }
     this.dropWeaponFor(enemy);
+    // 전리품 — 몬스터 종류마다 정해져 있고, 양은 색 등급이 정한다
+    const loot = CONFIG.loot;
+    const lootId = loot.byType[enemy.TYPE];
+    if (lootId && Math.random() < loot.dropChance) this.spawnLoot(enemy.x, enemy.y, lootId, loot.amountByTier[tier] || 1);
     // 골드는 잡는 즉시 들어온다 — 양은 색 등급이 정한다
     const g = CONFIG.gold;
     const base = g.amountByTier[tier] || g.amountByTier[0];
@@ -87,6 +93,8 @@ const Items = {
       hintTimer: 0,
       playerNear: false,
       pickupDelay: (opts && opts.pickupDelay) || 0,
+      // 가방에서 버린 것은 플레이어가 한 번 떨어져야 다시 끌려온다 (버리자마자 도로 주워지면 안 된다)
+      armed: !(opts && opts.dropped),
       vx: Util.rand(-28, 28),
       vy: Util.rand(-34, -10),
     };
@@ -96,6 +104,16 @@ const Items = {
     const d = this.makeDrop(x, y, CONFIG.items.lifetime);
     d.kind = 'potion';
     d.amount = amount;
+    this.drops.push(d);
+  },
+
+  // 전리품 드랍 (가방에서 버린 것은 opts.dropped)
+  spawnLoot(x, y, id, amount, opts) {
+    if (!CONFIG.loot.items[id]) return;
+    const d = this.makeDrop(x, y, CONFIG.loot.lifetime, opts);
+    d.kind = 'loot';
+    d.id = id;
+    d.amount = Math.max(1, amount | 0);
     this.drops.push(d);
   },
 
@@ -161,12 +179,38 @@ const Items = {
 
       if (d.pickupDelay > 0) continue;
       const dist = Util.dist(d.x, d.y, player.x, player.y);
+      if (!d.armed) {
+        if (dist > cfg.pickupRadius + 10) d.armed = true;
+        continue;
+      }
 
       // ── 무기: 끌려오지도, 저절로 바뀌지도 않는다. 발밑에 있으면 F 안내만 띄운다
       if (d.kind === 'weapon') {
         if (dist < cfg.pickupRadius + 5) {
           d.playerNear = true;
           if (dist < bestDist) { bestDist = dist; bestWeapon = i; }
+        }
+        continue;
+      }
+
+      // ── 전리품: 포션처럼 끌려와 가방에 쌓인다. 자리가 없으면 끌려오지 않는다
+      if (d.kind === 'loot') {
+        if (Inventory.roomFor(player, d.id) <= 0) continue;
+        if (dist < CONFIG.loot.magnetRadius && dist > 1) {
+          const pull = 130 * (1 - dist / CONFIG.loot.magnetRadius) + 40;
+          d.x += (player.x - d.x) / dist * pull * dt;
+          d.y += (player.y - d.y) / dist * pull * dt;
+        }
+        if (dist >= cfg.pickupRadius) continue;
+        const left = Inventory.addLoot(player, d.id, d.amount);
+        const got = d.amount - left;
+        if (got > 0) {
+          const ls = CONFIG.loot.items[d.id];
+          FX.burst(d.x, d.y - 4, 8, [ls.color, '#ffffff'], { speed: 40, life: 0.35, gravity: 60 });
+          FX.number(d.x, d.y - 14, '+' + ls.name + (got > 1 ? ' X' + got : ''), ls.color);
+          Sound.play('pickup');
+          d.amount = left;
+          if (d.amount <= 0) this.drops.splice(i, 1);
         }
         continue;
       }
@@ -202,13 +246,22 @@ const Items = {
     }
   },
 
-  // 무기 줍기 = 장착 + 손에 있던 무기는 그 자리에 두기
+  /* 무기 줍기 = 가방에 넣기 (끼는 건 인벤토리에서 고른다).
+     가방이 꽉 찼으면 예전처럼 손에 든 무기와 맞바꾼다 — 든 무기는 그 자리에 남는다 */
   pickupWeapon(index, d, player) {
+    if (player.dead) return;
+    if (Inventory.addWeapon(player, d.weapon, d.level, d.growing)) {
+      const color = d.growing ? CONFIG.weapons.growColor : (CONFIG.weapons.levelColor[levelTier(d.level)] || '#ffffff');
+      const name = d.growing ? CONFIG.weapons.growNames[d.weapon] : CONFIG.weapons[d.weapon].name + ' L' + d.level;
+      FX.burst(d.x, d.y - 4, 8, [color, '#ffffff'], { speed: 40, life: 0.35, gravity: 60 });
+      FX.number(d.x, d.y - 14, '+' + name, color);
+      Sound.play('pickup');
+      this.drops.splice(index, 1);
+      return;
+    }
     const oldId = player.weapon, oldLevel = player.weaponLevel, oldGrow = player.weaponGrowing;
     if (oldId === d.weapon && oldLevel === d.level && oldGrow === !!d.growing) {
-      // 종류도 레벨도 같은 무기면 그냥 회수한다
-      FX.burst(d.x, d.y - 4, 8, ['#ffffff', '#7ec8ff'], { speed: 40, life: 0.35, gravity: 60 });
-      this.drops.splice(index, 1);
+      FX.number(player.x, player.y - 20, 'BAG FULL', '#8f9aa8');
       return;
     }
     if (!player.equipWeapon(d.weapon, d.level, d.growing)) return;
@@ -253,12 +306,22 @@ const Items = {
       // 어떤 무기가 몇 레벨인지 바닥에서도 바로 보인다
       if (d.growing) UI.drawRainbowText(ctx, CONFIG.weapons.growNames[d.weapon] || spec.name, sx, sy + 8, true);
       else UI.drawText(ctx, spec.name + ' L' + d.level, sx, sy + 8, color, true);
-      // 발밑에 서 있으면 바꾸는 방법을 알려준다
-      if (d.playerNear) UI.drawText(ctx, 'F SWAP', sx, sy - 19, '#ffffff', true);
+      // 발밑에 서 있으면 집는 방법을 알려준다 (가방이 차 있으면 맞바꾸기)
+      if (d.playerNear) UI.drawText(ctx, Inventory.firstEmpty(Game.player) >= 0 ? 'F TAKE' : 'F SWAP', sx, sy - 19, '#ffffff', true);
       else if (Math.floor(d.age * 3) % 2 === 0) {
         ctx.fillStyle = '#ffffff';
         ctx.fillRect(sx + 4, sy - 10 + bob, 1, 1);
       }
+      return;
+    }
+
+    if (d.kind === 'loot') {
+      const ls = CONFIG.loot.items[d.id], sp = SPRITES.loot[d.id];
+      fillCircle(ctx, sx, sy + 5, 4, 'rgba(0,0,0,0.28)');
+      ctx.drawImage(sp, sx - Math.floor(sp.width / 2), sy - 6 + bob);
+      if (Math.floor(d.age * 3) % 2 === 0) { ctx.fillStyle = '#ffffff'; ctx.fillRect(sx + 3, sy - 8 + bob, 1, 1); }
+      if (ls.trophy) UI.drawText(ctx, ls.name, sx, sy + 8, ls.color, true);   // 보스 전리품은 이름이 보인다
+      else if (d.amount > 1) UI.drawText(ctx, 'X' + d.amount, sx, sy + 7, ls.color, true);
       return;
     }
 

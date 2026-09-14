@@ -26,9 +26,13 @@ class Player {
     // 보스가 떨구는 '성장하는 무기' — 레벨이 내 레벨을 따라 같이 오른다
     this.weaponGrowing = false;
 
-    // 9주차: 골드와 상점 강화 랭크 (hp / atk / bag). 강화로 오른 수치는 maxHp 등에 바로 더해져 있다
+    // 9주차: 골드와 상점 강화 랭크 (hp / atk / bag / slots). 강화로 오른 수치는 maxHp 등에 바로 더해져 있다
     this.gold = 0;
     this.upgrades = {};
+
+    // 여러 칸짜리 가방 — 첫 칸은 포션 주머니, 나머지엔 무기와 전리품 (Inventory 가 다룬다)
+    this.bagSlots = CONFIG.inventory.baseSlots;
+    Inventory.create(this);
 
     this.attackTimer = 0;      // 휘두르는 중이면 0보다 큼
     this.cooldown = 0;
@@ -321,6 +325,14 @@ class Player {
     const lv = CONFIG.weapons.levelMult[this.weaponLevel - 1] || 1;
     const buff = this.buff ? this.buff.damageMult : 1;
     return Math.max(1, Math.round(this.damage * this.weaponSpec().damageMult * lv * buff));
+  }
+
+  // 다른 무기를 들었다면 평타가 얼마일지 — 인벤토리에서 끼기 전에 비교하는 용도
+  damageWith(weapon, level, growing) {
+    const lv = growing ? Util.clamp(this.level, 1, CONFIG.weapons.levelMult.length) : level;
+    const mult = CONFIG.weapons.levelMult[lv - 1] || 1;
+    const buff = this.buff ? this.buff.damageMult : 1;
+    return Math.max(1, Math.round(this.damage * CONFIG.weapons[weapon].damageMult * mult * buff));
   }
 
   // 무기 레벨 색 — HUD·바닥 이름표에 함께 쓴다
