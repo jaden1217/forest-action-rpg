@@ -410,6 +410,7 @@ const Game = {
     let dt = (now - this.lastTime) / 1000;
     this.lastTime = now;
     dt = Math.min(dt, 0.05);   // 탭을 다시 켰을 때 한 번에 확 튀지 않도록
+    this.frameDt = dt;         // 그리기 쪽 연출(나무 옅어지기)도 시간에 맞춰 움직이도록
 
     // 개발 중 에러 하나로 게임이 통째로 멈추지 않도록 감싼다 (에러는 콘솔에 남는다)
     try {
@@ -460,6 +461,34 @@ const Game = {
     requestAnimationFrame(this.frame.bind(this));
   },
 
+  /* 나무 뒤에 서면 나무가 반투명해진다 — 플레이어나 몬스터가 잎사귀에 가려 안 보이는 일을 막는다.
+     "뒤"란 나무보다 위쪽(y가 작아 먼저 그려지는) 자리에서 몸통 상자가 나무 그림과 겹치는 것.
+     사람 눈에 머리까지 보여야 하므로 몸통 상자를 위로 조금 늘려 본다.
+     알파는 단번에 튀지 않고 부드럽게 오간다 (나무 하나마다 fade 값을 기억). */
+  fadeTrees(drawables, dt) {
+    const cfg = CONFIG.world.treeFade;
+    const bodies = [];
+    // 플레이어 + 살아 있는 몬스터. 상인처럼 몸통 상자가 없는 것(맞을 일이 없는 것)은 뺀다
+    for (const d of drawables) if (d.draw && !d.dead && d.hurtBox) bodies.push(d);
+    const k = Math.min(1, dt * cfg.speed);
+    for (const p of drawables) {
+      if (!p.tree) continue;
+      if (p.fade === undefined) p.fade = 1;
+      const left = p.x + p.ox, right = left + p.sprite.width;
+      const top = p.y + p.oy, bottom = top + p.sprite.height;
+      let hidden = false;
+      for (const b of bodies) {
+        if (b.y >= p.depth) continue;          // 나무 앞에 서 있으면 가려지지 않는다
+        const hb = b.hurtBox;
+        const bx0 = hb.x, bx1 = hb.x + hb.w, by0 = hb.y - 8, by1 = hb.y + hb.h;
+        if (bx1 < left || bx0 > right || by1 < top || by0 > bottom) continue;
+        hidden = true; break;
+      }
+      const target = hidden ? cfg.alpha : 1;
+      p.fade += (target - p.fade) * k;
+    }
+  },
+
   render() {
     const ctx = this.ctx;
     ctx.imageSmoothingEnabled = false;
@@ -497,6 +526,7 @@ const Game = {
     if (!this.player.dead) drawables.push(this.player);
 
     drawables.sort((a, b) => (a.depth !== undefined ? a.depth : a.y) - (b.depth !== undefined ? b.depth : b.y));
+    this.fadeTrees(drawables, this.frameDt || 0);
 
     for (const d of drawables) {
       if (d.kind) {
@@ -506,7 +536,10 @@ const Game = {
       } else {
         // 흔들리는 풀은 프레임이 여러 장이다
         const sp = d.frames ? d.frames[World.swayFrame(d)] : d.sprite;
+        // 뒤에 누가 서 있는 나무는 옅게 그린다
+        if (d.fade !== undefined && d.fade < 0.995) ctx.globalAlpha = d.fade;
         ctx.drawImage(sp, Math.round(d.x - cam.x + d.ox), Math.round(d.y - cam.y + d.oy));
+        ctx.globalAlpha = 1;
       }
     }
 
