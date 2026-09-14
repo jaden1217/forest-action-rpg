@@ -28,6 +28,7 @@ const Save = {
     return {
       version: this.VERSION,
       seed: game.seed,
+      map: o ? o.world.mapId : World.mapId,   // 어느 맵에 있었나 (보스 방 안이면 접어둔 겉맵)
       savedAt: Date.now(),
       player: {
         x: Math.round(x), y: Math.round(y),
@@ -104,7 +105,7 @@ const Save = {
     if (CONFIG.weapons[s.weapon]) {
       player.weapon = s.weapon;
       player.weaponGrowing = !!s.weaponGrowing;
-      player.weaponLevel = Util.clamp(s.weaponLevel || 1, 1, player.weaponGrowing ? CONFIG.weapons.levelMult.length : LEVEL_MAX);
+      player.weaponLevel = Util.clamp(s.weaponLevel || 1, 1, CONFIG.weapons.levelMult.length);
       player.syncWeaponLevel();   // 성장하는 무기는 레벨을 다시 맞춰둔다
     }
 

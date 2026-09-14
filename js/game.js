@@ -14,11 +14,13 @@ const Game = {
   showInventory: false,
   showMap: false,
   confirmNewGame: false,
-  forestBanner: 0,   // 숲 이름표(태초의 숲)가 남는 시간 — 시작할 때와 동굴에서 나올 때 뜬다
+  forestBanner: 0,   // 맵 이름표(태초의 숲 / 작열하는 사막)가 남는 시간 — 시작·텔레포트·동굴에서 나올 때 뜬다
+  mapStates: {},     // 다른 맵에 있는 동안 접어둔 맵들 (맵·몬스터·드랍) — 텔레포트로 돌아오면 그대로 펼친다
+  portalPrompt: false,   // 텔레포트 비석 앞에 서 있는가
   boss: null,        // 살아있는 보스
   bossReadyIn: [0, 0, 0],   // 동굴마다 다시 도전할 수 있게 되기까지 남은 시간
   cavePrompt: null,  // 앞에 서 있는 동굴 입구 (입장 안내가 뜬다) — 없으면 null
-  arenaCave: 0,      // 지금 들어가 있는 보스 방이 몇 번째 동굴 것인가 (CONFIG.forest.caves 순서)
+  arenaCave: 0,      // 지금 들어가 있는 보스 방이 몇 번째 동굴 것인가 (CONFIG.maps.forest.caves 순서)
   exitPrompt: false, // 보스 방에서 나가는 굴 앞에 서 있는가
   inArena: false,    // 지금 보스 방 안인가
   overworld: null,   // 보스 방에 있는 동안 접어둔 겉맵 (맵·몬스터·드랍·플레이어 자리)
@@ -55,7 +57,8 @@ const Game = {
   // saved 가 있으면 그 시드로 같은 맵을 되살리고 진행 상황을 얹는다
   startGame(saved) {
     this.seed = (saved && saved.seed) || Math.floor(Math.random() * 100000);
-    World.init(this.seed);
+    this.mapStates = {};
+    World.init(this.seed, (saved && CONFIG.maps[saved.map]) ? saved.map : 'forest');
     Minimap.build();
     FX.reset();
     Items.reset();
@@ -70,9 +73,9 @@ const Game = {
     // 시작 지점은 숲 한가운데 — 사방 어디로 가든 점점 위험해진다
     this.player = new Player(World.startX, World.startY);
     if (saved) Save.apply(saved, this.player);
-    this.forestBanner = 2.8;   // 숲 이름을 한 번 띄운다
+    this.forestBanner = 2.8;   // 맵 이름을 한 번 띄운다
     this.boss = null;
-    this.bossReadyIn = CONFIG.forest.caves.map(() => 0);
+    this.bossReadyIn = CONFIG.maps.forest.caves.map(() => 0);   // 동굴은 숲에만 있다
     this.cavePrompt = null;
     this.exitPrompt = false;
     this.inArena = false;
@@ -93,6 +96,10 @@ const Game = {
     slime: (x, y, lv) => new Slime(x, y, lv),
     mushroom: (x, y, lv) => new Mushroom(x, y, lv),
     wolf: (x, y, lv) => new Wolf(x, y, lv),
+    // 사막
+    scorpion: (x, y, lv) => new Scorpion(x, y, lv),
+    cactus: (x, y, lv) => new Cactus(x, y, lv),
+    sandworm: (x, y, lv) => new Sandworm(x, y, lv),
   },
 
   // 보스 종류 -> 클래스 (CONFIG.bosses[*].type)
@@ -102,9 +109,9 @@ const Game = {
     mushroom: (x, y) => new ElderShroom(x, y),
   },
 
-  // 몇 번째 동굴의 보스 설정인가 (CONFIG.forest.caves 순서)
+  // 몇 번째 동굴의 보스 설정인가 (CONFIG.maps.forest.caves 순서)
   bossSpec(caveIndex) {
-    return CONFIG.bosses[CONFIG.forest.caves[caveIndex].boss];
+    return CONFIG.bosses[CONFIG.maps.forest.caves[caveIndex].boss];
   },
 
   /* ── 몬스터를 맵 아무 데나, 플레이어와 충분히 떨어진 빈 자리에 놓는다.
@@ -119,9 +126,9 @@ const Game = {
       if (!World.isFreeSpot(x, y, 9)) continue;
       if (Util.dist(x, y, this.player.x, this.player.y) < cs.minDistFromPlayer) continue;
 
-      // 레벨은 그 자리의 기준 레벨에서 조금 흔들린다 (가운데 1 -> 가장자리 23)
-      const spread = CONFIG.forest.levelSpread;
-      const level = Util.clamp(World.levelAt(x, y) + Util.randInt(-spread, spread), 1, LEVEL_MAX);
+      // 레벨은 그 자리의 기준 레벨에서 조금 흔들린다 (숲 1 -> 23, 사막 24 -> 40)
+      const spread = World.spec.levelSpread, range = World.spec.levelRange;
+      const level = Util.clamp(World.levelAt(x, y) + Util.randInt(-spread, spread), range[0], range[1]);
       const weights = World.typeWeightsAt(x, y);
       const names = Object.keys(weights);
       const type = names[Util.weightedIndex(names.map(n => weights[n]))];
@@ -146,11 +153,69 @@ const Game = {
     this.cavePrompt = null;
     this.exitPrompt = false;
     this.shopPrompt = false;
+    this.portalPrompt = false;
     if (this.inArena) this.updateArenaGate(dt);
     else {
       this.updateCaveGate();
       this.updateShopGate();
+      this.updatePortalGate();
     }
+  },
+
+  // 텔레포트 비석 앞에서 F — 다른 맵의 비석 앞으로 옮겨간다
+  updatePortalGate() {
+    const p = World.portal;
+    if (!p || this.player.dead || this.cavePrompt || this.shopPrompt || Items.nearWeapon) return;
+    if (Util.dist(this.player.x, this.player.y, p.x, p.y + 4) > CONFIG.portal.interactRange) return;
+
+    this.portalPrompt = true;
+    if (!Items.pickupRequested) return;
+    Items.pickupRequested = false;
+    const target = World.spec.portalTo;
+    this.beginTransition(() => this.travel(target));
+  },
+
+  /* ── 맵 옮겨가기 ───────────────────────────────────────
+     지금 맵(지형·몬스터·바닥 드랍)은 통째로 접어두고, 목적지 맵은 접어둔 게 있으면 펼치고 없으면 새로 만든다.
+     같은 시드에서 만들므로 처음 가도 저장을 다시 켜도 같은 사막이 나온다. 도착 자리는 그 맵의 비석 앞. */
+  travel(mapId) {
+    const from = World.mapId;
+    this.mapStates[from] = {
+      world: World.snapshot(),
+      enemies: this.enemies,
+      respawnQueue: this.respawnQueue,
+      drops: Items.drops.slice(),
+    };
+    Projectiles.reset();
+    FX.reset();
+    Items.reset();
+
+    const saved = this.mapStates[mapId];
+    if (saved) {
+      World.restore(saved.world);
+      this.enemies = saved.enemies;
+      this.respawnQueue = saved.respawnQueue;
+      for (const d of saved.drops) Items.drops.push(d);
+      delete this.mapStates[mapId];
+    } else {
+      World.init(this.seed, mapId);
+      this.enemies = [];
+      this.respawnQueue = [];
+    }
+    Minimap.build();
+    Ambient.reset();
+
+    const p = this.player;
+    const portal = World.portal;
+    p.x = portal.x; p.y = portal.y + 22;
+    p.spawnX = p.x; p.spawnY = p.y;
+    p.kx = p.ky = 0; p.invuln = 0.9; p.attackTimer = 0; p.activeSkill = null;
+    if (!saved) for (let i = 0; i < CONFIG.spawn.maxAlive; i++) this.spawnEnemy();
+
+    this.forestBanner = 2.8;
+    this.updateCamera(true);
+    FX.burst(p.x, p.y, 30, ['#5ff0ff', '#ffffff', '#2a8fa0'], { speed: 80, life: 0.7, gravity: -20 });
+    Sound.play('caveOut');
   },
 
   // 상인 앞에서 F — 무기 줍기와 동굴 입장이 먼저이고, 둘 다 아니면 상점이다
@@ -344,13 +409,13 @@ const Game = {
     return this.showInventory || this.showMap || this.confirmNewGame || Shop.open || PatchNotes.open;
   },
 
-  // 이름표 시간과 배경음 — 숲에서는 시작점에서 멀어질수록 곡이 무거워진다 (forest -> deep -> cave)
+  // 이름표 시간과 배경음 — 시작점에서 멀어질수록 곡이 무거워진다 (맵마다 spec.bgm 에 곡과 경계가 있다)
   updateBanners(dt) {
     this.lairBanner = Math.max(0, this.lairBanner - dt);
     this.forestBanner = Math.max(0, this.forestBanner - dt);
     if (this.inArena) { Sound.setTrack('boss'); return; }
-    const t = World.dangerAt(this.player.x, this.player.y), edges = CONFIG.forest.bgm;
-    Sound.setTrack(t < edges[0] ? 'forest' : (t < edges[1] ? 'deep' : 'cave'));
+    const t = World.dangerAt(this.player.x, this.player.y), bgm = World.spec.bgm;
+    Sound.setTrack(t < bgm.edges[0] ? bgm.tracks[0] : (t < bgm.edges[1] ? bgm.tracks[1] : bgm.tracks[2]));
   },
 
   // 체력이 낮으면 심장이 뛴다 (화면 가장자리는 UI 가 붉게 칠한다)
@@ -553,9 +618,10 @@ const Game = {
     if (this.cavePrompt) UI.drawCavePrompt(ctx, this.cavePrompt, cam, this.bossReadyIn[this.cavePrompt.caveIndex], 'ENTER');
     if (this.exitPrompt) UI.drawCavePrompt(ctx, World.arenaExit, cam, 0, 'LEAVE');
     if (this.shopPrompt && !this.showMap) Shop.drawPrompt(ctx, cam);
+    if (this.portalPrompt && !this.showMap) UI.drawPortalPrompt(ctx, World.portal, cam, CONFIG.maps[World.spec.portalTo]);
     if (Shop.open) Shop.draw(ctx, this.player);
     if (this.lairBanner > 0) UI.drawBanner(ctx, this.bossSpec(this.arenaCave).lairName, '#ff6b6b', this.lairBanner);
-    if (this.forestBanner > 0 && !this.showMap && !this.showInventory && !Shop.open && !this.title) UI.drawBanner(ctx, CONFIG.forest.name, CONFIG.forest.color, this.forestBanner);
+    if (this.forestBanner > 0 && !this.showMap && !this.showInventory && !Shop.open && !this.title) UI.drawBanner(ctx, World.spec.name, World.spec.color, this.forestBanner);
     if (this.confirmNewGame) UI.drawConfirm(ctx);
     if (this.soundFlash > 0) UI.drawSoundState(ctx, Sound.enabled);
     // 장면 전환은 맨 위를 덮는다

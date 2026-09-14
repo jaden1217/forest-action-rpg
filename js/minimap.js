@@ -17,12 +17,7 @@ const Minimap = {
   /* 타일 색 — [지역][타일종류]. 지역마다 바닥색이 달라서
      지도만 봐도 "여기부터 깊은 숲, 저기부터 포자 골짜기"가 바로 보인다.
      (TILE_GRASS, TILE_DIRT, TILE_SAND, TILE_WATER, TILE_MEADOW 순서) */
-  // [그늘 여부][타일 종류] — 볕 드는 바닥 / 빽빽한 숲의 그늘진 바닥
-  TILE_RGB: [
-    [[63, 139, 64], [125, 95, 60], [194, 168, 119], [47, 111, 158], [86, 163, 90]],
-    [[44, 100, 49], [110, 84, 53], [194, 168, 119], [47, 111, 158], [52, 112, 57]],
-  ],
-  TREE_RGB: ['#1f5a2a', '#173f1f'],
+  // 바닥·나무 색은 맵마다 다르다 (CONFIG.maps[*].minimap — [색 줄][타일 종류])
 
   build() {
     const W = World.cols, H = World.rows;
@@ -30,10 +25,11 @@ const Minimap = {
     this.canvas = makeCanvas(W, H);
     const ctx = this.canvas.getContext('2d');
 
+    const pal = World.spec.minimap;
     const img = ctx.createImageData(W, H);
     for (let i = 0; i < W * H; i++) {
-      const byShade = this.TILE_RGB[World.shade[i]] || this.TILE_RGB[0];
-      const c = byShade[World.tiles[i]] || byShade[0];
+      const row = pal.tiles[World.colorRow[i]] || pal.tiles[0];
+      const c = row[World.tiles[i]] || row[0];
       img.data[i * 4] = c[0];
       img.data[i * 4 + 1] = c[1];
       img.data[i * 4 + 2] = c[2];
@@ -45,14 +41,14 @@ const Minimap = {
     for (const p of World.props) {
       if (!p.tree) continue;
       const tx = Math.floor(p.x / CONFIG.TILE), ty = Math.floor(p.y / CONFIG.TILE);
-      ctx.fillStyle = this.TREE_RGB[World.shade[ty * W + tx]] || this.TREE_RGB[0];
+      ctx.fillStyle = pal.tree[World.colorRow[ty * W + tx]] || pal.tree[0];
       ctx.fillRect(tx, ty, 1, 1);
     }
 
-    // 동굴 입구와 상인은 이정표라 눈에 띄게 찍는다 (동굴 주황, 상인 노랑)
+    // 동굴 입구·상인·비석은 이정표라 눈에 띄게 찍는다 (동굴 주황, 상인 노랑, 비석 하늘색)
     for (const p of World.props) {
       if (!p.landmark) continue;
-      ctx.fillStyle = p.landmark === 'shop' ? '#ffe066' : '#e08a4f';
+      ctx.fillStyle = p.landmark === 'shop' ? '#ffe066' : (p.landmark === 'portal' ? '#5ff0ff' : '#e08a4f');
       ctx.fillRect(Math.floor(p.x / CONFIG.TILE) - 1, Math.floor(p.y / CONFIG.TILE) - 1, 3, 3);
       ctx.fillStyle = '#1d1a17';
       ctx.fillRect(Math.floor(p.x / CONFIG.TILE), Math.floor(p.y / CONFIG.TILE), 1, 1);

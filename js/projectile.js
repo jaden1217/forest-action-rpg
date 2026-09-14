@@ -27,6 +27,8 @@ const Projectiles = {
       maxLife: opts.life,
       radius: opts.radius || 3,
       spin: Math.random() * Math.PI * 2,
+      kind: opts.kind || 'spore',   // 'needle' 은 선인장 가시 — 날아가는 방향으로 누운 막대
+      angle: angle,
     });
   },
 
@@ -68,9 +70,19 @@ const Projectiles = {
   draw(ctx, cam) {
     for (const p of this.list) {
       const sx = Math.round(p.x - cam.x), sy = Math.round(p.y - cam.y);
-      const sprite = SPRITES.spore[levelTier(p.level)];
       // 사라지기 직전에는 깜빡여서 곧 없어짐을 알린다
       if (p.life < 0.3 && Math.floor(p.life * 24) % 2 === 0) continue;
+      if (p.kind === 'needle') {
+        const pal = LEVEL_PALETTES[levelTier(p.level)];
+        ctx.save();
+        ctx.translate(sx, sy);
+        ctx.rotate(p.angle);
+        ctx.fillStyle = pal.n; ctx.fillRect(-3, -1, 6, 2);
+        ctx.fillStyle = '#ffffff'; ctx.fillRect(1, -1, 2, 1);
+        ctx.restore();
+        continue;
+      }
+      const sprite = SPRITES.spore[levelTier(p.level)];
       // 살짝 위아래로 흔들리며 날아간다
       const bob = Math.round(Math.sin(p.spin) * 1.2);
       ctx.drawImage(sprite, sx - 2, sy - 2 + bob);

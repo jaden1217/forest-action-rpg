@@ -123,8 +123,8 @@ const Items = {
     d.weapon = weaponId;
     d.growing = !!(opts && opts.growing);
     if (d.growing) d.life = 1e9;   // 성장 무기는 사라지지 않는다 (보스 보상이 증발하면 안 된다)
-    // 일반 드랍은 몬스터 레벨 상한(23)까지, 성장 무기만 표 끝까지 올라간다
-    d.level = Util.clamp(Math.round(level || 1), 1, d.growing ? CONFIG.weapons.levelMult.length : LEVEL_MAX);
+    // 떨군 몬스터의 레벨을 그대로 따른다 (사막 몬스터는 23을 넘는다). 표 끝(60)이 상한
+    d.level = Util.clamp(Math.round(level || 1), 1, CONFIG.weapons.levelMult.length);
     d.amount = 1;
     d.auraTimer = 0;
     this.drops.push(d);

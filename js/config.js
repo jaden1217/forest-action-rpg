@@ -5,13 +5,14 @@
 // 몬스터의 최대 레벨 (바닥에 떨어지는 무기도 잡은 몬스터 레벨을 따르므로 여기까지)
 const LEVEL_MAX = 23;
 /* 무기 레벨 표의 끝. 보스가 주는 '성장하는 무기'는 플레이어 레벨을 그대로 따라가므로
-   23을 넘어 계속 세져야 한다 — 그게 그 무기의 존재 이유다. 일반 드랍은 여전히 23이 끝이다. */
+   23을 넘어 계속 세져야 한다. 사막 몬스터(24~40)가 떨구는 무기도 자기 레벨을 그대로 따른다. */
 const WEAPON_LEVEL_MAX = 60;
 
-/* 23단계나 되는 레벨을 색 5등급으로 묶는다.
+/* 레벨을 색 등급으로 묶는다.
    레벨 숫자를 읽지 않아도 색만 보고 위험도를 가늠할 수 있게 하기 위한 것이다.
-   (1~4 초록 / 5~8 청록 / 9~13 파랑 / 14~18 보라 / 19~23 빨강) */
-const LEVEL_TIER_BREAKS = [4, 8, 13, 18];
+   (1~4 초록 / 5~8 청록 / 9~13 파랑 / 14~18 보라 / 19~23 빨강 — 숲)
+   (24~29 호박 / 30~35 은빛 / 36~ 흑요석 — 사막) */
+const LEVEL_TIER_BREAKS = [4, 8, 13, 18, 23, 29, 35];
 function levelTier(level) {
   for (let i = 0; i < LEVEL_TIER_BREAKS.length; i++) {
     if (level <= LEVEL_TIER_BREAKS[i]) return i;
@@ -50,19 +51,25 @@ function buildLevels(base, growth, extra) {
    전에는 같은 레벨 슬라임에게 20번을 맞아야 죽어서 위협이 없었다.
    목표는 '같은 레벨 슬라임 기준 1레벨 12번 -> 12레벨 11번 -> 23레벨 7번' —
    초반은 여유 있게 배우고, 깊이 갈수록 둘러싸이면 정말 위험해지도록. */
-/* 표(1~23) 밖의 레벨이 필요할 때 — 보스는 몬스터 상한보다 높은 레벨을 쓸 수 있다.
-   23레벨 값에서 같은 증가율로 더 늘려 잡는다. */
+/* 표(1~23) 밖의 레벨이 필요할 때 — 사막 몬스터(24~40)와 늙은 버섯(30)이 쓴다.
+   23레벨 값에서 더 완만한 증가율(ENEMY_GROWTH_HIGH)로 늘려 잡는다.
+   숲의 증가율을 그대로 쓰면 지수 곡선이 플레이어의 직선 성장을 앞질러
+   40레벨에서는 세 대에 죽고 열두 대를 때려야 했다 — 완만하게 잡으면 다섯 대 / 일곱 대 정도가 된다. */
 function enemyStatsAt(levels, level) {
   if (level <= levels.length) return levels[level - 1];
   const top = levels[levels.length - 1], k = level - levels.length;
   const s = Object.assign({}, top);
   for (const key in ENEMY_GROWTH) {
     if (top[key] === undefined) continue;
-    const v = top[key] * Math.pow(ENEMY_GROWTH[key], k);
+    const g = ENEMY_GROWTH_HIGH[key] === undefined ? ENEMY_GROWTH[key] : ENEMY_GROWTH_HIGH[key];
+    const v = top[key] * Math.pow(g, k);
     s[key] = key === 'scale' ? +v.toFixed(3) : Math.max(1, Math.round(v));
   }
   return s;
 }
+
+// 23레벨 너머의 증가율 (사막) — 체력 +7.5%, 공격 +5.5%, 경험치 +8%
+const ENEMY_GROWTH_HIGH = { hp: 1.075, atk: 1.055, xp: 1.08, scale: 1.01 };
 
 const ENEMY_GROWTH = {
   hp: 1.115,
@@ -90,6 +97,8 @@ const CONFIG = {
   world: {
     waterLevel: 0.86,      // 연못 — 너무 낮추면 맵이 물로 갈라진다
     shoreLevel: 0.80,      // 연못 둘레 모래사장
+    oasisLevel: 0.90,      // 사막의 오아시스 (더 드물다)
+    oasisGrassLevel: 0.85, // 오아시스 둘레 풀밭
     clearingLevel: 0.24,   // 흙바닥 공터
     meadowLevel: 0.71,     // 꽃밭
     treeLevel: 0.42,       // 이 값을 넘는 곳부터 나무가 자란다 (낮출수록 숲이 빽빽해진다)
@@ -267,7 +276,7 @@ const CONFIG = {
       return a;
     })(),
     // 칼날 색 — 레벨이 아니라 색 등급(levelTier)으로 고른다
-    levelColor: ['#c8d0d8', '#8fe0a8', '#7ec8ff', '#c79ce8', '#ffb35c'],
+    levelColor: ['#c8d0d8', '#8fe0a8', '#7ec8ff', '#c79ce8', '#ffb35c', '#ffb08a', '#f0f4f8', '#b48fd8'],
     // 성장하는 무기(보스 보상)는 등급색 대신 이 금색으로 표시해 한눈에 구별한다
     growColor: '#ffd93d',
     /* 성장하는 무기의 이름 — 어느 보스가 떨구느냐에 따라 다르다.
@@ -289,6 +298,9 @@ const CONFIG = {
       slime: 'dagger',
       wolf: 'sword',
       mushroom: 'axe',
+      scorpion: 'dagger',
+      cactus: 'axe',
+      sandworm: 'sword',
     },
     // 떨어지는 무기의 레벨은 잡은 몬스터의 레벨과 같다.
     weaponLifetime: 60,      // 바닥 무기가 사라지기까지 (초)
@@ -314,50 +326,108 @@ const CONFIG = {
     respawnMin: 2.5,        // 죽은 뒤 다시 등장하기까지 (초)
     respawnMax: 6.0,
     minDistFromPlayer: 78,  // 플레이어 코앞에 튀어나오지 않도록
-    // 어떤 몬스터가 몇 레벨로 나올지는 그 자리의 "위험도"(시작점에서의 거리)가 정한다 (CONFIG.forest)
+    // 어떤 몬스터가 몇 레벨로 나올지는 그 자리의 "위험도"(시작점에서의 거리)가 정한다 (CONFIG.maps)
   },
 
-  /* ── 태초의 숲 — 맵 하나가 통째로 한 숲이다 ────────────────
-     예전에는 세 지역(가장자리 / 깊은 숲 / 포자 골짜기)으로 나눴지만, 이제는 경계 없이
-     "시작점에서 얼마나 멀리 왔는가"(위험도 t, 0~1)가 모든 것을 정한다.
-       - 몬스터 레벨: 가운데 1레벨에서 가장자리 23레벨까지 서서히 오른다
-       - 몬스터 종류: 가까운 곳은 슬라임, 중간은 늑대, 먼 곳은 버섯이 많다 (섞여 나온다)
-       - 나무: 멀수록 침엽수·고사목이 늘고 숲이 빽빽해진다
-       - 보스 동굴 셋: 위험도 고리 위에 하나씩, 방향은 120도씩 벌려 세운다
+  /* ── 맵 — 지금은 둘: 태초의 숲과 작열하는 사막 (텔레포트 비석으로 오간다) ────
+     두 맵은 크기가 같고 같은 뼈대로 만든다. 지역 경계 대신 "시작점에서 얼마나 멀리 왔는가"
+     (위험도 t, 0~1)가 몬스터 레벨·종류, 초목, 소품을 정한다.
+       - 몬스터 레벨: 가운데 levelRange[0] 에서 가장자리 levelRange[1] 까지 서서히 오른다
+       - 몬스터 종류: typeWeights 세 지점(t = 0 / 0.5 / 1)의 값을 사이사이 보간한다
+       - 초목: 멀수록 빽빽해지고 종류가 바뀐다
+       - 동굴(보스): 위험도 고리 위에 하나씩, 방향은 120도씩 벌려 세운다
      위험도는 맵 모양을 따르는 둥근 사각형 거리(4제곱 노름)라 가장자리 어디서나 1에 닿는다. */
-  forest: {
-    name: 'PRIMEVAL FOREST',     // 태초의 숲 (도트 폰트가 영문 대문자뿐이라 영문으로 띄운다)
-    color: '#9be564',
-    wobble: 0.10,                // 위험도 고리를 울퉁불퉁하게 흔드는 정도
+  maps: {
+    forest: {
+      id: 'forest', theme: 'forest',
+      name: 'PRIMEVAL FOREST',     // 태초의 숲 (도트 폰트가 영문 대문자뿐이라 영문으로 띄운다)
+      color: '#9be564',
+      wobble: 0.10,                // 위험도 고리를 울퉁불퉁하게 흔드는 정도
 
-    // 몬스터 레벨 곡선 — t 가 safeRadius 안이면 1, 거기서부터 가장자리(1.0)까지 curve 승으로 오른다.
-    // 지수가 1보다 크면 낮은 레벨 구간이 넓어진다 (t=0.5 에서 약 7레벨, 0.7 에서 12, 0.85 에서 17)
-    safeRadius: 0.12,
-    curve: 1.6,
-    levelSpread: 2,              // 그 자리 기준 레벨에서 ±이만큼 흔들린다
+      // 몬스터 레벨 곡선 — t 가 safeRadius 안이면 최소, 거기서부터 가장자리(1.0)까지 curve 승으로 오른다.
+      // 지수가 1보다 크면 낮은 레벨 구간이 넓어진다 (t=0.5 에서 약 7레벨, 0.7 에서 12, 0.85 에서 17)
+      levelRange: [1, 23],
+      safeRadius: 0.12,
+      curve: 1.6,
+      levelSpread: 2,              // 그 자리 기준 레벨에서 ±이만큼 흔들린다
 
-    // 몬스터 종류 가중치 — t = 0 / 0.5 / 1 지점의 값을 사이사이 보간한다
-    typeWeights: [
-      { slime: 70, wolf: 20, mushroom: 10 },   // 시작 부근 — 약한 슬라임 위주라 처음 몇 분이 안전하다
-      { wolf: 60, slime: 25, mushroom: 15 },   // 중간 — 늑대가 많다. 돌진을 피하며 싸우는 구간
-      { mushroom: 55, wolf: 30, slime: 15 },   // 가장자리 — 버섯이 지천. 포자를 피해 다니는 구간
-    ],
+      typeWeights: [
+        { slime: 70, wolf: 20, mushroom: 10 },   // 시작 부근 — 약한 슬라임 위주라 처음 몇 분이 안전하다
+        { wolf: 60, slime: 25, mushroom: 15 },   // 중간 — 늑대가 많다. 돌진을 피하며 싸우는 구간
+        { mushroom: 55, wolf: 30, slime: 15 },   // 가장자리 — 버섯이 지천. 포자를 피해 다니는 구간
+      ],
 
-    // 나무·소품 — [t=0 값, t=1 값] 사이를 보간
-    treeDensity: [1.0, 1.5],
-    pineChance: [0.10, 0.55],
-    deadChance: [0.03, 0.20],
-    boulders: [1.0, 2.2],
-    shadeLevel: 0.60,            // 개방도 노이즈가 이보다 높은 빽빽한 숲 바닥은 그늘진 잔디로 그린다
+      // 초목·소품 — [t=0 값, t=1 값] 사이를 보간
+      treeDensity: [1.0, 1.5],
+      pineChance: [0.10, 0.55],    // 침엽수 비율
+      deadChance: [0.03, 0.20],    // 고사목 비율
+      boulders: [1.0, 2.2],
+      shadeLevel: 0.60,            // 개방도 노이즈가 이보다 높은 빽빽한 숲 바닥은 그늘진 잔디로 그린다
 
-    // 보스 동굴 — 위험도 고리(t)마다 하나. 가까운 것부터 슬라임 -> 늑대 -> 버섯
-    caves: [
-      { boss: 'slime', t: 0.38 },
-      { boss: 'wolf', t: 0.68 },
-      { boss: 'mushroom', t: 0.93 },
-    ],
+      // 보스 동굴 — 위험도 고리(t)마다 하나. 가까운 것부터 슬라임 -> 늑대 -> 버섯
+      caves: [
+        { boss: 'slime', t: 0.38 },
+        { boss: 'wolf', t: 0.68 },
+        { boss: 'mushroom', t: 0.93 },
+      ],
 
-    bgm: [0.40, 0.75],           // 위험도가 이 경계를 넘으면 배경음이 forest -> deep -> cave 로 바뀐다
+      bgm: { edges: [0.40, 0.75], tracks: ['forest', 'deep', 'cave'] },   // 위험도가 경계를 넘으면 곡이 바뀐다
+      // 미니맵 색 — [볕 드는 바닥, 그늘진 바닥] x [풀, 흙, 모래, 물, 꽃밭], 나무 점
+      minimap: {
+        tiles: [
+          [[63, 139, 64], [125, 95, 60], [194, 168, 119], [47, 111, 158], [86, 163, 90]],
+          [[44, 100, 49], [110, 84, 53], [194, 168, 119], [47, 111, 158], [52, 112, 57]],
+        ],
+        tree: ['#1f5a2a', '#173f1f'],
+      },
+      portalTo: 'desert',          // 이 맵의 텔레포트 비석이 이어지는 곳
+    },
+
+    /* 작열하는 사막 — 숲 다음 무대. 텔레포트 비석으로만 오갈 수 있다.
+       숲(1~23)보다 센 24~40레벨 몬스터가 나오고, 종류도 셋 다 새것이다.
+         전갈    쫓아와서 꼬리로 찌른다. 찔리면 잠시 독이 오른다
+         선인장  제자리에서 사방으로 가시를 쏜다 (버섯과 달리 조준하지 않고 고리로 퍼진다)
+         모래벌레 땅속을 파고 다가와 발밑에서 솟구친다. 땅속에 있을 땐 때릴 수 없다
+       바닥은 모래, 물기가 많은 곳만 오아시스(물 + 풀), 개방도가 낮은 곳은 갈라진 땅. */
+    desert: {
+      id: 'desert', theme: 'desert',
+      name: 'SCORCHED SANDS',      // 작열하는 사막
+      color: '#ffb35c',
+      wobble: 0.10,
+
+      levelRange: [24, 40],
+      safeRadius: 0.10,
+      curve: 1.3,
+      levelSpread: 2,
+
+      typeWeights: [
+        { scorpion: 65, cactus: 25, sandworm: 10 },   // 비석 근처 — 전갈 위주
+        { cactus: 40, scorpion: 35, sandworm: 25 },   // 중간 — 선인장 가시밭
+        { sandworm: 45, scorpion: 30, cactus: 25 },   // 가장자리 — 모래벌레가 우글거린다
+      ],
+
+      treeDensity: [0.55, 1.0],    // 선인장·바위기둥 (숲보다 성기다)
+      pineChance: [0.15, 0.45],    // 여기서는 '바위기둥' 비율
+      deadChance: [0.05, 0.15],    // 고사목 비율
+      boulders: [1.6, 3.0],
+      shadeLevel: 2,               // 그늘 없음 (사막은 늘 볕이 든다)
+
+      caves: [],                   // 사막 보스는 아직 없다
+
+      bgm: { edges: [0.55, 2], tracks: ['desert', 'cave', 'cave'] },
+      minimap: {
+        tiles: [
+          [[63, 139, 64], [154, 107, 60], [217, 194, 127], [47, 111, 158], [224, 204, 138]],   // 오아시스 풀, 갈라진 땅, 모래, 물, 모래언덕
+        ],
+        tree: ['#2f7a3a'],
+      },
+      portalTo: 'forest',
+    },
+  },
+
+  // 텔레포트 비석 — 맵마다 시작점 옆에 하나. 앞에서 F 를 누르면 다른 맵의 비석 앞으로 옮겨간다
+  portal: {
+    interactRange: 26,
   },
 
   slime: {
@@ -406,6 +476,57 @@ const CONFIG = {
     lungeTime: 0.30,        // 돌진이 이어지는 시간
     recover: 0.55,          // 돌진 뒤 빈틈 — 이때가 때리기 좋다
     contactCooldown: 0.9,
+  },
+
+  /* ── 사막 몬스터 셋 ──────────────────────────────────────
+     레벨 표는 1~23까지 만들지만 사막에서는 24~40으로 나오므로 enemyStatsAt 이 표 끝에서
+     완만한 증가율(ENEMY_GROWTH_HIGH)로 늘려 잡는다. 시작값은 숲 몬스터와 같은 척도다. */
+
+  // 전갈 — 늑대처럼 쫓아오지만 돌진 대신 짧게 찌른다. 찔리면 독이 올라 몇 초간 체력이 조금씩 준다
+  scorpion: {
+    levels: buildLevels(
+      { hp: 36, atk: 7, speed: 30, detect: 92, scale: 0.9, xp: 8, knockback: 56 },
+      ENEMY_GROWTH
+    ),
+    stingRange: 24,         // 이 거리 안이면 찌를 준비
+    windup: 0.38,           // 꼬리를 치켜드는 예고
+    stingTime: 0.16,        // 찌르며 앞으로 나가는 시간
+    stingSpeed: 150,
+    recover: 0.5,
+    contactCooldown: 0.9,
+    poison: { time: 4, tick: 0.5, ratio: 0.2 },   // 4초 동안 0.5초마다 공격력의 20%
+  },
+
+  // 선인장 — 뿌리내린 채 사방으로 가시를 쏜다. 조준하지 않는 대신 고리로 퍼져서 틈새로 피해야 한다
+  cactus: {
+    levels: buildLevels(
+      { hp: 48, atk: 6, detect: 96, scale: 0.9, xp: 9, knockback: 20 },
+      ENEMY_GROWTH,
+      (lv) => ({ interval: +(3.0 - (lv - 1) / (LEVEL_MAX - 1) * 0.8).toFixed(2) })
+    ),
+    needles: 8,             // 한 번에 쏘는 가시 수 (고리)
+    windup: 0.5,
+    needleSpeed: 88,
+    needleLife: 1.5,
+    contactCooldown: 1.0,
+    thornMult: 0.8,         // 몸에 닿으면 가시 피해
+  },
+
+  // 모래벌레 — 땅속(모래 언덕)으로 다가와 발밑에서 솟구친다. 땅속에선 안 맞고, 솟은 뒤 잠깐이 때릴 틈
+  sandworm: {
+    levels: buildLevels(
+      { hp: 60, atk: 9, speed: 40, detect: 130, scale: 1.0, xp: 12, knockback: 30 },
+      ENEMY_GROWTH
+    ),
+    riseRange: 18,          // 이 거리 안이면 솟구칠 준비
+    chaseMax: 5,            // 땅속에서 이만큼 쫓으면 못 잡아도 솟구친다 (영원히 따라다니지 않게)
+    windup: 0.55,           // 땅이 들썩이는 예고 — 이때 비켜야 한다
+    eruptRadius: 20,        // 솟구칠 때 피해 범위
+    eruptMult: 1.4,
+    surfaced: 2.4,          // 밖에 나와 있는 시간 (이때 때린다)
+    surfaceSpeed: 14,       // 밖에서는 아주 느리게 기어온다
+    burrowTime: 0.4,
+    contactCooldown: 1.0,
   },
 
   /* ── 보스 방 (모든 보스 공통) ─────────────────────────────
@@ -563,7 +684,7 @@ const CONFIG = {
 
   items: {
     // 2주차: 슬라임이 떨구는 건 회복 포션 한 종류. 레벨이 높을수록 잘 나온다
-    potionDropChance: [0.10, 0.13, 0.17, 0.22, 0.30], // 색 등급별 드랍 확률
+    potionDropChance: [0.10, 0.13, 0.17, 0.22, 0.30, 0.32, 0.34, 0.36], // 색 등급별 드랍 확률 (사막 등급 셋 포함)
     potionDoubleChance: 0.25, // 높은 등급이 2개를 떨굴 확률
     /* 포션 1개 회복량 — 최대 체력의 비율로 잰다 (최소 30).
        11주차 밸런싱: 고정 30이면 23레벨(체력 236)에서는 13%밖에 안 채워 쓸모가 없었다 */
@@ -581,7 +702,7 @@ const CONFIG = {
      (줍는 수고를 없앤 대신 확정 지급이고, 양은 그만큼 살짝 낮췄다)
      양은 레벨이 아니라 색 등급(5단계)으로 정해서, 멀리 나갈수록 벌이가 좋다. */
   gold: {
-    amountByTier: [2, 5, 8, 13, 20],    // 등급별 기본량 (1~4 / 5~8 / 9~13 / 14~18 / 19~23)
+    amountByTier: [2, 5, 8, 13, 20, 28, 38, 50],    // 등급별 기본량 (1~4 / 5~8 / 9~13 / 14~18 / 19~23 / 사막 24~29 / 30~35 / 36~)
     variance: 0.35,                     // 기본량의 ±35% 사이에서 흔들린다
     bossMult: 12,                       // 보스는 자기 등급 기본량의 12배
     color: '#ffe066',
@@ -618,12 +739,15 @@ const CONFIG = {
      양은 색 등급이 정한다 (1~4레벨 1개 … 19~23레벨 3개). 보스는 자기 전리품을 하나 확정으로 준다. */
   loot: {
     dropChance: 0.20,
-    amountByTier: [1, 1, 2, 2, 3],
-    byType: { slime: 'gel', wolf: 'fang', mushroom: 'cap' },
+    amountByTier: [1, 1, 2, 2, 3, 3, 4, 4],
+    byType: { slime: 'gel', wolf: 'fang', mushroom: 'cap', scorpion: 'stinger', cactus: 'cactusFruit', sandworm: 'wormScale' },
     items: {
       gel:        { name: 'SLIME GEL',   value: 4,   color: '#8fe098' },
       fang:       { name: 'WOLF FANG',   value: 6,   color: '#e9f1f7' },
       cap:        { name: 'SPORE CAP',   value: 5,   color: '#e08a4f' },
+      stinger:    { name: 'STINGER',     value: 12,  color: '#ffd27a' },   // 사막
+      cactusFruit:{ name: 'CACTUS FRUIT', value: 10, color: '#e56b7a' },
+      wormScale:  { name: 'WORM SCALE',  value: 15,  color: '#c9bb9c' },
       slimeCore:  { name: 'SLIME CORE',  value: 150, color: '#7ec8ff', trophy: true },
       alphaFang:  { name: 'ALPHA FANG',  value: 250, color: '#ff6b6b', trophy: true },
       elderSpore: { name: 'ELDER SPORE', value: 400, color: '#c79ce8', trophy: true },

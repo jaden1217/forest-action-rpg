@@ -34,6 +34,7 @@ class Player {
     this.bagSlots = CONFIG.inventory.baseSlots;
     Inventory.create(this);
 
+    this.poison = null;        // 전갈 독 — { time, tick, dmg, next }. 0.5초마다 조금씩 깎이고 자연 회복이 멈춘다
     this.attackTimer = 0;      // 휘두르는 중이면 0보다 큼
     this.cooldown = 0;
     this.attackBuffer = 0;     // 쿨다운 중에 누른 공격을 잠깐 기억해둔다
@@ -366,6 +367,7 @@ class Player {
     this.invuln = Math.max(0, this.invuln - dt);
     this.potionCooldown = Math.max(0, this.potionCooldown - dt);
     this.updateRegen(dt);
+    this.updatePoison(dt);
 
     // ── 이동 입력
     let ix = Input.axisX(), iy = Input.axisY();
@@ -555,6 +557,7 @@ class Player {
   reviveAt(x, y) {
     this.dead = false;
     this.deadTimer = 0;
+    this.poison = null;
     this.hp = this.maxHp;
     this.sinceCombat = 0;
     this.x = x; this.y = y;
@@ -629,6 +632,31 @@ class Player {
     return !this.dead && this.sinceCombat >= CONFIG.player.regenDelay && this.hp < this.maxHp;
   }
 
+  /* 독 — 전갈에게 찔리면 걸린다. 무적 시간과 무관하게 tick 초마다 dmg 만큼 깎이되 1 아래로는 안 내려간다
+     (독만으로 죽지는 않는다). 걸려 있는 동안 자연 회복은 멈춘다. 다시 찔리면 시간이 새로 시작된다. */
+  applyPoison(dmg, time, tick) {
+    this.poison = { time: time, tick: tick, dmg: dmg, next: tick };
+    FX.number(this.x, this.y - 22, 'POISONED', '#7dff8a');
+  }
+
+  updatePoison(dt) {
+    const p = this.poison;
+    if (!p || this.dead) return;
+    p.time -= dt;
+    p.next -= dt;
+    this.sinceCombat = 0;
+    if (p.next <= 0) {
+      p.next = p.tick;
+      const hit = Math.min(p.dmg, Math.max(0, this.hp - 1));
+      if (hit > 0) {
+        this.hp -= hit;
+        FX.number(this.x + Util.rand(-6, 6), this.y - 12, '-' + hit, '#7dff8a');
+      }
+      FX.burst(this.x, this.y - 4, 3, ['#7dff8a', '#3fa347'], { speed: 12, life: 0.5, gravity: -30, size: 1 });
+    }
+    if (p.time <= 0) this.poison = null;
+  }
+
   // 포션 한 개가 채우는 양 — 최대 체력의 30%, 최소 30
   potionHeal() {
     const cfg = CONFIG.items;
@@ -665,7 +693,7 @@ class Player {
     growing = !!growing;
     // 성장하는 무기는 주운 순간부터 내 레벨을 그대로 따라간다
     level = growing ? this.level : level;
-    level = Util.clamp(Math.round(level || 1), 1, growing ? CONFIG.weapons.levelMult.length : LEVEL_MAX);
+    level = Util.clamp(Math.round(level || 1), 1, CONFIG.weapons.levelMult.length);   // 사막 무기는 23을 넘는다
     if (this.weapon === id && this.weaponLevel === level && this.weaponGrowing === growing) return 'same';
     this.weapon = id;
     this.weaponLevel = level;

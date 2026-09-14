@@ -143,7 +143,7 @@ html, body {
 }
 
 </style>
-<!-- built 2026-09-14 12:51 by tools/build.js -->
+<!-- built 2026-09-14 13:36 by tools/build.js -->
 </head>
 <body>
   <div id="stage">
@@ -158,7 +158,7 @@ html, body {
     <span><b>R</b> 무기 스킬 2 <span style="opacity:.6">Lv20</span></span>
     <span><b>E</b> 포션</span>
     <span><b>I</b> 인벤토리 <span style="opacity:.6">Space 사용 · X 버리기</span></span>
-    <span><b>F</b> 무기 줍기 / 동굴 / 상점</span>
+    <span><b>F</b> 무기 줍기 / 동굴 / 상점 / 텔레포트 비석</span>
     <span><b>M</b> 지도</span>
     <span><b>V</b> 소리</span>
     <span><b>N</b> 새 게임</span>
@@ -174,13 +174,14 @@ html, body {
 // 몬스터의 최대 레벨 (바닥에 떨어지는 무기도 잡은 몬스터 레벨을 따르므로 여기까지)
 const LEVEL_MAX = 23;
 /* 무기 레벨 표의 끝. 보스가 주는 '성장하는 무기'는 플레이어 레벨을 그대로 따라가므로
-   23을 넘어 계속 세져야 한다 — 그게 그 무기의 존재 이유다. 일반 드랍은 여전히 23이 끝이다. */
+   23을 넘어 계속 세져야 한다. 사막 몬스터(24~40)가 떨구는 무기도 자기 레벨을 그대로 따른다. */
 const WEAPON_LEVEL_MAX = 60;
 
-/* 23단계나 되는 레벨을 색 5등급으로 묶는다.
+/* 레벨을 색 등급으로 묶는다.
    레벨 숫자를 읽지 않아도 색만 보고 위험도를 가늠할 수 있게 하기 위한 것이다.
-   (1~4 초록 / 5~8 청록 / 9~13 파랑 / 14~18 보라 / 19~23 빨강) */
-const LEVEL_TIER_BREAKS = [4, 8, 13, 18];
+   (1~4 초록 / 5~8 청록 / 9~13 파랑 / 14~18 보라 / 19~23 빨강 — 숲)
+   (24~29 호박 / 30~35 은빛 / 36~ 흑요석 — 사막) */
+const LEVEL_TIER_BREAKS = [4, 8, 13, 18, 23, 29, 35];
 function levelTier(level) {
   for (let i = 0; i < LEVEL_TIER_BREAKS.length; i++) {
     if (level <= LEVEL_TIER_BREAKS[i]) return i;
@@ -219,19 +220,25 @@ function buildLevels(base, growth, extra) {
    전에는 같은 레벨 슬라임에게 20번을 맞아야 죽어서 위협이 없었다.
    목표는 '같은 레벨 슬라임 기준 1레벨 12번 -> 12레벨 11번 -> 23레벨 7번' —
    초반은 여유 있게 배우고, 깊이 갈수록 둘러싸이면 정말 위험해지도록. */
-/* 표(1~23) 밖의 레벨이 필요할 때 — 보스는 몬스터 상한보다 높은 레벨을 쓸 수 있다.
-   23레벨 값에서 같은 증가율로 더 늘려 잡는다. */
+/* 표(1~23) 밖의 레벨이 필요할 때 — 사막 몬스터(24~40)와 늙은 버섯(30)이 쓴다.
+   23레벨 값에서 더 완만한 증가율(ENEMY_GROWTH_HIGH)로 늘려 잡는다.
+   숲의 증가율을 그대로 쓰면 지수 곡선이 플레이어의 직선 성장을 앞질러
+   40레벨에서는 세 대에 죽고 열두 대를 때려야 했다 — 완만하게 잡으면 다섯 대 / 일곱 대 정도가 된다. */
 function enemyStatsAt(levels, level) {
   if (level <= levels.length) return levels[level - 1];
   const top = levels[levels.length - 1], k = level - levels.length;
   const s = Object.assign({}, top);
   for (const key in ENEMY_GROWTH) {
     if (top[key] === undefined) continue;
-    const v = top[key] * Math.pow(ENEMY_GROWTH[key], k);
+    const g = ENEMY_GROWTH_HIGH[key] === undefined ? ENEMY_GROWTH[key] : ENEMY_GROWTH_HIGH[key];
+    const v = top[key] * Math.pow(g, k);
     s[key] = key === 'scale' ? +v.toFixed(3) : Math.max(1, Math.round(v));
   }
   return s;
 }
+
+// 23레벨 너머의 증가율 (사막) — 체력 +7.5%, 공격 +5.5%, 경험치 +8%
+const ENEMY_GROWTH_HIGH = { hp: 1.075, atk: 1.055, xp: 1.08, scale: 1.01 };
 
 const ENEMY_GROWTH = {
   hp: 1.115,
@@ -259,6 +266,8 @@ const CONFIG = {
   world: {
     waterLevel: 0.86,      // 연못 — 너무 낮추면 맵이 물로 갈라진다
     shoreLevel: 0.80,      // 연못 둘레 모래사장
+    oasisLevel: 0.90,      // 사막의 오아시스 (더 드물다)
+    oasisGrassLevel: 0.85, // 오아시스 둘레 풀밭
     clearingLevel: 0.24,   // 흙바닥 공터
     meadowLevel: 0.71,     // 꽃밭
     treeLevel: 0.42,       // 이 값을 넘는 곳부터 나무가 자란다 (낮출수록 숲이 빽빽해진다)
@@ -436,7 +445,7 @@ const CONFIG = {
       return a;
     })(),
     // 칼날 색 — 레벨이 아니라 색 등급(levelTier)으로 고른다
-    levelColor: ['#c8d0d8', '#8fe0a8', '#7ec8ff', '#c79ce8', '#ffb35c'],
+    levelColor: ['#c8d0d8', '#8fe0a8', '#7ec8ff', '#c79ce8', '#ffb35c', '#ffb08a', '#f0f4f8', '#b48fd8'],
     // 성장하는 무기(보스 보상)는 등급색 대신 이 금색으로 표시해 한눈에 구별한다
     growColor: '#ffd93d',
     /* 성장하는 무기의 이름 — 어느 보스가 떨구느냐에 따라 다르다.
@@ -458,6 +467,9 @@ const CONFIG = {
       slime: 'dagger',
       wolf: 'sword',
       mushroom: 'axe',
+      scorpion: 'dagger',
+      cactus: 'axe',
+      sandworm: 'sword',
     },
     // 떨어지는 무기의 레벨은 잡은 몬스터의 레벨과 같다.
     weaponLifetime: 60,      // 바닥 무기가 사라지기까지 (초)
@@ -483,50 +495,108 @@ const CONFIG = {
     respawnMin: 2.5,        // 죽은 뒤 다시 등장하기까지 (초)
     respawnMax: 6.0,
     minDistFromPlayer: 78,  // 플레이어 코앞에 튀어나오지 않도록
-    // 어떤 몬스터가 몇 레벨로 나올지는 그 자리의 "위험도"(시작점에서의 거리)가 정한다 (CONFIG.forest)
+    // 어떤 몬스터가 몇 레벨로 나올지는 그 자리의 "위험도"(시작점에서의 거리)가 정한다 (CONFIG.maps)
   },
 
-  /* ── 태초의 숲 — 맵 하나가 통째로 한 숲이다 ────────────────
-     예전에는 세 지역(가장자리 / 깊은 숲 / 포자 골짜기)으로 나눴지만, 이제는 경계 없이
-     "시작점에서 얼마나 멀리 왔는가"(위험도 t, 0~1)가 모든 것을 정한다.
-       - 몬스터 레벨: 가운데 1레벨에서 가장자리 23레벨까지 서서히 오른다
-       - 몬스터 종류: 가까운 곳은 슬라임, 중간은 늑대, 먼 곳은 버섯이 많다 (섞여 나온다)
-       - 나무: 멀수록 침엽수·고사목이 늘고 숲이 빽빽해진다
-       - 보스 동굴 셋: 위험도 고리 위에 하나씩, 방향은 120도씩 벌려 세운다
+  /* ── 맵 — 지금은 둘: 태초의 숲과 작열하는 사막 (텔레포트 비석으로 오간다) ────
+     두 맵은 크기가 같고 같은 뼈대로 만든다. 지역 경계 대신 "시작점에서 얼마나 멀리 왔는가"
+     (위험도 t, 0~1)가 몬스터 레벨·종류, 초목, 소품을 정한다.
+       - 몬스터 레벨: 가운데 levelRange[0] 에서 가장자리 levelRange[1] 까지 서서히 오른다
+       - 몬스터 종류: typeWeights 세 지점(t = 0 / 0.5 / 1)의 값을 사이사이 보간한다
+       - 초목: 멀수록 빽빽해지고 종류가 바뀐다
+       - 동굴(보스): 위험도 고리 위에 하나씩, 방향은 120도씩 벌려 세운다
      위험도는 맵 모양을 따르는 둥근 사각형 거리(4제곱 노름)라 가장자리 어디서나 1에 닿는다. */
-  forest: {
-    name: 'PRIMEVAL FOREST',     // 태초의 숲 (도트 폰트가 영문 대문자뿐이라 영문으로 띄운다)
-    color: '#9be564',
-    wobble: 0.10,                // 위험도 고리를 울퉁불퉁하게 흔드는 정도
+  maps: {
+    forest: {
+      id: 'forest', theme: 'forest',
+      name: 'PRIMEVAL FOREST',     // 태초의 숲 (도트 폰트가 영문 대문자뿐이라 영문으로 띄운다)
+      color: '#9be564',
+      wobble: 0.10,                // 위험도 고리를 울퉁불퉁하게 흔드는 정도
 
-    // 몬스터 레벨 곡선 — t 가 safeRadius 안이면 1, 거기서부터 가장자리(1.0)까지 curve 승으로 오른다.
-    // 지수가 1보다 크면 낮은 레벨 구간이 넓어진다 (t=0.5 에서 약 7레벨, 0.7 에서 12, 0.85 에서 17)
-    safeRadius: 0.12,
-    curve: 1.6,
-    levelSpread: 2,              // 그 자리 기준 레벨에서 ±이만큼 흔들린다
+      // 몬스터 레벨 곡선 — t 가 safeRadius 안이면 최소, 거기서부터 가장자리(1.0)까지 curve 승으로 오른다.
+      // 지수가 1보다 크면 낮은 레벨 구간이 넓어진다 (t=0.5 에서 약 7레벨, 0.7 에서 12, 0.85 에서 17)
+      levelRange: [1, 23],
+      safeRadius: 0.12,
+      curve: 1.6,
+      levelSpread: 2,              // 그 자리 기준 레벨에서 ±이만큼 흔들린다
 
-    // 몬스터 종류 가중치 — t = 0 / 0.5 / 1 지점의 값을 사이사이 보간한다
-    typeWeights: [
-      { slime: 70, wolf: 20, mushroom: 10 },   // 시작 부근 — 약한 슬라임 위주라 처음 몇 분이 안전하다
-      { wolf: 60, slime: 25, mushroom: 15 },   // 중간 — 늑대가 많다. 돌진을 피하며 싸우는 구간
-      { mushroom: 55, wolf: 30, slime: 15 },   // 가장자리 — 버섯이 지천. 포자를 피해 다니는 구간
-    ],
+      typeWeights: [
+        { slime: 70, wolf: 20, mushroom: 10 },   // 시작 부근 — 약한 슬라임 위주라 처음 몇 분이 안전하다
+        { wolf: 60, slime: 25, mushroom: 15 },   // 중간 — 늑대가 많다. 돌진을 피하며 싸우는 구간
+        { mushroom: 55, wolf: 30, slime: 15 },   // 가장자리 — 버섯이 지천. 포자를 피해 다니는 구간
+      ],
 
-    // 나무·소품 — [t=0 값, t=1 값] 사이를 보간
-    treeDensity: [1.0, 1.5],
-    pineChance: [0.10, 0.55],
-    deadChance: [0.03, 0.20],
-    boulders: [1.0, 2.2],
-    shadeLevel: 0.60,            // 개방도 노이즈가 이보다 높은 빽빽한 숲 바닥은 그늘진 잔디로 그린다
+      // 초목·소품 — [t=0 값, t=1 값] 사이를 보간
+      treeDensity: [1.0, 1.5],
+      pineChance: [0.10, 0.55],    // 침엽수 비율
+      deadChance: [0.03, 0.20],    // 고사목 비율
+      boulders: [1.0, 2.2],
+      shadeLevel: 0.60,            // 개방도 노이즈가 이보다 높은 빽빽한 숲 바닥은 그늘진 잔디로 그린다
 
-    // 보스 동굴 — 위험도 고리(t)마다 하나. 가까운 것부터 슬라임 -> 늑대 -> 버섯
-    caves: [
-      { boss: 'slime', t: 0.38 },
-      { boss: 'wolf', t: 0.68 },
-      { boss: 'mushroom', t: 0.93 },
-    ],
+      // 보스 동굴 — 위험도 고리(t)마다 하나. 가까운 것부터 슬라임 -> 늑대 -> 버섯
+      caves: [
+        { boss: 'slime', t: 0.38 },
+        { boss: 'wolf', t: 0.68 },
+        { boss: 'mushroom', t: 0.93 },
+      ],
 
-    bgm: [0.40, 0.75],           // 위험도가 이 경계를 넘으면 배경음이 forest -> deep -> cave 로 바뀐다
+      bgm: { edges: [0.40, 0.75], tracks: ['forest', 'deep', 'cave'] },   // 위험도가 경계를 넘으면 곡이 바뀐다
+      // 미니맵 색 — [볕 드는 바닥, 그늘진 바닥] x [풀, 흙, 모래, 물, 꽃밭], 나무 점
+      minimap: {
+        tiles: [
+          [[63, 139, 64], [125, 95, 60], [194, 168, 119], [47, 111, 158], [86, 163, 90]],
+          [[44, 100, 49], [110, 84, 53], [194, 168, 119], [47, 111, 158], [52, 112, 57]],
+        ],
+        tree: ['#1f5a2a', '#173f1f'],
+      },
+      portalTo: 'desert',          // 이 맵의 텔레포트 비석이 이어지는 곳
+    },
+
+    /* 작열하는 사막 — 숲 다음 무대. 텔레포트 비석으로만 오갈 수 있다.
+       숲(1~23)보다 센 24~40레벨 몬스터가 나오고, 종류도 셋 다 새것이다.
+         전갈    쫓아와서 꼬리로 찌른다. 찔리면 잠시 독이 오른다
+         선인장  제자리에서 사방으로 가시를 쏜다 (버섯과 달리 조준하지 않고 고리로 퍼진다)
+         모래벌레 땅속을 파고 다가와 발밑에서 솟구친다. 땅속에 있을 땐 때릴 수 없다
+       바닥은 모래, 물기가 많은 곳만 오아시스(물 + 풀), 개방도가 낮은 곳은 갈라진 땅. */
+    desert: {
+      id: 'desert', theme: 'desert',
+      name: 'SCORCHED SANDS',      // 작열하는 사막
+      color: '#ffb35c',
+      wobble: 0.10,
+
+      levelRange: [24, 40],
+      safeRadius: 0.10,
+      curve: 1.3,
+      levelSpread: 2,
+
+      typeWeights: [
+        { scorpion: 65, cactus: 25, sandworm: 10 },   // 비석 근처 — 전갈 위주
+        { cactus: 40, scorpion: 35, sandworm: 25 },   // 중간 — 선인장 가시밭
+        { sandworm: 45, scorpion: 30, cactus: 25 },   // 가장자리 — 모래벌레가 우글거린다
+      ],
+
+      treeDensity: [0.55, 1.0],    // 선인장·바위기둥 (숲보다 성기다)
+      pineChance: [0.15, 0.45],    // 여기서는 '바위기둥' 비율
+      deadChance: [0.05, 0.15],    // 고사목 비율
+      boulders: [1.6, 3.0],
+      shadeLevel: 2,               // 그늘 없음 (사막은 늘 볕이 든다)
+
+      caves: [],                   // 사막 보스는 아직 없다
+
+      bgm: { edges: [0.55, 2], tracks: ['desert', 'cave', 'cave'] },
+      minimap: {
+        tiles: [
+          [[63, 139, 64], [154, 107, 60], [217, 194, 127], [47, 111, 158], [224, 204, 138]],   // 오아시스 풀, 갈라진 땅, 모래, 물, 모래언덕
+        ],
+        tree: ['#2f7a3a'],
+      },
+      portalTo: 'forest',
+    },
+  },
+
+  // 텔레포트 비석 — 맵마다 시작점 옆에 하나. 앞에서 F 를 누르면 다른 맵의 비석 앞으로 옮겨간다
+  portal: {
+    interactRange: 26,
   },
 
   slime: {
@@ -575,6 +645,57 @@ const CONFIG = {
     lungeTime: 0.30,        // 돌진이 이어지는 시간
     recover: 0.55,          // 돌진 뒤 빈틈 — 이때가 때리기 좋다
     contactCooldown: 0.9,
+  },
+
+  /* ── 사막 몬스터 셋 ──────────────────────────────────────
+     레벨 표는 1~23까지 만들지만 사막에서는 24~40으로 나오므로 enemyStatsAt 이 표 끝에서
+     완만한 증가율(ENEMY_GROWTH_HIGH)로 늘려 잡는다. 시작값은 숲 몬스터와 같은 척도다. */
+
+  // 전갈 — 늑대처럼 쫓아오지만 돌진 대신 짧게 찌른다. 찔리면 독이 올라 몇 초간 체력이 조금씩 준다
+  scorpion: {
+    levels: buildLevels(
+      { hp: 36, atk: 7, speed: 30, detect: 92, scale: 0.9, xp: 8, knockback: 56 },
+      ENEMY_GROWTH
+    ),
+    stingRange: 24,         // 이 거리 안이면 찌를 준비
+    windup: 0.38,           // 꼬리를 치켜드는 예고
+    stingTime: 0.16,        // 찌르며 앞으로 나가는 시간
+    stingSpeed: 150,
+    recover: 0.5,
+    contactCooldown: 0.9,
+    poison: { time: 4, tick: 0.5, ratio: 0.2 },   // 4초 동안 0.5초마다 공격력의 20%
+  },
+
+  // 선인장 — 뿌리내린 채 사방으로 가시를 쏜다. 조준하지 않는 대신 고리로 퍼져서 틈새로 피해야 한다
+  cactus: {
+    levels: buildLevels(
+      { hp: 48, atk: 6, detect: 96, scale: 0.9, xp: 9, knockback: 20 },
+      ENEMY_GROWTH,
+      (lv) => ({ interval: +(3.0 - (lv - 1) / (LEVEL_MAX - 1) * 0.8).toFixed(2) })
+    ),
+    needles: 8,             // 한 번에 쏘는 가시 수 (고리)
+    windup: 0.5,
+    needleSpeed: 88,
+    needleLife: 1.5,
+    contactCooldown: 1.0,
+    thornMult: 0.8,         // 몸에 닿으면 가시 피해
+  },
+
+  // 모래벌레 — 땅속(모래 언덕)으로 다가와 발밑에서 솟구친다. 땅속에선 안 맞고, 솟은 뒤 잠깐이 때릴 틈
+  sandworm: {
+    levels: buildLevels(
+      { hp: 60, atk: 9, speed: 40, detect: 130, scale: 1.0, xp: 12, knockback: 30 },
+      ENEMY_GROWTH
+    ),
+    riseRange: 18,          // 이 거리 안이면 솟구칠 준비
+    chaseMax: 5,            // 땅속에서 이만큼 쫓으면 못 잡아도 솟구친다 (영원히 따라다니지 않게)
+    windup: 0.55,           // 땅이 들썩이는 예고 — 이때 비켜야 한다
+    eruptRadius: 20,        // 솟구칠 때 피해 범위
+    eruptMult: 1.4,
+    surfaced: 2.4,          // 밖에 나와 있는 시간 (이때 때린다)
+    surfaceSpeed: 14,       // 밖에서는 아주 느리게 기어온다
+    burrowTime: 0.4,
+    contactCooldown: 1.0,
   },
 
   /* ── 보스 방 (모든 보스 공통) ─────────────────────────────
@@ -732,7 +853,7 @@ const CONFIG = {
 
   items: {
     // 2주차: 슬라임이 떨구는 건 회복 포션 한 종류. 레벨이 높을수록 잘 나온다
-    potionDropChance: [0.10, 0.13, 0.17, 0.22, 0.30], // 색 등급별 드랍 확률
+    potionDropChance: [0.10, 0.13, 0.17, 0.22, 0.30, 0.32, 0.34, 0.36], // 색 등급별 드랍 확률 (사막 등급 셋 포함)
     potionDoubleChance: 0.25, // 높은 등급이 2개를 떨굴 확률
     /* 포션 1개 회복량 — 최대 체력의 비율로 잰다 (최소 30).
        11주차 밸런싱: 고정 30이면 23레벨(체력 236)에서는 13%밖에 안 채워 쓸모가 없었다 */
@@ -750,7 +871,7 @@ const CONFIG = {
      (줍는 수고를 없앤 대신 확정 지급이고, 양은 그만큼 살짝 낮췄다)
      양은 레벨이 아니라 색 등급(5단계)으로 정해서, 멀리 나갈수록 벌이가 좋다. */
   gold: {
-    amountByTier: [2, 5, 8, 13, 20],    // 등급별 기본량 (1~4 / 5~8 / 9~13 / 14~18 / 19~23)
+    amountByTier: [2, 5, 8, 13, 20, 28, 38, 50],    // 등급별 기본량 (1~4 / 5~8 / 9~13 / 14~18 / 19~23 / 사막 24~29 / 30~35 / 36~)
     variance: 0.35,                     // 기본량의 ±35% 사이에서 흔들린다
     bossMult: 12,                       // 보스는 자기 등급 기본량의 12배
     color: '#ffe066',
@@ -787,12 +908,15 @@ const CONFIG = {
      양은 색 등급이 정한다 (1~4레벨 1개 … 19~23레벨 3개). 보스는 자기 전리품을 하나 확정으로 준다. */
   loot: {
     dropChance: 0.20,
-    amountByTier: [1, 1, 2, 2, 3],
-    byType: { slime: 'gel', wolf: 'fang', mushroom: 'cap' },
+    amountByTier: [1, 1, 2, 2, 3, 3, 4, 4],
+    byType: { slime: 'gel', wolf: 'fang', mushroom: 'cap', scorpion: 'stinger', cactus: 'cactusFruit', sandworm: 'wormScale' },
     items: {
       gel:        { name: 'SLIME GEL',   value: 4,   color: '#8fe098' },
       fang:       { name: 'WOLF FANG',   value: 6,   color: '#e9f1f7' },
       cap:        { name: 'SPORE CAP',   value: 5,   color: '#e08a4f' },
+      stinger:    { name: 'STINGER',     value: 12,  color: '#ffd27a' },   // 사막
+      cactusFruit:{ name: 'CACTUS FRUIT', value: 10, color: '#e56b7a' },
+      wormScale:  { name: 'WORM SCALE',  value: 15,  color: '#c9bb9c' },
       slimeCore:  { name: 'SLIME CORE',  value: 150, color: '#7ec8ff', trophy: true },
       alphaFang:  { name: 'ALPHA FANG',  value: 250, color: '#ff6b6b', trophy: true },
       elderSpore: { name: 'ELDER SPORE', value: 400, color: '#c79ce8', trophy: true },
@@ -1214,6 +1338,9 @@ const LEVEL_PALETTES = [
   { m: '#1e3a72', M: '#3f6ec9', n: '#93b7ff' },  // Lv3 파랑
   { m: '#4a2170', M: '#8a45c9', n: '#d3a2ff' },  // Lv4 보라
   { m: '#6e1c1c', M: '#c93f3f', n: '#ffa08f' },  // Lv5 빨강
+  { m: '#7a4a10', M: '#d98a2b', n: '#ffd27a' },  // 사막 24~29 호박
+  { m: '#5a6470', M: '#a9b4c0', n: '#f0f4f8' },  // 사막 30~35 은빛
+  { m: '#1a1220', M: '#4a3760', n: '#b48fd8' },  // 사막 36~   흑요석
 ];
 
 /* ── 절차적 생성 스프라이트 ────────────────────────────────── */
@@ -1267,15 +1394,16 @@ function makeTree(seed) {
   return cv;
 }
 
-function makeBush(seed) {
+function makeBush(seed, pal) {
+  pal = pal || { out: '#0e2f16', dark: '#22622c', mid: '#34873c', lit: '#49a750', shade: '#1a4a22' };
   const cv = makeCanvas(18, 15), ctx = cv.getContext('2d');
   const rng = Util.makeRng(seed);
   const blobs = [[6, 9, 5], [12, 9, 5], [9, 7, 5]];
-  for (const b of blobs) fillCircle(ctx, b[0], b[1], b[2] + 1, '#0e2f16');
-  for (const b of blobs) fillCircle(ctx, b[0], b[1], b[2], '#22622c');
-  for (const b of blobs) fillCircle(ctx, b[0] - 1, b[1] - 2, b[2] - 2, '#34873c');
+  for (const b of blobs) fillCircle(ctx, b[0], b[1], b[2] + 1, pal.out);
+  for (const b of blobs) fillCircle(ctx, b[0], b[1], b[2], pal.dark);
+  for (const b of blobs) fillCircle(ctx, b[0] - 1, b[1] - 2, b[2] - 2, pal.mid);
   for (let i = 0; i < 14; i++) {
-    ctx.fillStyle = rng() < 0.5 ? '#49a750' : '#1a4a22';
+    ctx.fillStyle = rng() < 0.5 ? pal.lit : pal.shade;
     ctx.fillRect(2 + Math.floor(rng() * 14), 3 + Math.floor(rng() * 9), 1, 1);
   }
   return cv;
@@ -1512,6 +1640,164 @@ function makeBoulder(seed) {
   return cv;
 }
 
+/* ── 사막 바닥·소품 ───────────────────────────────────────── */
+
+// 사막 모래 — 물가 모래보다 따뜻하고 밝다
+function makeDesertSandTile(seed) {
+  return makeNoiseTile(seed, '#d9c27f', '#c9b06e', '#e6d191');
+}
+
+// 모래언덕 — 바람결 무늬가 진 밝은 모래 (꽃밭 자리에 쓴다)
+function makeDuneTile(seed) {
+  const cv = makeNoiseTile(seed, '#e0cc8a', '#d1bb79', '#ecd99c');
+  const ctx = cv.getContext('2d');
+  const rng = Util.makeRng(seed + 17);
+  for (let i = 0; i < 3; i++) {
+    const x = Math.floor(rng() * 8), y = 2 + Math.floor(rng() * 12);
+    ctx.fillStyle = '#c4aa66';
+    ctx.fillRect(x, y, 4, 1);
+    ctx.fillRect(x + 4, y + 1, 4, 1);
+  }
+  return cv;
+}
+
+// 갈라진 땅 — 마른 진흙. 숲의 흙 자리(공터·길)에 쓴다
+function makeCrackedTile(seed) {
+  const cv = makeNoiseTile(seed, '#9a6b3c', '#8a5e33', '#a97a47');
+  const ctx = cv.getContext('2d');
+  const rng = Util.makeRng(seed + 23);
+  for (let i = 0; i < 3; i++) {   // 갈라진 금
+    let x = Math.floor(rng() * 14), y = Math.floor(rng() * 14);
+    ctx.fillStyle = '#6a4424';
+    for (let k = 0; k < 4; k++) {
+      ctx.fillRect(x, y, 1, 1);
+      x += rng() < 0.5 ? 1 : 0; y += rng() < 0.6 ? 1 : 0;
+      if (x > 15 || y > 15) break;
+    }
+  }
+  return cv;
+}
+
+// 기둥 선인장 (22x40) — 몸통 하나에 팔 둘. 나무 자리에 선다 (부딪힌다)
+function makeCactus(seed) {
+  const cv = makeCanvas(22, 40), ctx = cv.getContext('2d');
+  const rng = Util.makeRng(seed);
+  const OUT = '#12330f', DARK = '#2a6a2a', MID = '#3f9040', LIT = '#5ab05a';
+  const col = (x, y0, y1, w) => {   // 위가 둥근 세로 기둥
+    ctx.fillStyle = OUT; ctx.fillRect(x - 1, y0 - 1, w + 2, y1 - y0 + 2);
+    ctx.fillStyle = DARK; ctx.fillRect(x, y0, w, y1 - y0);
+    ctx.fillStyle = MID; ctx.fillRect(x + 1, y0, w - 2, y1 - y0);
+    ctx.fillStyle = LIT; ctx.fillRect(x + 1, y0 + 1, 1, y1 - y0 - 2);
+    ctx.fillStyle = OUT; ctx.fillRect(x - 1, y0 - 1, 1, 1); ctx.fillRect(x + w, y0 - 1, 1, 1);
+    ctx.fillStyle = MID; ctx.fillRect(x, y0 - 1, w, 1);
+  };
+  const armL = 5 + Math.floor(rng() * 4), armR = 6 + Math.floor(rng() * 4);
+  col(3, 22 - armL, 27, 4);  ctx.fillStyle = OUT; ctx.fillRect(7, 24, 1, 4); ctx.fillStyle = DARK; ctx.fillRect(7, 25, 2, 2);   // 왼팔
+  col(15, 20 - armR, 26, 4); ctx.fillStyle = OUT; ctx.fillRect(14, 23, 1, 4); ctx.fillStyle = DARK; ctx.fillRect(13, 24, 2, 2);  // 오른팔
+  col(8, 6, 39, 6);          // 몸통
+  // 가시 — 밝은 점을 세로로 띄엄띄엄
+  for (let i = 0; i < 26; i++) {
+    const x = Math.floor(rng() * 22), y = Math.floor(rng() * 38);
+    const px = ctx.getImageData(x, y, 1, 1).data;
+    if (px[3] === 0) continue;
+    ctx.fillStyle = rng() < 0.5 ? '#d8e8b0' : '#1e4d1e';
+    ctx.fillRect(x, y, 1, 1);
+  }
+  // 꽃 하나 (가끔)
+  if (rng() < 0.5) { ctx.fillStyle = '#e56b7a'; ctx.fillRect(10, 4, 2, 2); ctx.fillStyle = '#ffd0d8'; ctx.fillRect(10, 4, 1, 1); }
+  return cv;
+}
+
+// 공 선인장 (14x13) — 낮고 둥글다. 그루터기 자리에 선다 (부딪힌다)
+function makeBarrelCactus(seed) {
+  const cv = makeCanvas(14, 13), ctx = cv.getContext('2d');
+  const rng = Util.makeRng(seed);
+  fillCircle(ctx, 7, 7, 6, '#12330f');
+  fillCircle(ctx, 7, 7, 5, '#2a6a2a');
+  fillCircle(ctx, 6, 6, 3.5, '#3f9040');
+  ctx.fillStyle = '#2a6a2a';
+  for (let x = 3; x <= 11; x += 2) ctx.fillRect(x, 3, 1, 8);   // 세로 골
+  for (let i = 0; i < 10; i++) { ctx.fillStyle = '#d8e8b0'; ctx.fillRect(2 + Math.floor(rng() * 10), 2 + Math.floor(rng() * 9), 1, 1); }
+  ctx.fillStyle = '#e56b7a'; ctx.fillRect(6, 1, 2, 2); ctx.fillStyle = '#ffd0d8'; ctx.fillRect(6, 1, 1, 1);
+  return cv;
+}
+
+// 야자수 (30x44) — 오아시스 둘레. 휘어진 줄기 위에 잎이 사방으로 늘어진다
+function makePalm(seed) {
+  const cv = makeCanvas(30, 44), ctx = cv.getContext('2d');
+  const rng = Util.makeRng(seed);
+  const lean = rng() < 0.5 ? -1 : 1;
+  // 줄기 — 아래에서 위로 살짝 휜다
+  for (let y = 43; y >= 12; y--) {
+    const t = (43 - y) / 31;
+    const x = 14 + Math.round(lean * t * t * 5);
+    ctx.fillStyle = '#4a3018'; ctx.fillRect(x - 1, y, 5, 1);
+    ctx.fillStyle = (y % 3 === 0) ? '#8a6a3a' : '#6e4e2a'; ctx.fillRect(x, y, 3, 1);
+  }
+  const cx = 14 + lean * 5, cy = 12;
+  // 잎 — 여덟 방향으로 늘어지는 선
+  const OUT = '#12330f', LEAF = '#3f9040', LIT = '#6bb35b';
+  for (let i = 0; i < 8; i++) {
+    const a = -Math.PI * 0.9 + (i / 7) * Math.PI * 0.8 * 2;
+    const len = 9 + Math.floor(rng() * 4);
+    for (let k = 0; k < len; k++) {
+      const droop = k * k * 0.06;
+      const x = Math.round(cx + Math.cos(a) * k), y = Math.round(cy + Math.sin(a) * k * 0.5 + droop);
+      ctx.fillStyle = OUT; ctx.fillRect(x - 1, y - 1, 3, 3);
+    }
+  }
+  for (let i = 0; i < 8; i++) {
+    const a = -Math.PI * 0.9 + (i / 7) * Math.PI * 0.8 * 2;
+    const len = 9 + Math.floor(rng() * 4);
+    for (let k = 0; k < len; k++) {
+      const droop = k * k * 0.06;
+      const x = Math.round(cx + Math.cos(a) * k), y = Math.round(cy + Math.sin(a) * k * 0.5 + droop);
+      ctx.fillStyle = k % 2 ? LEAF : LIT; ctx.fillRect(x, y, 1, 1);
+    }
+  }
+  ctx.fillStyle = '#6e4e2a'; ctx.fillRect(cx - 1, cy - 1, 3, 3);   // 잎 뿌리
+  // 열매
+  ctx.fillStyle = '#c96a3a'; ctx.fillRect(cx - 2, cy + 2, 2, 2); ctx.fillRect(cx + 1, cy + 3, 2, 2);
+  return cv;
+}
+
+// 바위기둥 (22x34) — 사막의 침엽수 자리. 맵 가장자리 담장으로도 쓴다 (부딪힌다)
+function makeRockSpire(seed) {
+  const cv = makeCanvas(22, 34), ctx = cv.getContext('2d');
+  const rng = Util.makeRng(seed);
+  const OUT = '#3a2a1a', DARK = '#8a6a44', MID = '#b08a5a', LIT = '#d0aa74';
+  const topX = 8 + Math.floor(rng() * 6);
+  for (let y = 2; y < 33; y++) {
+    const t = (y - 2) / 31;
+    const half = 1 + Math.round(t * 8 + (rng() - 0.5) * 1.5);
+    const cx = Math.round(topX + (11 - topX) * t);
+    ctx.fillStyle = OUT; ctx.fillRect(cx - half - 1, y, half * 2 + 3, 1);
+    ctx.fillStyle = y < 6 ? LIT : DARK; ctx.fillRect(cx - half, y, half * 2 + 1, 1);
+    ctx.fillStyle = MID; ctx.fillRect(cx - half, y, Math.max(1, half), 1);
+    if (rng() < 0.3) { ctx.fillStyle = LIT; ctx.fillRect(cx - half + 1, y, 1, 1); }
+  }
+  ctx.fillStyle = OUT; ctx.fillRect(1, 33, 20, 1);
+  return cv;
+}
+
+// 뼈 (16x9) — 해골과 갈비. 지나갈 수 있는 장식
+function makeBones(seed) {
+  const cv = makeCanvas(16, 9), ctx = cv.getContext('2d');
+  const rng = Util.makeRng(seed);
+  const OUT = '#6a5a44', BONE = '#efe6d0', DARK = '#c9bb9c';
+  fillCircle(ctx, 4, 4, 3.5, OUT); fillCircle(ctx, 4, 4, 2.5, BONE);
+  ctx.fillStyle = OUT; ctx.fillRect(3, 4, 1, 1); ctx.fillRect(5, 4, 1, 1);   // 눈구멍
+  ctx.fillStyle = DARK; ctx.fillRect(3, 6, 3, 1);
+  for (let i = 0; i < 4; i++) {   // 갈비
+    const x = 8 + i * 2;
+    ctx.fillStyle = OUT; ctx.fillRect(x, 2 + (i % 2), 1, 5);
+    ctx.fillStyle = BONE; ctx.fillRect(x, 3 + (i % 2), 1, 3);
+  }
+  ctx.fillStyle = OUT; ctx.fillRect(8, 1, 8, 1); ctx.fillStyle = BONE; ctx.fillRect(9, 1, 6, 1);
+  if (rng() < 0.5) { ctx.fillStyle = BONE; ctx.fillRect(12, 8, 3, 1); }
+  return cv;
+}
+
 // 버섯 (9x10) — 색만 바꿔 여러 종류를 만든다
 const MUSHROOM = [
   '..ooooo..',
@@ -1544,7 +1830,8 @@ function makeCattail(seed) {
 }
 
 // 흔들리는 풀 — 같은 시드로 3프레임을 만들어 기울기만 바꾼다
-function makeGrassTuft(seed, lean) {
+function makeGrassTuft(seed, lean, pal) {
+  pal = pal || { tip: '#63c065', dark: '#357936', mid: '#469a48' };
   const cv = makeCanvas(13, 13), ctx = cv.getContext('2d');
   const rng = Util.makeRng(seed);
   for (let i = 0; i < 7; i++) {
@@ -1554,7 +1841,7 @@ function makeGrassTuft(seed, lean) {
     for (let k = 0; k < h; k++) {
       const t = k / h;
       const x = bx + Math.round(lean * t * 2);
-      ctx.fillStyle = k > h - 3 ? '#63c065' : (dark ? '#357936' : '#469a48');
+      ctx.fillStyle = k > h - 3 ? pal.tip : (dark ? pal.dark : pal.mid);
       ctx.fillRect(x, 12 - k, 1, 1);
     }
   }
@@ -1854,6 +2141,151 @@ const LOOT_SPORE = [
   '...oooo...',
 ];
 
+/* ── 사막 몬스터 ─────────────────────────────────────────── */
+
+// 전갈 (24x14, 오른쪽을 본다). 꼬리가 등 위로 말려 올라와 침이 앞을 향한다. 다리 11~13줄은 두 프레임
+// M = 몸통, m = 마디 그늘·다리, n = 밝은면, k = 눈, S = 침
+const SCORPION_BODY = [
+  '......ooo...............',
+  '.....onnMo..............',
+  '....onMoooo.............',
+  '....oMo..oSSo...........',
+  '....oMo...oSo...........',
+  '...oMMo....o......ooo...',
+  '..oMMMoooooooooooooMMMo.',
+  '.oMMMMMMMMMMMMMMMMMMkMMo',
+  'oMMmMMmMMmMMmMMmMMMMMMMo',
+  '.ommmmmmmmmmmmmmmmmoMMMo',
+  '..ooooooooooooooooo.ooo.',
+];
+const SCORPION_LEGS = [
+  ['...mm...mm...mm...mm....', '..mm...mm...mm...mm.....', '..m....m....m....m......'],
+  ['....mm...mm...mm...mm...', '...mm...mm...mm...mm....', '...m....m....m....m.....'],
+];
+
+// 선인장 몬스터 (16x17) — 팔 둘 달린 기둥 선인장. 머리에 꽃 하나, 눈은 화났다
+const CACTUS_MOB = [
+  '......oRRo......',
+  '.....onMMMo.....',
+  '.oo..oMMMMo..oo.',
+  'onMo.oMkMkMo.oMo',
+  'oMMooMMMMMMooMMo',
+  'oMMMMMMMMMMMMMMo',
+  '.oMMMMnMMMMMMMo.',
+  '..ooMMMMMMMMoo..',
+  '....oMMnMMMMo...',
+  '....nMMMMMMMn...',
+  '....oMmMMmMMo...',
+  '....nMMMMMMMn...',
+  '....oMmMMMmMo...',
+  '....nMMMMMMMn...',
+  '....oMMMmMMMo...',
+  '.....oMMMMMo....',
+  '......ooooo.....',
+];
+
+// 모래벌레 — 땅속에서는 모래 언덕(16x8)만 보이고, 솟구치면 입을 벌린 몸통(16x21)이 선다
+const WORM_MOUND = [
+  '......oooo......',
+  '....ooDDDDoo....',
+  '..ooDDDdddDDoo..',
+  '.oDDDdddddddDDo.',
+  'oDDdddddddddddDo',
+  'oddddddddddddddo',
+  '.oooooooooooooo.',
+  '................',
+];
+const WORM_BODY = [
+  '.oo.........oo..',
+  'onMo.......onMo.',
+  '.oMMo..oo..oMMo.',
+  '..oMMooRRooMMo..',
+  '...oMMRRRRMMo...',
+  '...oMkRRRRkMo...',
+  '...oMMMRRMMMo...',
+  '...oMMMMMMMMo...',
+  '...onMMMMMMno...',
+  '...ommMMMMmmo...',
+  '...oMMMMMMMMo...',
+  '...onMMMMMMno...',
+  '...ommMMMMmmo...',
+  '...oMMMMMMMMo...',
+  '...onMMMMMMno...',
+  '...ommMMMMmmo...',
+  '...oMMMMMMMMo...',
+  '..oMMMMMMMMMMo..',
+  '.oDDMMMMMMMMDDo.',
+  'oDDDDDMMMMDDDDDo',
+  '.oooooooooooooo.',
+];
+
+// 사막 전리품 — 전갈 침 / 선인장 열매 / 벌레 비늘
+const LOOT_STINGER = [
+  '......oo',
+  '.....oSo',
+  '....oSSo',
+  '...oSSo.',
+  '..oSSo..',
+  '.oYSo...',
+  'oYYo....',
+  '.oo.....',
+];
+const LOOT_FRUIT = [
+  '...oo...',
+  '..oGGo..',
+  '.oRRRRo.',
+  'oRRnRRRo',
+  'oRRRRnRo',
+  'oRnRRRRo',
+  '.oRRRRo.',
+  '..oooo..',
+];
+const LOOT_SCALE = [
+  '...oooo...',
+  '..oDDDDo..',
+  '.oDDddDDo.',
+  'oDDddddDDo',
+  'oDDddddDDo',
+  '.oDDddDDo.',
+  '..oDDDDo..',
+  '...oooo...',
+];
+
+/* 텔레포트 비석 (18x30) — 위로 갈수록 좁아지는 돌기둥. 가운데 룬(C)이 빛나고, 두 번째 그림은 룬이 어둡다.
+   맵마다 시작점 옆에 하나씩 서 있고, 앞에서 F 를 누르면 다른 맵으로 옮겨간다. */
+const OBELISK = [
+  '........oo........',
+  '.......oGGo.......',
+  '.......oGGo.......',
+  '......oGGGGo......',
+  '......oGgGGo......',
+  '......oGgGGo......',
+  '.....oGGgGGGo.....',
+  '.....oGGgGGGo.....',
+  '.....oGGCCGGo.....',
+  '.....oGCggCGo.....',
+  '.....oGCgGCGo.....',
+  '.....oGGCCGGo.....',
+  '....oGGGgGGGGo....',
+  '....oGGGgGGGGo....',
+  '....oGGGgGGGGo....',
+  '....oGGGCGGGGo....',
+  '....oGGCgCGGGo....',
+  '....oGGGCGGGGo....',
+  '....oGGGgGGGGo....',
+  '...oGGGGgGGGGGo...',
+  '...oGGGGgGGGGGo...',
+  '...oGGGGgGGGGGo...',
+  '...oGGGGgGGGGGo...',
+  '...oGGGGgGGGGGo...',
+  '..oGGGGGGGGGGGGo..',
+  '..oGGGGGGGGGGGGo..',
+  '.oGGGGGGGGGGGGGGo.',
+  '.oBBBBBBBBBBBBBBo.',
+  '.oBBBBBBBBBBBBBBo.',
+  '..oooooooooooooo..',
+];
+
 /* 9주차: 상인 (16x16) — 두건을 쓴 보라 로브. 시작 지점 옆 가판대에 서 있다.
    두 번째 그림은 눈을 감은 것(깜빡임)이라 살아 있는 느낌이 난다. */
 const MERCHANT = [
@@ -1900,6 +2332,9 @@ function buildSprites() {
     { w: '#4a80b8', W: '#bfe0ff' },   // Lv3 파랑
     { w: '#8055ae', W: '#dfc0f5' },   // Lv4 보라
     { w: '#b8763a', W: '#ffd9a0' },   // Lv5 황금
+    { w: '#c25a2a', W: '#ffb08a' },   // 사막 24~29 구리
+    { w: '#8fa0b0', W: '#ffffff' },   // 사막 30~35 은
+    { w: '#3d2e4a', W: '#b48fd8' },   // 사막 36~   흑요석
   ];
   SPRITES.weapons = {};
   for (const id in WEAPON_SHAPES) {
@@ -1917,6 +2352,9 @@ function buildSprites() {
     slimeCore: makeSprite('loot_core', LOOT_CORE, { M: '#35a0b0', n: '#8fe6f0' }),
     alphaFang: makeSprite('loot_alpha', LOOT_ALPHA_FANG, { W: '#ffd0d0', w: '#c05a5a' }),
     elderSpore: makeSprite('loot_spore', LOOT_SPORE, { M: '#8055ae', n: '#dfc0f5' }),
+    stinger: makeSprite('loot_stinger', LOOT_STINGER, { S: '#3a2a1a', Y: '#ffd27a' }),
+    cactusFruit: makeSprite('loot_fruit', LOOT_FRUIT, { R: '#e56b7a', n: '#ffd0d8', G: '#3f9040' }),
+    wormScale: makeSprite('loot_scale', LOOT_SCALE, { D: '#c9bb9c', d: '#e8dcc0' }),
   };
   SPRITES.merchant = [makeSprite('merchant', MERCHANT), makeSprite('merchant_blink', MERCHANT_BLINK)];
   SPRITES.stall = makeStall(1201);
@@ -1945,6 +2383,24 @@ function buildSprites() {
 
   SPRITES.spore = LEVEL_PALETTES.map((pal, i) => makeSprite('spore_lv' + (i + 1), SPORE, pal));
 
+  // ── 사막 몬스터 — 색은 같은 레벨 등급 규칙을 따른다
+  SPRITES.scorpion = LEVEL_PALETTES.map((pal, i) =>
+    SCORPION_LEGS.map((legs, f) => makeSprite('scorpion_lv' + (i + 1) + '_' + f, SCORPION_BODY.concat(legs), Object.assign({ S: '#2b1d12' }, pal))));
+  SPRITES.scorpionLeft = SPRITES.scorpion.map(frames => frames.map(flipX));
+  SPRITES.scorpionFlash = SPRITES.scorpion.map(frames => frames.map(s => makeSilhouette(s, '#ffffff')));
+  SPRITES.scorpionLeftFlash = SPRITES.scorpionLeft.map(frames => frames.map(s => makeSilhouette(s, '#ffffff')));
+  SPRITES.cactusMob = LEVEL_PALETTES.map((pal, i) => makeSprite('cactus_lv' + (i + 1), CACTUS_MOB, Object.assign({ R: '#e56b7a' }, pal)));
+  SPRITES.cactusMobFlash = SPRITES.cactusMob.map(s => makeSilhouette(s, '#ffffff'));
+  SPRITES.wormMound = makeSprite('worm_mound', WORM_MOUND, { o: '#9a8560', D: '#e0cc8a', d: '#c9b06e' });
+  SPRITES.worm = LEVEL_PALETTES.map((pal, i) => makeSprite('worm_lv' + (i + 1), WORM_BODY, Object.assign({ R: '#8e2a2a', D: '#e0cc8a' }, pal)));
+  SPRITES.wormFlash = SPRITES.worm.map(s => makeSilhouette(s, '#ffffff'));
+
+  // 텔레포트 비석 — 룬이 밝은 것 / 어두운 것
+  SPRITES.obelisk = [
+    makeSprite('obelisk_on', OBELISK, { G: '#7d8493', g: '#5e6572', C: '#5ff0ff', B: '#4a4f5a' }),
+    makeSprite('obelisk_off', OBELISK, { G: '#7d8493', g: '#5e6572', C: '#2a8fa0', B: '#4a4f5a' }),
+  ];
+
   // 보스 — 레벨 색 등급별 5종 + 피격 실루엣, 착지 충격파 4프레임
   SPRITES.giantSlime = LEVEL_PALETTES.map(makeGiantSlime);
   SPRITES.giantSlimeFlash = SPRITES.giantSlime.map(s => makeSilhouette(s, '#ffffff'));
@@ -1962,6 +2418,9 @@ function buildSprites() {
   SPRITES.darkGrass = [0, 1, 2, 3].map(i => makeDarkGrassTile(5000 + i * 613));
   SPRITES.stone = [0, 1, 2, 3].map(i => makeStoneTile(6000 + i * 571));
   SPRITES.gravel = [0, 1, 2].map(i => makeGravelTile(7000 + i * 487));
+  SPRITES.desertSand = [0, 1, 2, 3].map(i => makeDesertSandTile(8000 + i * 419));
+  SPRITES.dune = [0, 1, 2].map(i => makeDuneTile(9000 + i * 383));
+  SPRITES.cracked = [0, 1, 2].map(i => makeCrackedTile(9500 + i * 347));
 
   /* 바닥 타일 묶음 — 볕 드는 숲 바닥 / 빽빽한 숲의 그늘진 바닥 / 보스 방의 돌바닥.
      같은 "풀"이라도 어느 묶음이냐에 따라 밝은 잔디 / 그늘진 잔디 / 돌바닥이 된다. */
@@ -1969,12 +2428,21 @@ function buildSprites() {
     forest: { grass: SPRITES.grass, dirt: SPRITES.dirt, meadow: SPRITES.grass },
     shade:  { grass: SPRITES.darkGrass, dirt: SPRITES.dirt, meadow: SPRITES.darkGrass },
     stone:  { grass: SPRITES.stone, dirt: SPRITES.gravel, meadow: SPRITES.stone },
+    // 사막 — 풀은 오아시스 둘레에만, 흙 자리는 갈라진 땅, 꽃밭 자리는 모래언덕, 바탕은 사막 모래
+    desert: { grass: SPRITES.grass, dirt: SPRITES.cracked, meadow: SPRITES.dune, sand: SPRITES.desertSand },
   };
 
   // 나무 — 활엽수 / 침엽수 / 고사목
   SPRITES.tree = [0, 1, 2, 3].map(i => makeTree(31 + i * 613));
   SPRITES.pine = [0, 1].map(i => makePine(101 + i * 547));
   SPRITES.deadTree = [0, 1].map(i => makeDeadTree(211 + i * 379));
+  // 사막 초목 — 기둥 선인장 / 공 선인장 / 야자수 / 바위기둥 / 뼈
+  SPRITES.cactus = [0, 1, 2].map(i => makeCactus(1301 + i * 271));
+  SPRITES.barrelCactus = [0, 1].map(i => makeBarrelCactus(1401 + i * 191));
+  SPRITES.palm = [0, 1].map(i => makePalm(1501 + i * 233));
+  SPRITES.rockSpire = [0, 1, 2].map(i => makeRockSpire(1601 + i * 211));
+  SPRITES.bones = [0, 1].map(i => makeBones(1701 + i * 157));
+  SPRITES.dryBush = [0, 1].map(i => makeBush(1801 + i * 431, { out: '#3a2a10', dark: '#7a6a2a', mid: '#a08e3a', lit: '#c9b25a', shade: '#5a4a1a' }));
 
   // 바닥 소품
   SPRITES.bush = [0, 1, 2].map(i => makeBush(77 + i * 431));
@@ -1996,11 +2464,18 @@ function buildSprites() {
 
   // 흔들리는 풀 — [왼쪽, 가운데, 오른쪽] 3프레임 x 3종
   SPRITES.tuft = [0, 1, 2].map(k => [-1, 0, 1].map(lean => makeGrassTuft(811 + k * 127, lean)));
+  SPRITES.dryTuft = [0, 1, 2].map(k => [-1, 0, 1].map(lean => makeGrassTuft(911 + k * 127, lean, { tip: '#e0cc8a', dark: '#8a7a3a', mid: '#b09a4a' })));
 
   SPRITES.vignette = makeVignette(CONFIG.VIEW_W, CONFIG.VIEW_H, CONFIG.ambient.vignette);
   SPRITES.leaf = ['#4f9a3f', '#7fae3a', '#b8933a', '#c07a35'].map(c => {
     const cv = makeCanvas(3, 2), ctx = cv.getContext('2d');
     ctx.fillStyle = c; ctx.fillRect(0, 0, 3, 1); ctx.fillRect(1, 1, 1, 1);
+    return cv;
+  });
+  // 사막에서는 나뭇잎 대신 모래 알갱이가 날린다
+  SPRITES.sandGrain = ['#e6d191', '#d9c27f', '#c9b06e'].map(c => {
+    const cv = makeCanvas(2, 1), ctx = cv.getContext('2d');
+    ctx.fillStyle = c; ctx.fillRect(0, 0, 2, 1);
     return cv;
   });
 
@@ -2585,6 +3060,22 @@ const Sound = {
         0, 0, 0, 0, 65, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
       ],
     },
+    // 작열하는 사막 — 프리지안 음계(반음 내린 2도)로 뜨겁고 이국적인 느낌, 톱니파 멜로디
+    desert: {
+      bpm: 96, type: 'sawtooth', leadGain: 0.06, bassType: 'triangle',
+      bass: [40, 40, 45, 40, 41, 40, 43, 40],
+      chord: [[52, 56, 59], [52, 56, 59], [45, 48, 52], [52, 56, 59], [53, 57, 60], [52, 56, 59], [50, 53, 57], [52, 56, 59]],
+      lead: [
+        76, 0, 77, 0, 76, 0, 74, 0, 72, 0, 0, 0, 71, 0, 0, 0,
+        69, 0, 71, 0, 72, 0, 71, 0, 69, 0, 68, 0, 64, 0, 0, 0,
+        64, 0, 65, 0, 68, 0, 69, 0, 71, 0, 72, 0, 71, 0, 69, 0,
+        68, 0, 0, 0, 65, 0, 0, 0, 64, 0, 0, 0, 0, 0, 0, 0,
+        76, 0, 0, 0, 77, 0, 76, 0, 74, 0, 72, 0, 74, 0, 0, 0,
+        72, 0, 71, 0, 69, 0, 0, 0, 68, 0, 69, 0, 71, 0, 0, 0,
+        72, 0, 0, 0, 74, 0, 72, 0, 71, 0, 69, 0, 68, 0, 65, 0,
+        64, 0, 0, 0, 0, 0, 0, 0, 68, 0, 65, 0, 64, 0, 0, 0,
+      ],
+    },
     // 보스 방 — 빠르고 몰아치는 단조, 베이스가 8분음표로 달린다
     boss: {
       bpm: 140, type: 'square', leadGain: 0.1, bassType: 'sawtooth',
@@ -2670,7 +3161,7 @@ const Sound = {
 // ── js/world.js
 'use strict';
 
-/* 숲 맵.
+/* 겉맵 — 태초의 숲과 작열하는 사막. 같은 뼈대로 만들고 spec(CONFIG.maps[*]) 의 theme 으로 갈린다.
    바닥(지형 타일 + 잔디디테일)은 한 번만 그려서 큰 캔버스에 구워두고,
    서 있는 물체(나무, 바위, 풀)는 매 프레임 캐릭터와 함께 y좌표 순으로 그린다.
 
@@ -2681,11 +3172,16 @@ const Sound = {
 
 const TILE_GRASS = 0, TILE_DIRT = 1, TILE_SAND = 2, TILE_WATER = 3, TILE_MEADOW = 4;
 
-// 타일 경계를 흐릴 때 쓰는 대표색 — [그늘 여부][타일종류]
-const TILE_BASE_COLOR = [
-  ['#3f8b40', '#7d5f3c', '#c2a877', '#2f6f9e', '#3f8b40'],   // 볕이 드는 숲 바닥
-  ['#2c6431', '#7d5f3c', '#c2a877', '#2f6f9e', '#2c6431'],   // 빽빽한 숲의 그늘진 바닥
-];
+// 타일 경계를 흐릴 때 쓰는 대표색 — [테마][색 줄][타일종류]. 숲은 볕/그늘 두 줄, 사막은 한 줄
+const TILE_BASE_COLOR = {
+  forest: [
+    ['#3f8b40', '#7d5f3c', '#c2a877', '#2f6f9e', '#3f8b40'],   // 볕이 드는 숲 바닥
+    ['#2c6431', '#7d5f3c', '#c2a877', '#2f6f9e', '#2c6431'],   // 빽빽한 숲의 그늘진 바닥
+  ],
+  desert: [
+    ['#3f8b40', '#9a6b3c', '#d9c27f', '#2f6f9e', '#e0cc8a'],   // 오아시스 풀, 갈라진 땅, 모래, 물, 모래언덕
+  ],
+};
 
 const World = {
   w: 0,            // 픽셀 단위 맵 크기
@@ -2699,18 +3195,23 @@ const World = {
   tileBlocked: null,
   time: 0,         // 풀이 흔들리는 데 쓰는 누적 시간
 
-  init(seed) {
+  // mapId: 'forest' | 'desert'. 같은 시드라도 맵마다 다른 지형이 나오도록 시드를 비틀어 쓴다
+  init(seed, mapId) {
     const T = CONFIG.TILE;
+    this.mapId = mapId || 'forest';
+    this.spec = CONFIG.maps[this.mapId];
+    seed = seed + (this.mapId === 'desert' ? 50021 : 0);
     this.cols = CONFIG.MAP_W;
     this.rows = CONFIG.MAP_H;
     this.isArena = false;
     this.arenaExit = null;
+    this.portal = null;
     this.w = this.cols * T;
     this.h = this.rows * T;
     this.props = [];
     this.solids = [];
     this.time = 0;
-    this.caves = CONFIG.forest.caves.map(() => null);   // 동굴 입구 셋 — 각자 자기 보스 방으로 이어진다
+    this.caves = this.spec.caves.map(() => null);   // 동굴 입구 — 각자 자기 보스 방으로 이어진다 (사막엔 없다)
     this.merchant = null;   // 상인 (Shop.place 가 채운다)
 
     this.buildDanger(seed);
@@ -2720,6 +3221,7 @@ const World = {
     this.buildGrid();   // 나무 충돌을 먼저 등록해야 장식이 나무를 피해서 놓인다
     this.placeDecor(Util.makeRng(seed + 41));
     Shop.place();       // 9주차: 시작 지점 옆 가판대와 상인
+    this.placePortal(); // 텔레포트 비석 — 시작 지점 반대편
     this.buildGrid();   // 바위·그루터기·가판대까지 포함해 다시 만든다
   },
 
@@ -2733,9 +3235,9 @@ const World = {
      만들어 둔 것을 그냥 들고 있는 편이 낫다. (바닥 캔버스가 커봐야 20MB 남짓) */
   STATE_KEYS: [
     'cols', 'rows', 'w', 'h', 'ground', 'props', 'solids', 'grid',
-    'tiles', 'tileBlocked', 'shade', 'dangerNoise',
+    'tiles', 'tileBlocked', 'shade', 'colorRow', 'dangerNoise',
     'startX', 'startY', 'wetNoise', 'openNoise', 'caves', 'arenaExit', 'merchant',
-    'time', 'isArena',
+    'time', 'isArena', 'mapId', 'spec', 'portal',
   ],
 
   snapshot() {
@@ -2764,14 +3266,17 @@ const World = {
     this.time = 0;
     this.caves = [];
     this.merchant = null;
+    this.portal = null;
     this.isArena = true;
     this.arenaCave = caveIndex || 0;
+    // spec 은 들어온 겉맵 것을 그대로 둔다 (배경음·이름표가 참조한다). 보스 방 자체는 위험도 0
 
     const rng = Util.makeRng(seed);
     const N = this.cols * this.rows;
     this.tiles = new Uint8Array(N);
     this.tileBlocked = new Uint8Array(N);
     this.shade = new Uint8Array(N);
+    this.colorRow = new Uint8Array(N);
     // 겉맵 전용 노이즈를 참조하다 터지지 않도록 밋밋한 값으로 채워둔다
     this.wetNoise = () => 0;
     this.openNoise = () => 0.5;
@@ -2889,7 +3394,7 @@ const World = {
   },
 
   /* ── 위험도 — 시작점(맵 한가운데)에서 얼마나 멀리 왔는가 (0~1) ──
-     맵 하나가 통째로 "태초의 숲"이고, 지역 경계 대신 이 값이 몬스터 레벨·종류, 나무, 소품을 정한다.
+     지역 경계 대신 이 값이 몬스터 레벨·종류, 초목, 소품을 정한다 (수치는 맵마다 spec 에 있다).
      거리는 맵 모양을 따르는 둥근 사각형(4제곱 노름)으로 재서 가장자리 어디서나 1에 닿고,
      노이즈를 조금 섞어 같은 레벨대가 완벽한 고리로 보이지 않게 한다. */
   buildDanger(seed) {
@@ -2903,20 +3408,20 @@ const World = {
     if (this.isArena) return 0;
     const dx = Math.abs(x - this.startX) / (this.w / 2), dy = Math.abs(y - this.startY) / (this.h / 2);
     const d = Math.pow(dx * dx * dx * dx + dy * dy * dy * dy, 0.25);
-    const wob = (this.dangerNoise(x / this.w, y / this.h) - 0.5) * CONFIG.forest.wobble;
+    const wob = (this.dangerNoise(x / this.w, y / this.h) - 0.5) * this.spec.wobble;
     return Util.clamp(d + wob, 0, 1);
   },
 
-  // 그 자리의 기준 몬스터 레벨 (1 ~ LEVEL_MAX). 안전 반경 안은 1, 가장자리에서 최대
+  // 그 자리의 기준 몬스터 레벨 (spec.levelRange 안). 안전 반경 안은 최소, 가장자리에서 최대
   levelAt(x, y) {
-    const f = CONFIG.forest;
+    const f = this.spec, lo = f.levelRange[0], hi = f.levelRange[1];
     const t = Util.clamp((this.dangerAt(x, y) - f.safeRadius) / (1 - f.safeRadius), 0, 1);
-    return 1 + Math.round(Math.pow(t, f.curve) * (LEVEL_MAX - 1));
+    return lo + Math.round(Math.pow(t, f.curve) * (hi - lo));
   },
 
   // 그 자리에 어떤 몬스터가 잘 나오는가 — 세 기준점(t = 0 / 0.5 / 1) 사이를 보간
   typeWeightsAt(x, y) {
-    const list = CONFIG.forest.typeWeights;
+    const list = this.spec.typeWeights;
     const t = this.dangerAt(x, y) * (list.length - 1);
     const i = Math.min(list.length - 2, Math.floor(t)), u = t - i;
     const out = {};
@@ -2926,7 +3431,7 @@ const World = {
 
   // [t=0 값, t=1 값] 사이를 위험도로 보간 (나무 밀도, 침엽수 비율 등)
   forestAt(key, x, y) {
-    const pair = CONFIG.forest[key];
+    const pair = this.spec[key];
     return Util.lerp(pair[0], pair[1], this.dangerAt(x, y));
   },
 
@@ -2937,27 +3442,34 @@ const World = {
     this.wetNoise = this.makeNoise(seed + 11, 7, 5);
     this.openNoise = this.makeNoise(seed + 29, 10, 8);
     const bloom = this.makeNoise(seed + 53, 12, 9);
-    this.shade = new Uint8Array(W * H);   // 빽빽한 숲 바닥은 그늘져서 잔디가 어둡다
-    // 시작 지점(숲 한가운데) 주변은 물 없이 비워둔다
+    this.shade = new Uint8Array(W * H);      // 빽빽한 숲 바닥은 그늘져서 잔디가 어둡다
+    this.colorRow = new Uint8Array(W * H);   // 경계 흐리기·미니맵이 쓰는 색 줄 (숲: 볕 0 / 그늘 1, 사막: 0)
+    const desert = this.spec.theme === 'desert';
+    const base = desert ? TILE_SAND : TILE_GRASS;   // 바탕 타일 — 사막은 모래
+    // 시작 지점(맵 한가운데) 주변은 물 없이 비워둔다
     const cx = this.startX / CONFIG.TILE, cy = this.startY / CONFIG.TILE;
 
     for (let ty = 0; ty < H; ty++) {
       for (let tx = 0; tx < W; tx++) {
         const fx = tx / W, fy = ty / H;
         const nearStart = Util.dist(tx, ty, cx, cy) < cfg.startClearTiles;
-        let t = TILE_GRASS;
+        let t = base;
 
         const wet = this.wetNoise(fx, fy);
         if (!nearStart) {
-          if (wet > cfg.waterLevel) t = TILE_WATER;
+          if (desert) {
+            // 사막의 물은 드문 오아시스 — 물 둘레에만 풀이 자란다
+            if (wet > cfg.oasisLevel) t = TILE_WATER;
+            else if (wet > cfg.oasisGrassLevel) t = TILE_GRASS;
+          } else if (wet > cfg.waterLevel) t = TILE_WATER;
           else if (wet > cfg.shoreLevel) t = TILE_SAND;
         }
-        if (t === TILE_GRASS) {
-          if (this.openNoise(fx, fy) < cfg.clearingLevel) t = TILE_DIRT;
-          else if (bloom(fx, fy) > cfg.meadowLevel) t = TILE_MEADOW;
+        if (t === base) {
+          if (this.openNoise(fx, fy) < cfg.clearingLevel) t = TILE_DIRT;      // 공터 (사막: 갈라진 땅)
+          else if (bloom(fx, fy) > cfg.meadowLevel) t = TILE_MEADOW;          // 꽃밭 (사막: 모래언덕)
         }
         this.tiles[ty * W + tx] = t;
-        if (this.openNoise(fx, fy) > CONFIG.forest.shadeLevel && !nearStart) this.shade[ty * W + tx] = 1;
+        if (this.openNoise(fx, fy) > this.spec.shadeLevel && !nearStart) { this.shade[ty * W + tx] = 1; this.colorRow[ty * W + tx] = 1; }
       }
     }
 
@@ -3019,7 +3531,7 @@ const World = {
     for (let ty = 0; ty < H; ty++) {
       for (let tx = 0; tx < W; tx++) {
         const i = ty * W + tx;
-        const set = this.groundSet(this.tiles[i], this.shade[i] ? 'shade' : 'forest');
+        const set = this.groundSet(this.tiles[i], this.spec.theme === 'desert' ? 'desert' : (this.shade[i] ? 'shade' : 'forest'));
         ctx.drawImage(set[Math.floor(rng() * set.length)], tx * T, ty * T);
       }
     }
@@ -3032,7 +3544,7 @@ const World = {
   groundSet(tile, setName) {
     const g = SPRITES.groundSets[setName] || SPRITES.groundSets.forest;
     if (tile === TILE_DIRT) return g.dirt;
-    if (tile === TILE_SAND) return SPRITES.sand;    // 물가 모래는 어디서나 같다
+    if (tile === TILE_SAND) return g.sand || SPRITES.sand;    // 물가 모래 (사막은 자기 모래)
     if (tile === TILE_WATER) return SPRITES.water;
     if (tile === TILE_MEADOW) return g.meadow;
     return g.grass;
@@ -3042,7 +3554,8 @@ const World = {
   // 타일 종류가 같아도 그늘 여부가 다르면 색이 다르므로 그늘 경계도 함께 흐려진다.
   ditherEdges(ctx, rng) {
     const T = CONFIG.TILE, W = this.cols, H = this.rows;
-    const colorAt = (i) => TILE_BASE_COLOR[this.shade[i]][this.tiles[i]];
+    const rows = TILE_BASE_COLOR[this.spec.theme] || TILE_BASE_COLOR.forest;
+    const colorAt = (i) => rows[this.colorRow[i]][this.tiles[i]];
     const sprinkle = (x, y, w, h, color, n) => {
       ctx.fillStyle = color;
       for (let i = 0; i < n; i++) {
@@ -3074,11 +3587,20 @@ const World = {
   // 지형에 어울리는 잔디테일을 바닥에 직접 찍는다 (움직이지 않으므로 구워도 된다)
   bakeDetails(ctx, rng) {
     const T = CONFIG.TILE, W = this.cols, H = this.rows;
+    const desert = this.spec.theme === 'desert';
     for (let ty = 0; ty < H; ty++) {
       for (let tx = 0; tx < W; tx++) {
         const i = ty * W + tx;
         const t = this.tiles[i], shaded = this.shade[i];
         const x = tx * T, y = ty * T;
+
+        if (desert) {
+          // 사막 — 오아시스 풀에만 꽃, 모래엔 아주 드문 돌멩이, 갈라진 땅엔 자갈
+          if (t === TILE_GRASS && rng() < 0.14) ctx.drawImage(Util.choice(SPRITES.flower), x + Math.floor(rng() * 12), y + Math.floor(rng() * 11));
+          else if (t === TILE_DIRT && rng() < 0.03) ctx.drawImage(SPRITES.rock[0], x + Math.floor(rng() * 5), y + Math.floor(rng() * 6));
+          else if (t === TILE_SAND && rng() < 0.008) ctx.drawImage(SPRITES.rock[0], x + Math.floor(rng() * 5), y + Math.floor(rng() * 6));
+          continue;
+        }
 
         // 그늘진 바닥은 꽃이 훨씬 드물다
         const flowerRate = shaded ? 0.05 : 0.16;
@@ -3120,11 +3642,13 @@ const World = {
     return p;
   },
 
-  // 나무는 개방도 노이즈가 높은 곳(=숲)에 빽빽하게, 공터에는 드물게 심는다
+  // 나무는 개방도 노이즈가 높은 곳(=숲)에 빽빽하게, 공터에는 드물게 심는다.
+  // 사막에서는 같은 자리에 선인장·바위기둥이 서고, 오아시스 풀밭에는 야자수가 선다
   placeTrees(rng) {
     const W = this.cols, H = this.rows, cfg = CONFIG.world;
     const minGap = 26;
     const cx = this.startX, cy = this.startY;
+    const desert = this.spec.theme === 'desert';
 
     /* 나무끼리 너무 붙지 않게 간격을 확인한다.
        심은 나무를 전부 훑으면 맵이 커질수록 급격히 느려지므로(개수의 제곱),
@@ -3150,22 +3674,29 @@ const World = {
       if (x < 20 || x > this.w - 20 || y < 46 || y > this.h - 10) return;
       if (!force && Util.dist(x, y, cx, cy) < cfg.startClearTiles * CONFIG.TILE) return;
       const t = this.tileAt(x, y);
-      if (t === TILE_WATER || t === TILE_SAND || t === TILE_DIRT) return;
+      if (t === TILE_WATER || t === TILE_DIRT) return;
+      if (!desert && t === TILE_SAND) return;   // 숲의 물가 모래엔 나무가 없다
       if (tooClose(x, y)) return;
       const k = bkey(x, y);
       if (!buckets.has(k)) buckets.set(k, []);
       buckets.get(k).push({ x: x, y: y });
 
-      // 시작점에서 멀어질수록 침엽수와 고사목이 늘어난다 — 숲이 점점 험해 보인다
       let sprite, solid;
-      if (rng() < this.forestAt('pineChance', x, y)) {
+      if (desert) {
+        // 오아시스 풀밭엔 야자수, 가장자리 담장과 먼 곳엔 바위기둥, 나머지는 선인장 (고사목이 조금 섞인다)
+        if (t === TILE_GRASS) { sprite = Util.choice(SPRITES.palm); solid = [5, 5, 8]; }
+        else if (force || rng() < this.forestAt('pineChance', x, y)) { sprite = Util.choice(SPRITES.rockSpire); solid = [7, 5, 8]; }
+        else if (rng() < this.forestAt('deadChance', x, y)) { sprite = Util.choice(SPRITES.deadTree); solid = [4, 4, 7]; }
+        else { sprite = Util.choice(SPRITES.cactus); solid = [4, 4, 7]; }
+      } else if (rng() < this.forestAt('pineChance', x, y)) {
+        // 시작점에서 멀어질수록 침엽수와 고사목이 늘어난다 — 숲이 점점 험해 보인다
         sprite = Util.choice(SPRITES.pine); solid = [5, 5, 8];
       } else if (rng() < this.forestAt('deadChance', x, y)) {
         sprite = Util.choice(SPRITES.deadTree); solid = [4, 4, 7];
       } else {
         sprite = Util.choice(SPRITES.tree); solid = [6, 5, 8];
       }
-      this.addProp(sprite, x, y, { solid: solid }).tree = true;   // 미니맵에 숲으로 표시된다
+      this.addProp(sprite, x, y, { solid: solid }).tree = true;   // 미니맵에 숲으로 표시되고, 뒤에 서면 옅어진다
     };
 
     // 맵 가장자리는 나무로 둘러 벽처럼 막는다
@@ -3205,6 +3736,9 @@ const World = {
       return null;
     };
 
+    const desert = this.spec.theme === 'desert';
+    if (desert) { this.placeDesertDecor(rng, spot); return; }
+
     // 흔들리는 풀 — 숲을 살아있게 만드는 가장 큰 요소
     for (let i = 0, n = this.scaled(260); i < n; i++) {
       const s = spot();
@@ -3228,7 +3762,7 @@ const World = {
        방향은 120도씩 벌려 서로 다른 쪽에 두고, 맵마다 돌아가는 각도가 달라 매번 다른 자리다.
        흔하면 이정표 구실을 못 하므로 희소하게 두었다. 미니맵에 따로 찍힌다. */
     const base = rng() * Math.PI * 2;
-    CONFIG.forest.caves.forEach((spec, index) => {
+    this.spec.caves.forEach((spec, index) => {
       const want = base + index * (Math.PI * 2 / 3);
       for (let i = 0; i < 3000; i++) {
         // 원하는 방향 ±30도, 원하는 고리 ±0.05 안에서 빈자리를 찾는다
@@ -3266,6 +3800,53 @@ const World = {
       const s = spot(TILE_SAND);
       if (s) this.addProp(Util.choice(SPRITES.cattail), s.x, s.y, { footHeight: 1 });
     }
+  },
+
+  // 사막 소품 — 마른 풀, 마른 수풀, 바위(많다), 공 선인장(부딪힌다), 뼈
+  placeDesertDecor(rng, spot) {
+    for (let i = 0, n = this.scaled(200); i < n; i++) {
+      const s = spot();
+      if (!s) continue;
+      const t = this.tileAt(s.x, s.y);
+      if (t === TILE_DIRT) continue;
+      const frames = t === TILE_GRASS ? Util.choice(SPRITES.tuft) : Util.choice(SPRITES.dryTuft);   // 오아시스엔 푸른 풀
+      this.addProp(frames[1], s.x, s.y, { frames: frames, footHeight: 1 });
+    }
+    for (let i = 0, n = this.scaled(60); i < n; i++) {
+      const s = spot();
+      if (s) this.addProp(Util.choice(SPRITES.dryBush), s.x, s.y, { footHeight: 3 });
+    }
+    for (let i = 0, n = this.scaled(110); i < n; i++) {
+      const s = spot();
+      if (!s) continue;
+      if (rng() > this.forestAt('boulders', s.x, s.y) * 0.4) continue;
+      this.addProp(Util.choice(SPRITES.boulder), s.x, s.y, { solid: [7, 4, 6], footHeight: 3 });
+    }
+    for (let i = 0, n = this.scaled(50); i < n; i++) {
+      const s = spot();
+      if (s && this.tileAt(s.x, s.y) !== TILE_GRASS) this.addProp(Util.choice(SPRITES.barrelCactus), s.x, s.y, { solid: [5, 3, 5], footHeight: 3 });
+    }
+    for (let i = 0, n = this.scaled(26); i < n; i++) {
+      const s = spot();
+      if (s) this.addProp(Util.choice(SPRITES.bones), s.x, s.y, { footHeight: 2 });
+    }
+  },
+
+  /* ── 텔레포트 비석 ──────────────────────────────────────
+     시작 지점 왼쪽(상인 반대편)에 하나. 앞에서 F 를 누르면 다른 맵의 비석 앞으로 옮겨간다.
+     룬이 0.5초마다 깜빡이고 푸른 알갱이가 피어올라 멀리서도 눈에 띈다. */
+  placePortal() {
+    const x = this.startX - 44, y = this.startY - 6;
+    const p = this.addProp(SPRITES.obelisk[0], x, y, { solid: [7, 3, 5], footHeight: 3 });
+    p.portal = true;
+    p.landmark = 'portal';   // 미니맵에 하늘색으로 찍힌다
+    p.draw = (ctx, cam) => {
+      const sx = Math.round(p.x - cam.x), sy = Math.round(p.y - cam.y);
+      fillCircle(ctx, sx, sy + 1, 7, 'rgba(0,0,0,0.28)');
+      const sp = (Math.floor(World.time * 2) % 2 === 0) ? SPRITES.obelisk[0] : SPRITES.obelisk[1];
+      ctx.drawImage(sp, sx + p.ox, sy + p.oy);
+    };
+    this.portal = p;
   },
 
   /* ── 충돌 ──────────────────────────────────────────────── */
@@ -3384,7 +3965,7 @@ const Ambient = {
       fall: Util.rand(9, 20),
       phase: Util.rand(0, Math.PI * 2),
       wobble: Util.rand(6, 16),
-      sprite: Util.choice(SPRITES.leaf),
+      sprite: Util.choice(World.spec && World.spec.theme === 'desert' ? SPRITES.sandGrain : SPRITES.leaf),   // 사막엔 모래 알갱이가 날린다
       t: Util.rand(0, 6),
     };
   },
@@ -3473,12 +4054,7 @@ const Minimap = {
   /* 타일 색 — [지역][타일종류]. 지역마다 바닥색이 달라서
      지도만 봐도 "여기부터 깊은 숲, 저기부터 포자 골짜기"가 바로 보인다.
      (TILE_GRASS, TILE_DIRT, TILE_SAND, TILE_WATER, TILE_MEADOW 순서) */
-  // [그늘 여부][타일 종류] — 볕 드는 바닥 / 빽빽한 숲의 그늘진 바닥
-  TILE_RGB: [
-    [[63, 139, 64], [125, 95, 60], [194, 168, 119], [47, 111, 158], [86, 163, 90]],
-    [[44, 100, 49], [110, 84, 53], [194, 168, 119], [47, 111, 158], [52, 112, 57]],
-  ],
-  TREE_RGB: ['#1f5a2a', '#173f1f'],
+  // 바닥·나무 색은 맵마다 다르다 (CONFIG.maps[*].minimap — [색 줄][타일 종류])
 
   build() {
     const W = World.cols, H = World.rows;
@@ -3486,10 +4062,11 @@ const Minimap = {
     this.canvas = makeCanvas(W, H);
     const ctx = this.canvas.getContext('2d');
 
+    const pal = World.spec.minimap;
     const img = ctx.createImageData(W, H);
     for (let i = 0; i < W * H; i++) {
-      const byShade = this.TILE_RGB[World.shade[i]] || this.TILE_RGB[0];
-      const c = byShade[World.tiles[i]] || byShade[0];
+      const row = pal.tiles[World.colorRow[i]] || pal.tiles[0];
+      const c = row[World.tiles[i]] || row[0];
       img.data[i * 4] = c[0];
       img.data[i * 4 + 1] = c[1];
       img.data[i * 4 + 2] = c[2];
@@ -3501,14 +4078,14 @@ const Minimap = {
     for (const p of World.props) {
       if (!p.tree) continue;
       const tx = Math.floor(p.x / CONFIG.TILE), ty = Math.floor(p.y / CONFIG.TILE);
-      ctx.fillStyle = this.TREE_RGB[World.shade[ty * W + tx]] || this.TREE_RGB[0];
+      ctx.fillStyle = pal.tree[World.colorRow[ty * W + tx]] || pal.tree[0];
       ctx.fillRect(tx, ty, 1, 1);
     }
 
-    // 동굴 입구와 상인은 이정표라 눈에 띄게 찍는다 (동굴 주황, 상인 노랑)
+    // 동굴 입구·상인·비석은 이정표라 눈에 띄게 찍는다 (동굴 주황, 상인 노랑, 비석 하늘색)
     for (const p of World.props) {
       if (!p.landmark) continue;
-      ctx.fillStyle = p.landmark === 'shop' ? '#ffe066' : '#e08a4f';
+      ctx.fillStyle = p.landmark === 'shop' ? '#ffe066' : (p.landmark === 'portal' ? '#5ff0ff' : '#e08a4f');
       ctx.fillRect(Math.floor(p.x / CONFIG.TILE) - 1, Math.floor(p.y / CONFIG.TILE) - 1, 3, 3);
       ctx.fillStyle = '#1d1a17';
       ctx.fillRect(Math.floor(p.x / CONFIG.TILE), Math.floor(p.y / CONFIG.TILE), 1, 1);
@@ -3632,6 +4209,7 @@ const Save = {
     return {
       version: this.VERSION,
       seed: game.seed,
+      map: o ? o.world.mapId : World.mapId,   // 어느 맵에 있었나 (보스 방 안이면 접어둔 겉맵)
       savedAt: Date.now(),
       player: {
         x: Math.round(x), y: Math.round(y),
@@ -3708,7 +4286,7 @@ const Save = {
     if (CONFIG.weapons[s.weapon]) {
       player.weapon = s.weapon;
       player.weaponGrowing = !!s.weaponGrowing;
-      player.weaponLevel = Util.clamp(s.weaponLevel || 1, 1, player.weaponGrowing ? CONFIG.weapons.levelMult.length : LEVEL_MAX);
+      player.weaponLevel = Util.clamp(s.weaponLevel || 1, 1, CONFIG.weapons.levelMult.length);
       player.syncWeaponLevel();   // 성장하는 무기는 레벨을 다시 맞춰둔다
     }
 
@@ -3783,6 +4361,7 @@ class Player {
     this.bagSlots = CONFIG.inventory.baseSlots;
     Inventory.create(this);
 
+    this.poison = null;        // 전갈 독 — { time, tick, dmg, next }. 0.5초마다 조금씩 깎이고 자연 회복이 멈춘다
     this.attackTimer = 0;      // 휘두르는 중이면 0보다 큼
     this.cooldown = 0;
     this.attackBuffer = 0;     // 쿨다운 중에 누른 공격을 잠깐 기억해둔다
@@ -4115,6 +4694,7 @@ class Player {
     this.invuln = Math.max(0, this.invuln - dt);
     this.potionCooldown = Math.max(0, this.potionCooldown - dt);
     this.updateRegen(dt);
+    this.updatePoison(dt);
 
     // ── 이동 입력
     let ix = Input.axisX(), iy = Input.axisY();
@@ -4304,6 +4884,7 @@ class Player {
   reviveAt(x, y) {
     this.dead = false;
     this.deadTimer = 0;
+    this.poison = null;
     this.hp = this.maxHp;
     this.sinceCombat = 0;
     this.x = x; this.y = y;
@@ -4378,6 +4959,31 @@ class Player {
     return !this.dead && this.sinceCombat >= CONFIG.player.regenDelay && this.hp < this.maxHp;
   }
 
+  /* 독 — 전갈에게 찔리면 걸린다. 무적 시간과 무관하게 tick 초마다 dmg 만큼 깎이되 1 아래로는 안 내려간다
+     (독만으로 죽지는 않는다). 걸려 있는 동안 자연 회복은 멈춘다. 다시 찔리면 시간이 새로 시작된다. */
+  applyPoison(dmg, time, tick) {
+    this.poison = { time: time, tick: tick, dmg: dmg, next: tick };
+    FX.number(this.x, this.y - 22, 'POISONED', '#7dff8a');
+  }
+
+  updatePoison(dt) {
+    const p = this.poison;
+    if (!p || this.dead) return;
+    p.time -= dt;
+    p.next -= dt;
+    this.sinceCombat = 0;
+    if (p.next <= 0) {
+      p.next = p.tick;
+      const hit = Math.min(p.dmg, Math.max(0, this.hp - 1));
+      if (hit > 0) {
+        this.hp -= hit;
+        FX.number(this.x + Util.rand(-6, 6), this.y - 12, '-' + hit, '#7dff8a');
+      }
+      FX.burst(this.x, this.y - 4, 3, ['#7dff8a', '#3fa347'], { speed: 12, life: 0.5, gravity: -30, size: 1 });
+    }
+    if (p.time <= 0) this.poison = null;
+  }
+
   // 포션 한 개가 채우는 양 — 최대 체력의 30%, 최소 30
   potionHeal() {
     const cfg = CONFIG.items;
@@ -4414,7 +5020,7 @@ class Player {
     growing = !!growing;
     // 성장하는 무기는 주운 순간부터 내 레벨을 그대로 따라간다
     level = growing ? this.level : level;
-    level = Util.clamp(Math.round(level || 1), 1, growing ? CONFIG.weapons.levelMult.length : LEVEL_MAX);
+    level = Util.clamp(Math.round(level || 1), 1, CONFIG.weapons.levelMult.length);   // 사막 무기는 23을 넘는다
     if (this.weapon === id && this.weaponLevel === level && this.weaponGrowing === growing) return 'same';
     this.weapon = id;
     this.weaponLevel = level;
@@ -4671,6 +5277,8 @@ const Projectiles = {
       maxLife: opts.life,
       radius: opts.radius || 3,
       spin: Math.random() * Math.PI * 2,
+      kind: opts.kind || 'spore',   // 'needle' 은 선인장 가시 — 날아가는 방향으로 누운 막대
+      angle: angle,
     });
   },
 
@@ -4712,9 +5320,19 @@ const Projectiles = {
   draw(ctx, cam) {
     for (const p of this.list) {
       const sx = Math.round(p.x - cam.x), sy = Math.round(p.y - cam.y);
-      const sprite = SPRITES.spore[levelTier(p.level)];
       // 사라지기 직전에는 깜빡여서 곧 없어짐을 알린다
       if (p.life < 0.3 && Math.floor(p.life * 24) % 2 === 0) continue;
+      if (p.kind === 'needle') {
+        const pal = LEVEL_PALETTES[levelTier(p.level)];
+        ctx.save();
+        ctx.translate(sx, sy);
+        ctx.rotate(p.angle);
+        ctx.fillStyle = pal.n; ctx.fillRect(-3, -1, 6, 2);
+        ctx.fillStyle = '#ffffff'; ctx.fillRect(1, -1, 2, 1);
+        ctx.restore();
+        continue;
+      }
+      const sprite = SPRITES.spore[levelTier(p.level)];
       // 살짝 위아래로 흔들리며 날아간다
       const bob = Math.round(Math.sin(p.spin) * 1.2);
       ctx.drawImage(sprite, sx - 2, sy - 2 + bob);
@@ -5237,6 +5855,362 @@ class Wolf extends Enemy {
       this.drawWarning(ctx, sx, topY, 1 - this.timer / CONFIG.wolf.windup);
     }
     this.drawLabel(ctx, sx, topY);
+  }
+}
+
+</script>
+  <script>
+// ── js/scorpion.js
+'use strict';
+
+/* 전갈 — 사막의 기본 몬스터. 늑대처럼 쫓아오지만 돌진 대신 짧게 찌른다.
+   찔리면 몇 초간 독이 올라 체력이 조금씩 준다 — 한 방은 늑대보다 약하지만 물러나서 회복하기 전까지 계속 갉아먹는다.
+
+   상태 흐름
+     배회 → (감지) 추적 → (사거리 안) 꼬리 치켜듦(예고) → 찌르기(짧게 앞으로) → 빈틈 → 추적
+   예고 동안 느낌표가 뜨고 몸이 뒤로 살짝 물러나므로, 옆으로 비키면 빗나간다. */
+
+class Scorpion extends Enemy {
+  constructor(x, y, level) {
+    super(x, y, level, enemyStatsAt(CONFIG.scorpion.levels, level));
+    this.TYPE = 'scorpion';
+    this.state = 'wander';   // wander | chase | windup | sting | recover
+    this.timer = Util.rand(0.5, 2.0);
+    this.facing = 1;
+    this.stepTime = 0;
+    this.stingDir = 0;
+  }
+
+  think(dt, player) {
+    const cfg = CONFIG.scorpion;
+    const dist = this.distanceTo(player);
+    this.timer -= dt;
+
+    switch (this.state) {
+      case 'wander':
+        this.stepTime += dt * 0.6;
+        if (this.timer <= 0) {
+          this.dir = Math.random() * Math.PI * 2;
+          this.timer = Util.rand(1.2, 3.0);
+        }
+        this.walk(this.dir, this.stats.speed * 0.35, dt);
+        if (dist < this.stats.detect) this.state = 'chase';
+        break;
+
+      case 'chase':
+        this.stepTime += dt * 1.6;
+        this.dir = Math.atan2(player.y - this.y, player.x - this.x);
+        this.walk(this.dir, this.stats.speed, dt);
+        if (dist > this.stats.detect * 1.3) {
+          this.state = 'wander';
+          this.timer = Util.rand(0.6, 1.6);
+        } else if (dist < cfg.stingRange) {
+          this.state = 'windup';
+          this.timer = cfg.windup;
+          this.stingDir = this.dir;
+        }
+        break;
+
+      case 'windup':
+        // 꼬리를 치켜들고 멈춘다 — 이때 비키면 빗나간다
+        if (this.timer <= 0) {
+          this.state = 'sting';
+          this.timer = cfg.stingTime;
+          this.stung = false;
+        }
+        break;
+
+      case 'sting':
+        this.walk(this.stingDir, cfg.stingSpeed, dt);
+        // 찌르는 동안 닿으면 피해 + 독
+        if (!this.stung && this.touchPlayer(player, cfg.contactCooldown)) {
+          this.stung = true;
+          player.applyPoison(Math.max(1, Math.round(this.stats.atk * cfg.poison.ratio)), cfg.poison.time, cfg.poison.tick);
+        }
+        if (this.timer <= 0) {
+          this.state = 'recover';
+          this.timer = cfg.recover;
+        }
+        break;
+
+      case 'recover':
+        if (this.timer <= 0) this.state = 'chase';
+        break;
+    }
+
+    if (this.state !== 'sting') this.touchPlayer(player, cfg.contactCooldown, Math.round(this.stats.atk * 0.7));
+  }
+
+  walk(angle, speed, dt) {
+    this.facing = Math.cos(angle) >= 0 ? 1 : -1;
+    this.moveWithCollision(Math.cos(angle) * speed * dt, Math.sin(angle) * speed * dt);
+  }
+
+  // 맞으면 예고가 끊긴다 (선제공격이 통한다)
+  onHit() {
+    if (this.state === 'windup') {
+      this.state = 'recover';
+      this.timer = CONFIG.scorpion.recover * 0.6;
+    }
+  }
+
+  drawBody(ctx, sx, sy) {
+    const cfg = CONFIG.scorpion;
+    const moving = this.state === 'wander' || this.state === 'chase' || this.state === 'sting';
+    const frame = moving ? (Math.floor(this.stepTime * 6) % 2) : 0;
+    const flash = this.hurtFlash > 0;
+    const set = this.facing >= 0
+      ? (flash ? SPRITES.scorpionFlash : SPRITES.scorpion)
+      : (flash ? SPRITES.scorpionLeftFlash : SPRITES.scorpionLeft);
+    const sprite = set[levelTier(this.level)][frame];
+
+    // 예고 때는 뒤로 움츠리고, 찌를 때는 앞으로 길어진다
+    let sxScale = 1, syScale = 1;
+    if (this.state === 'windup') { sxScale = 0.9; syScale = 1.1; }
+    else if (this.state === 'sting') { sxScale = 1.15; syScale = 0.92; }
+
+    const draw = this.scale * 0.85;
+    const w = Math.round(sprite.width * draw * sxScale);
+    const h = Math.round(sprite.height * draw * syScale);
+    this.drawShadow(ctx, sx, sy, 7 * this.scale);
+    ctx.drawImage(sprite, sx - Math.round(w / 2), Math.round(sy + 7 - h), w, h);
+
+    const topY = Math.round(sy + 7 - h + 2);
+    if (this.state === 'windup') this.drawWarning(ctx, sx, topY, 1 - this.timer / cfg.windup);
+    this.drawLabel(ctx, sx, topY);
+  }
+}
+
+</script>
+  <script>
+// ── js/cactus.js
+'use strict';
+
+/* 선인장 — 사막의 포탑. 버섯처럼 뿌리내린 채 쏘지만, 조준하는 대신 사방으로 가시 고리를 뿌린다.
+   고리는 볼 때마다 반 칸씩 돌아가서(22.5도) 한 자리에 가만히 서 있으면 결국 맞는다.
+   가시 사이 틈으로 빠져나가거나, 붙어서 빨리 없애는 게 답이다. 몸에 닿으면 가시 피해.
+
+   행동 순서
+     대기 → (플레이어가 감지 범위 안) 재는 중 → 부풀어오름(예고) → 사방 발사 → 다시 대기 */
+
+class Cactus extends Enemy {
+  constructor(x, y, level) {
+    super(x, y, level, enemyStatsAt(CONFIG.cactus.levels, level));
+    this.TYPE = 'cactus';
+    this.cooldown = Util.rand(0.6, this.stats.interval);
+    this.windup = 0;
+    this.puff = 0;
+    this.volley = 0;      // 몇 번째 발사인가 — 홀수 번은 반 칸 돌려 쏜다
+  }
+
+  think(dt, player) {
+    const cfg = CONFIG.cactus;
+    this.puff = Math.max(0, this.puff - dt);
+    const inRange = this.distanceTo(player) < this.stats.detect;
+
+    if (this.windup > 0) {
+      this.windup -= dt;
+      if (this.windup <= 0) this.fire();
+    } else if (inRange) {
+      this.cooldown -= dt;
+      if (this.cooldown <= 0) {
+        this.windup = cfg.windup;
+        this.cooldown = this.stats.interval;
+      }
+    }
+    // 몸에 닿으면 가시에 찔린다
+    this.touchPlayer(player, cfg.contactCooldown, Math.max(1, Math.round(this.stats.atk * cfg.thornMult)));
+  }
+
+  fire() {
+    const cfg = CONFIG.cactus;
+    const n = cfg.needles;
+    const offset = (this.volley++ % 2) * (Math.PI / n);   // 번갈아 반 칸씩 돌린다
+    this.puff = 0.18;
+    for (let i = 0; i < n; i++) {
+      Projectiles.spawn(this.x, this.y - 4, offset + (i / n) * Math.PI * 2, {
+        speed: cfg.needleSpeed,
+        damage: this.stats.atk,
+        level: this.level,
+        life: cfg.needleLife,
+        kind: 'needle',
+      });
+    }
+    const pal = this.palette;
+    FX.burst(this.x, this.y - 4, 8, [pal.n, '#ffffff'], { speed: 30, life: 0.3, gravity: 10, size: 1 });
+  }
+
+  // 뿌리내린 몬스터 — 넉백을 거의 무시한다
+  takeHit(damage, angle, crit, player) {
+    super.takeHit(damage, angle, crit, player);
+    this.kx *= 0.2;
+    this.ky *= 0.2;
+  }
+
+  drawBody(ctx, sx, sy) {
+    const cfg = CONFIG.cactus;
+    let grow = 1;
+    if (this.windup > 0) grow = 1 + (1 - this.windup / cfg.windup) * 0.14;
+    else if (this.puff > 0) grow = 1 - (this.puff / 0.18) * 0.1;
+
+    const sprite = this.hurtFlash > 0 ? SPRITES.cactusMobFlash[levelTier(this.level)] : SPRITES.cactusMob[levelTier(this.level)];
+    const w = Math.round(sprite.width * this.scale * grow);
+    const h = Math.round(sprite.height * this.scale * grow);
+    this.drawShadow(ctx, sx, sy, 5.5 * this.scale);
+    ctx.drawImage(sprite, sx - Math.round(w / 2), Math.round(sy + 7 - h), w, h);
+
+    const topY = Math.round(sy + 7 - h + 4);
+    if (this.windup > 0) this.drawWarning(ctx, sx, topY, 1 - this.windup / cfg.windup);
+    this.drawLabel(ctx, sx, topY);
+  }
+}
+
+</script>
+  <script>
+// ── js/sandworm.js
+'use strict';
+
+/* 모래벌레 — 땅속으로 다가와 발밑에서 솟구친다.
+   땅속에 있을 때는 모래 언덕만 보이고 때릴 수 없다. 언덕이 멈추고 들썩이면(예고) 곧 솟구치므로
+   그 자리에서 비켜야 한다. 솟구친 뒤 잠깐 밖에 나와 느릿느릿 기어오는데, 그때가 때릴 틈이다.
+
+   상태 흐름
+     땅속(추적) → 들썩임(예고) → 솟구침(범위 피해) → 밖에 나옴(느림, 맞는다) → 다시 파고듦 → 땅속 */
+
+class Sandworm extends Enemy {
+  constructor(x, y, level) {
+    super(x, y, level, enemyStatsAt(CONFIG.sandworm.levels, level));
+    this.TYPE = 'sandworm';
+    this.state = 'burrowed';   // burrowed | rise | surfaced | burrow
+    this.timer = 0;
+    this.chaseTime = 0;
+    this.wanderTimer = 0;
+    this.shake = 0;
+    this.sandTimer = 0;
+  }
+
+  get underground() { return this.state === 'burrowed' || this.state === 'rise' || this.state === 'burrow'; }
+
+  // 땅속에서는 어디를 베어도 닿지 않는다
+  hitDistance(px, py) {
+    if (this.underground) return Infinity;
+    return Util.dist(px, py, this.x, this.y) - this.radius;
+  }
+
+  get hurtBox() {
+    if (this.underground) return { x: -9999, y: -9999, w: 0, h: 0 };
+    const r = this.radius;
+    return { x: this.x - r, y: this.y - r * 1.6, w: r * 2, h: r * 2.2 };
+  }
+
+  think(dt, player) {
+    const cfg = CONFIG.sandworm;
+    const dist = this.distanceTo(player);
+    this.timer -= dt;
+    this.sandTimer -= dt;
+
+    switch (this.state) {
+      case 'burrowed': {
+        const chasing = dist < this.stats.detect;
+        if (chasing) {
+          this.dir = Math.atan2(player.y - this.y, player.x - this.x);
+          this.chaseTime += dt;
+          this.moveWithCollision(Math.cos(this.dir) * this.stats.speed * dt, Math.sin(this.dir) * this.stats.speed * dt);
+        } else {
+          this.chaseTime = 0;
+          this.wanderTimer -= dt;
+          if (this.wanderTimer <= 0) { this.dir = Math.random() * Math.PI * 2; this.wanderTimer = Util.rand(1.5, 3.5); }
+          this.moveWithCollision(Math.cos(this.dir) * this.stats.speed * 0.3 * dt, Math.sin(this.dir) * this.stats.speed * 0.3 * dt);
+        }
+        // 지나간 자리에 모래가 튄다
+        if (this.sandTimer <= 0) {
+          this.sandTimer = 0.12;
+          FX.burst(this.x, this.y + 3, 2, ['#e6d191', '#c9b06e'], { speed: 14, life: 0.35, gravity: 40, size: 1 });
+        }
+        if (chasing && (dist < cfg.riseRange || this.chaseTime > cfg.chaseMax)) {
+          this.state = 'rise';
+          this.timer = cfg.windup;
+          this.chaseTime = 0;
+        }
+        break;
+      }
+
+      case 'rise':
+        // 들썩이며 멈춰 있다 — 비킬 시간
+        this.shake = (1 - this.timer / cfg.windup) * 2;
+        if (this.timer <= 0) this.erupt(player);
+        break;
+
+      case 'surfaced':
+        // 밖에서는 아주 느리게 기어온다. 이때가 때릴 틈
+        if (dist < this.stats.detect) {
+          this.dir = Math.atan2(player.y - this.y, player.x - this.x);
+          this.moveWithCollision(Math.cos(this.dir) * cfg.surfaceSpeed * dt, Math.sin(this.dir) * cfg.surfaceSpeed * dt);
+        }
+        this.touchPlayer(player, cfg.contactCooldown);
+        if (this.timer <= 0) {
+          this.state = 'burrow';
+          this.timer = cfg.burrowTime;
+          FX.burst(this.x, this.y + 4, 10, ['#e6d191', '#c9b06e'], { speed: 30, life: 0.4, gravity: 60, size: 1 });
+        }
+        break;
+
+      case 'burrow':
+        if (this.timer <= 0) this.state = 'burrowed';
+        break;
+    }
+  }
+
+  // 솟구침 — 주변 범위에 한 번 피해를 주고 밀어낸다
+  erupt(player) {
+    const cfg = CONFIG.sandworm;
+    this.state = 'surfaced';
+    this.timer = cfg.surfaced;
+    this.shake = 0;
+    FX.burst(this.x, this.y + 2, 26, ['#e6d191', '#d9c27f', '#9a8560'], { speed: 90, life: 0.6, gravity: 80 });
+    FX.ring(this.x, this.y + 2, cfg.eruptRadius, '#e6d191');
+    FX.addShake(4);
+    Sound.play('slam');
+    if (!player.dead && Util.dist(this.x, this.y, player.x, player.y) < cfg.eruptRadius + 4) {
+      player.takeDamage(Math.max(1, Math.round(this.stats.atk * cfg.eruptMult)), this.x, this.y);
+    }
+  }
+
+  // 솟구칠 자리를 붉게 — 보스처럼 바닥에 미리 그린다
+  drawGround(ctx, cam) {
+    if (this.state !== 'rise') return;
+    const r = CONFIG.sandworm.eruptRadius;
+    const sx = Math.round(this.x - cam.x), sy = Math.round(this.y - cam.y + 3);
+    const k = 1 - this.timer / CONFIG.sandworm.windup;
+    ctx.globalAlpha = 0.28 + k * 0.2;
+    fillCircle(ctx, sx, sy, r, '#ff3b3b');
+    ctx.globalAlpha = 1;
+    ctx.strokeStyle = '#ff6b6b';
+    ctx.beginPath(); ctx.arc(sx, sy, r, 0, Math.PI * 2); ctx.stroke();
+  }
+
+  drawBody(ctx, sx, sy) {
+    const cfg = CONFIG.sandworm;
+    if (this.underground) {
+      // 모래 언덕 — 예고 때는 좌우로 들썩이고 조금 부푼다
+      const jitter = this.state === 'rise' ? Math.round(Math.sin(World.time * 40) * this.shake) : 0;
+      const grow = this.state === 'rise' ? 1 + (1 - this.timer / cfg.windup) * 0.3 : (this.state === 'burrow' ? 0.8 : 1);
+      const sp = SPRITES.wormMound;
+      const w = Math.round(sp.width * this.scale * grow), h = Math.round(sp.height * this.scale * grow);
+      ctx.drawImage(sp, sx - Math.round(w / 2) + jitter, Math.round(sy + 7 - h), w, h);
+      const topY = Math.round(sy + 7 - h);
+      if (this.state === 'rise') this.drawWarning(ctx, sx, topY, 1 - this.timer / cfg.windup);
+      UI.drawText(ctx, 'L' + this.level, sx - 4, topY - 5, this.palette.n, false);
+      return;
+    }
+    // 밖에 나온 몸통 — 막 솟았을 땐 위로 늘어났다가 자리를 잡는다
+    const age = cfg.surfaced - this.timer;
+    const stretch = age < 0.25 ? 1 + (0.25 - age) * 1.2 : 1;
+    const sprite = this.hurtFlash > 0 ? SPRITES.wormFlash[levelTier(this.level)] : SPRITES.worm[levelTier(this.level)];
+    const w = Math.round(sprite.width * this.scale), h = Math.round(sprite.height * this.scale * stretch);
+    this.drawShadow(ctx, sx, sy, 6 * this.scale);
+    ctx.drawImage(sprite, sx - Math.round(w / 2), Math.round(sy + 7 - h), w, h);
+    this.drawLabel(ctx, sx, Math.round(sy + 7 - h + 2));
   }
 }
 
@@ -6642,8 +7616,8 @@ const Items = {
     d.weapon = weaponId;
     d.growing = !!(opts && opts.growing);
     if (d.growing) d.life = 1e9;   // 성장 무기는 사라지지 않는다 (보스 보상이 증발하면 안 된다)
-    // 일반 드랍은 몬스터 레벨 상한(23)까지, 성장 무기만 표 끝까지 올라간다
-    d.level = Util.clamp(Math.round(level || 1), 1, d.growing ? CONFIG.weapons.levelMult.length : LEVEL_MAX);
+    // 떨군 몬스터의 레벨을 그대로 따른다 (사막 몬스터는 23을 넘는다). 표 끝(60)이 상한
+    d.level = Util.clamp(Math.round(level || 1), 1, CONFIG.weapons.levelMult.length);
     d.amount = 1;
     d.auraTimer = 0;
     this.drops.push(d);
@@ -7194,6 +8168,8 @@ const UI = {
     }
     this.drawText(ctx, 'HP', 8, 16, '#f0d9b5');
     this.drawText(ctx, Math.max(0, Math.ceil(player.hp)) + '/' + player.maxHp, 20, 16, '#f0d9b5');
+    // 독 — 남은 시간 동안 초록 글자가 깜빡인다
+    if (player.poison && Math.floor(World.time * 4) % 2 === 0) this.drawText(ctx, 'POISON', 83, 16, '#7dff8a');
 
     // ── 레벨 / 경험치
     this.bar(ctx, 8, 25, 72, 4, player.xp / player.xpNeed, '#9be564', '#25401c');
@@ -7368,6 +8344,15 @@ const UI = {
     this.drawText(ctx, 'F  ' + verb, sx, sy - 40, '#ff6b6b', true);
   },
 
+  // 텔레포트 비석 안내 — 어디로 가는지와 그곳 몬스터 레벨대를 같이 띄운다
+  drawPortalPrompt(ctx, portal, cam, dest) {
+    if (!portal || !dest) return;
+    const sx = Math.round(portal.x - cam.x), sy = Math.round(portal.y - cam.y);
+    this.drawText(ctx, 'LV ' + dest.levelRange[0] + '-' + dest.levelRange[1], sx, sy - 44, '#8f9aa8', true);
+    if (Math.floor(World.time * 3) % 2 === 0) return;
+    this.drawText(ctx, 'F  TO ' + dest.name, sx, sy - 52, '#5ff0ff', true);
+  },
+
   // 화면을 까맣게 덮는다 (동굴을 드나들 때의 장면 전환)
   drawFade(ctx, alpha) {
     if (alpha <= 0) return;
@@ -7497,6 +8482,10 @@ const PATCH_NOTES = [
   {
     date: '2026-09-14',
     notes: [
+      '두 번째 맵 "작열하는 사막(SCORCHED SANDS)" — 시작점 옆 텔레포트 비석에서 F. 숲과 같은 크기, 레벨 24~40',
+      '사막 몬스터 셋: 전갈(찌르기 + 독) / 선인장(사방 가시) / 모래벌레(땅속 접근 후 솟구침)',
+      '색 등급 셋 추가 (24~29 호박 / 30~35 은빛 / 36~ 흑요석). 사막 무기 드랍은 23 상한 없음',
+      '사막 전리품 셋과 사막 배경음 추가. 떠나 있는 동안 맵은 접어뒀다가 돌아오면 그대로',
       '전리품 드랍 확률 38% → 20%',
       '포션을 마셨을 때 회복량에 소수점이 찍히던 버그 수정',
       '인벤토리가 여러 칸짜리 가방이 됐다 (20칸, 상점 강화로 35칸) — 무기를 여럿 들고 다니며 바꿔 낄 수 있다',
@@ -7642,11 +8631,13 @@ const Game = {
   showInventory: false,
   showMap: false,
   confirmNewGame: false,
-  forestBanner: 0,   // 숲 이름표(태초의 숲)가 남는 시간 — 시작할 때와 동굴에서 나올 때 뜬다
+  forestBanner: 0,   // 맵 이름표(태초의 숲 / 작열하는 사막)가 남는 시간 — 시작·텔레포트·동굴에서 나올 때 뜬다
+  mapStates: {},     // 다른 맵에 있는 동안 접어둔 맵들 (맵·몬스터·드랍) — 텔레포트로 돌아오면 그대로 펼친다
+  portalPrompt: false,   // 텔레포트 비석 앞에 서 있는가
   boss: null,        // 살아있는 보스
   bossReadyIn: [0, 0, 0],   // 동굴마다 다시 도전할 수 있게 되기까지 남은 시간
   cavePrompt: null,  // 앞에 서 있는 동굴 입구 (입장 안내가 뜬다) — 없으면 null
-  arenaCave: 0,      // 지금 들어가 있는 보스 방이 몇 번째 동굴 것인가 (CONFIG.forest.caves 순서)
+  arenaCave: 0,      // 지금 들어가 있는 보스 방이 몇 번째 동굴 것인가 (CONFIG.maps.forest.caves 순서)
   exitPrompt: false, // 보스 방에서 나가는 굴 앞에 서 있는가
   inArena: false,    // 지금 보스 방 안인가
   overworld: null,   // 보스 방에 있는 동안 접어둔 겉맵 (맵·몬스터·드랍·플레이어 자리)
@@ -7683,7 +8674,8 @@ const Game = {
   // saved 가 있으면 그 시드로 같은 맵을 되살리고 진행 상황을 얹는다
   startGame(saved) {
     this.seed = (saved && saved.seed) || Math.floor(Math.random() * 100000);
-    World.init(this.seed);
+    this.mapStates = {};
+    World.init(this.seed, (saved && CONFIG.maps[saved.map]) ? saved.map : 'forest');
     Minimap.build();
     FX.reset();
     Items.reset();
@@ -7698,9 +8690,9 @@ const Game = {
     // 시작 지점은 숲 한가운데 — 사방 어디로 가든 점점 위험해진다
     this.player = new Player(World.startX, World.startY);
     if (saved) Save.apply(saved, this.player);
-    this.forestBanner = 2.8;   // 숲 이름을 한 번 띄운다
+    this.forestBanner = 2.8;   // 맵 이름을 한 번 띄운다
     this.boss = null;
-    this.bossReadyIn = CONFIG.forest.caves.map(() => 0);
+    this.bossReadyIn = CONFIG.maps.forest.caves.map(() => 0);   // 동굴은 숲에만 있다
     this.cavePrompt = null;
     this.exitPrompt = false;
     this.inArena = false;
@@ -7721,6 +8713,10 @@ const Game = {
     slime: (x, y, lv) => new Slime(x, y, lv),
     mushroom: (x, y, lv) => new Mushroom(x, y, lv),
     wolf: (x, y, lv) => new Wolf(x, y, lv),
+    // 사막
+    scorpion: (x, y, lv) => new Scorpion(x, y, lv),
+    cactus: (x, y, lv) => new Cactus(x, y, lv),
+    sandworm: (x, y, lv) => new Sandworm(x, y, lv),
   },
 
   // 보스 종류 -> 클래스 (CONFIG.bosses[*].type)
@@ -7730,9 +8726,9 @@ const Game = {
     mushroom: (x, y) => new ElderShroom(x, y),
   },
 
-  // 몇 번째 동굴의 보스 설정인가 (CONFIG.forest.caves 순서)
+  // 몇 번째 동굴의 보스 설정인가 (CONFIG.maps.forest.caves 순서)
   bossSpec(caveIndex) {
-    return CONFIG.bosses[CONFIG.forest.caves[caveIndex].boss];
+    return CONFIG.bosses[CONFIG.maps.forest.caves[caveIndex].boss];
   },
 
   /* ── 몬스터를 맵 아무 데나, 플레이어와 충분히 떨어진 빈 자리에 놓는다.
@@ -7747,9 +8743,9 @@ const Game = {
       if (!World.isFreeSpot(x, y, 9)) continue;
       if (Util.dist(x, y, this.player.x, this.player.y) < cs.minDistFromPlayer) continue;
 
-      // 레벨은 그 자리의 기준 레벨에서 조금 흔들린다 (가운데 1 -> 가장자리 23)
-      const spread = CONFIG.forest.levelSpread;
-      const level = Util.clamp(World.levelAt(x, y) + Util.randInt(-spread, spread), 1, LEVEL_MAX);
+      // 레벨은 그 자리의 기준 레벨에서 조금 흔들린다 (숲 1 -> 23, 사막 24 -> 40)
+      const spread = World.spec.levelSpread, range = World.spec.levelRange;
+      const level = Util.clamp(World.levelAt(x, y) + Util.randInt(-spread, spread), range[0], range[1]);
       const weights = World.typeWeightsAt(x, y);
       const names = Object.keys(weights);
       const type = names[Util.weightedIndex(names.map(n => weights[n]))];
@@ -7774,11 +8770,69 @@ const Game = {
     this.cavePrompt = null;
     this.exitPrompt = false;
     this.shopPrompt = false;
+    this.portalPrompt = false;
     if (this.inArena) this.updateArenaGate(dt);
     else {
       this.updateCaveGate();
       this.updateShopGate();
+      this.updatePortalGate();
     }
+  },
+
+  // 텔레포트 비석 앞에서 F — 다른 맵의 비석 앞으로 옮겨간다
+  updatePortalGate() {
+    const p = World.portal;
+    if (!p || this.player.dead || this.cavePrompt || this.shopPrompt || Items.nearWeapon) return;
+    if (Util.dist(this.player.x, this.player.y, p.x, p.y + 4) > CONFIG.portal.interactRange) return;
+
+    this.portalPrompt = true;
+    if (!Items.pickupRequested) return;
+    Items.pickupRequested = false;
+    const target = World.spec.portalTo;
+    this.beginTransition(() => this.travel(target));
+  },
+
+  /* ── 맵 옮겨가기 ───────────────────────────────────────
+     지금 맵(지형·몬스터·바닥 드랍)은 통째로 접어두고, 목적지 맵은 접어둔 게 있으면 펼치고 없으면 새로 만든다.
+     같은 시드에서 만들므로 처음 가도 저장을 다시 켜도 같은 사막이 나온다. 도착 자리는 그 맵의 비석 앞. */
+  travel(mapId) {
+    const from = World.mapId;
+    this.mapStates[from] = {
+      world: World.snapshot(),
+      enemies: this.enemies,
+      respawnQueue: this.respawnQueue,
+      drops: Items.drops.slice(),
+    };
+    Projectiles.reset();
+    FX.reset();
+    Items.reset();
+
+    const saved = this.mapStates[mapId];
+    if (saved) {
+      World.restore(saved.world);
+      this.enemies = saved.enemies;
+      this.respawnQueue = saved.respawnQueue;
+      for (const d of saved.drops) Items.drops.push(d);
+      delete this.mapStates[mapId];
+    } else {
+      World.init(this.seed, mapId);
+      this.enemies = [];
+      this.respawnQueue = [];
+    }
+    Minimap.build();
+    Ambient.reset();
+
+    const p = this.player;
+    const portal = World.portal;
+    p.x = portal.x; p.y = portal.y + 22;
+    p.spawnX = p.x; p.spawnY = p.y;
+    p.kx = p.ky = 0; p.invuln = 0.9; p.attackTimer = 0; p.activeSkill = null;
+    if (!saved) for (let i = 0; i < CONFIG.spawn.maxAlive; i++) this.spawnEnemy();
+
+    this.forestBanner = 2.8;
+    this.updateCamera(true);
+    FX.burst(p.x, p.y, 30, ['#5ff0ff', '#ffffff', '#2a8fa0'], { speed: 80, life: 0.7, gravity: -20 });
+    Sound.play('caveOut');
   },
 
   // 상인 앞에서 F — 무기 줍기와 동굴 입장이 먼저이고, 둘 다 아니면 상점이다
@@ -7972,13 +9026,13 @@ const Game = {
     return this.showInventory || this.showMap || this.confirmNewGame || Shop.open || PatchNotes.open;
   },
 
-  // 이름표 시간과 배경음 — 숲에서는 시작점에서 멀어질수록 곡이 무거워진다 (forest -> deep -> cave)
+  // 이름표 시간과 배경음 — 시작점에서 멀어질수록 곡이 무거워진다 (맵마다 spec.bgm 에 곡과 경계가 있다)
   updateBanners(dt) {
     this.lairBanner = Math.max(0, this.lairBanner - dt);
     this.forestBanner = Math.max(0, this.forestBanner - dt);
     if (this.inArena) { Sound.setTrack('boss'); return; }
-    const t = World.dangerAt(this.player.x, this.player.y), edges = CONFIG.forest.bgm;
-    Sound.setTrack(t < edges[0] ? 'forest' : (t < edges[1] ? 'deep' : 'cave'));
+    const t = World.dangerAt(this.player.x, this.player.y), bgm = World.spec.bgm;
+    Sound.setTrack(t < bgm.edges[0] ? bgm.tracks[0] : (t < bgm.edges[1] ? bgm.tracks[1] : bgm.tracks[2]));
   },
 
   // 체력이 낮으면 심장이 뛴다 (화면 가장자리는 UI 가 붉게 칠한다)
@@ -8181,9 +9235,10 @@ const Game = {
     if (this.cavePrompt) UI.drawCavePrompt(ctx, this.cavePrompt, cam, this.bossReadyIn[this.cavePrompt.caveIndex], 'ENTER');
     if (this.exitPrompt) UI.drawCavePrompt(ctx, World.arenaExit, cam, 0, 'LEAVE');
     if (this.shopPrompt && !this.showMap) Shop.drawPrompt(ctx, cam);
+    if (this.portalPrompt && !this.showMap) UI.drawPortalPrompt(ctx, World.portal, cam, CONFIG.maps[World.spec.portalTo]);
     if (Shop.open) Shop.draw(ctx, this.player);
     if (this.lairBanner > 0) UI.drawBanner(ctx, this.bossSpec(this.arenaCave).lairName, '#ff6b6b', this.lairBanner);
-    if (this.forestBanner > 0 && !this.showMap && !this.showInventory && !Shop.open && !this.title) UI.drawBanner(ctx, CONFIG.forest.name, CONFIG.forest.color, this.forestBanner);
+    if (this.forestBanner > 0 && !this.showMap && !this.showInventory && !Shop.open && !this.title) UI.drawBanner(ctx, World.spec.name, World.spec.color, this.forestBanner);
     if (this.confirmNewGame) UI.drawConfirm(ctx);
     if (this.soundFlash > 0) UI.drawSoundState(ctx, Sound.enabled);
     // 장면 전환은 맨 위를 덮는다

@@ -1,6 +1,6 @@
 'use strict';
 
-/* 숲 맵.
+/* 겉맵 — 태초의 숲과 작열하는 사막. 같은 뼈대로 만들고 spec(CONFIG.maps[*]) 의 theme 으로 갈린다.
    바닥(지형 타일 + 잔디디테일)은 한 번만 그려서 큰 캔버스에 구워두고,
    서 있는 물체(나무, 바위, 풀)는 매 프레임 캐릭터와 함께 y좌표 순으로 그린다.
 
@@ -11,11 +11,16 @@
 
 const TILE_GRASS = 0, TILE_DIRT = 1, TILE_SAND = 2, TILE_WATER = 3, TILE_MEADOW = 4;
 
-// 타일 경계를 흐릴 때 쓰는 대표색 — [그늘 여부][타일종류]
-const TILE_BASE_COLOR = [
-  ['#3f8b40', '#7d5f3c', '#c2a877', '#2f6f9e', '#3f8b40'],   // 볕이 드는 숲 바닥
-  ['#2c6431', '#7d5f3c', '#c2a877', '#2f6f9e', '#2c6431'],   // 빽빽한 숲의 그늘진 바닥
-];
+// 타일 경계를 흐릴 때 쓰는 대표색 — [테마][색 줄][타일종류]. 숲은 볕/그늘 두 줄, 사막은 한 줄
+const TILE_BASE_COLOR = {
+  forest: [
+    ['#3f8b40', '#7d5f3c', '#c2a877', '#2f6f9e', '#3f8b40'],   // 볕이 드는 숲 바닥
+    ['#2c6431', '#7d5f3c', '#c2a877', '#2f6f9e', '#2c6431'],   // 빽빽한 숲의 그늘진 바닥
+  ],
+  desert: [
+    ['#3f8b40', '#9a6b3c', '#d9c27f', '#2f6f9e', '#e0cc8a'],   // 오아시스 풀, 갈라진 땅, 모래, 물, 모래언덕
+  ],
+};
 
 const World = {
   w: 0,            // 픽셀 단위 맵 크기
@@ -29,18 +34,23 @@ const World = {
   tileBlocked: null,
   time: 0,         // 풀이 흔들리는 데 쓰는 누적 시간
 
-  init(seed) {
+  // mapId: 'forest' | 'desert'. 같은 시드라도 맵마다 다른 지형이 나오도록 시드를 비틀어 쓴다
+  init(seed, mapId) {
     const T = CONFIG.TILE;
+    this.mapId = mapId || 'forest';
+    this.spec = CONFIG.maps[this.mapId];
+    seed = seed + (this.mapId === 'desert' ? 50021 : 0);
     this.cols = CONFIG.MAP_W;
     this.rows = CONFIG.MAP_H;
     this.isArena = false;
     this.arenaExit = null;
+    this.portal = null;
     this.w = this.cols * T;
     this.h = this.rows * T;
     this.props = [];
     this.solids = [];
     this.time = 0;
-    this.caves = CONFIG.forest.caves.map(() => null);   // 동굴 입구 셋 — 각자 자기 보스 방으로 이어진다
+    this.caves = this.spec.caves.map(() => null);   // 동굴 입구 — 각자 자기 보스 방으로 이어진다 (사막엔 없다)
     this.merchant = null;   // 상인 (Shop.place 가 채운다)
 
     this.buildDanger(seed);
@@ -50,6 +60,7 @@ const World = {
     this.buildGrid();   // 나무 충돌을 먼저 등록해야 장식이 나무를 피해서 놓인다
     this.placeDecor(Util.makeRng(seed + 41));
     Shop.place();       // 9주차: 시작 지점 옆 가판대와 상인
+    this.placePortal(); // 텔레포트 비석 — 시작 지점 반대편
     this.buildGrid();   // 바위·그루터기·가판대까지 포함해 다시 만든다
   },
 
@@ -63,9 +74,9 @@ const World = {
      만들어 둔 것을 그냥 들고 있는 편이 낫다. (바닥 캔버스가 커봐야 20MB 남짓) */
   STATE_KEYS: [
     'cols', 'rows', 'w', 'h', 'ground', 'props', 'solids', 'grid',
-    'tiles', 'tileBlocked', 'shade', 'dangerNoise',
+    'tiles', 'tileBlocked', 'shade', 'colorRow', 'dangerNoise',
     'startX', 'startY', 'wetNoise', 'openNoise', 'caves', 'arenaExit', 'merchant',
-    'time', 'isArena',
+    'time', 'isArena', 'mapId', 'spec', 'portal',
   ],
 
   snapshot() {
@@ -94,14 +105,17 @@ const World = {
     this.time = 0;
     this.caves = [];
     this.merchant = null;
+    this.portal = null;
     this.isArena = true;
     this.arenaCave = caveIndex || 0;
+    // spec 은 들어온 겉맵 것을 그대로 둔다 (배경음·이름표가 참조한다). 보스 방 자체는 위험도 0
 
     const rng = Util.makeRng(seed);
     const N = this.cols * this.rows;
     this.tiles = new Uint8Array(N);
     this.tileBlocked = new Uint8Array(N);
     this.shade = new Uint8Array(N);
+    this.colorRow = new Uint8Array(N);
     // 겉맵 전용 노이즈를 참조하다 터지지 않도록 밋밋한 값으로 채워둔다
     this.wetNoise = () => 0;
     this.openNoise = () => 0.5;
@@ -219,7 +233,7 @@ const World = {
   },
 
   /* ── 위험도 — 시작점(맵 한가운데)에서 얼마나 멀리 왔는가 (0~1) ──
-     맵 하나가 통째로 "태초의 숲"이고, 지역 경계 대신 이 값이 몬스터 레벨·종류, 나무, 소품을 정한다.
+     지역 경계 대신 이 값이 몬스터 레벨·종류, 초목, 소품을 정한다 (수치는 맵마다 spec 에 있다).
      거리는 맵 모양을 따르는 둥근 사각형(4제곱 노름)으로 재서 가장자리 어디서나 1에 닿고,
      노이즈를 조금 섞어 같은 레벨대가 완벽한 고리로 보이지 않게 한다. */
   buildDanger(seed) {
@@ -233,20 +247,20 @@ const World = {
     if (this.isArena) return 0;
     const dx = Math.abs(x - this.startX) / (this.w / 2), dy = Math.abs(y - this.startY) / (this.h / 2);
     const d = Math.pow(dx * dx * dx * dx + dy * dy * dy * dy, 0.25);
-    const wob = (this.dangerNoise(x / this.w, y / this.h) - 0.5) * CONFIG.forest.wobble;
+    const wob = (this.dangerNoise(x / this.w, y / this.h) - 0.5) * this.spec.wobble;
     return Util.clamp(d + wob, 0, 1);
   },
 
-  // 그 자리의 기준 몬스터 레벨 (1 ~ LEVEL_MAX). 안전 반경 안은 1, 가장자리에서 최대
+  // 그 자리의 기준 몬스터 레벨 (spec.levelRange 안). 안전 반경 안은 최소, 가장자리에서 최대
   levelAt(x, y) {
-    const f = CONFIG.forest;
+    const f = this.spec, lo = f.levelRange[0], hi = f.levelRange[1];
     const t = Util.clamp((this.dangerAt(x, y) - f.safeRadius) / (1 - f.safeRadius), 0, 1);
-    return 1 + Math.round(Math.pow(t, f.curve) * (LEVEL_MAX - 1));
+    return lo + Math.round(Math.pow(t, f.curve) * (hi - lo));
   },
 
   // 그 자리에 어떤 몬스터가 잘 나오는가 — 세 기준점(t = 0 / 0.5 / 1) 사이를 보간
   typeWeightsAt(x, y) {
-    const list = CONFIG.forest.typeWeights;
+    const list = this.spec.typeWeights;
     const t = this.dangerAt(x, y) * (list.length - 1);
     const i = Math.min(list.length - 2, Math.floor(t)), u = t - i;
     const out = {};
@@ -256,7 +270,7 @@ const World = {
 
   // [t=0 값, t=1 값] 사이를 위험도로 보간 (나무 밀도, 침엽수 비율 등)
   forestAt(key, x, y) {
-    const pair = CONFIG.forest[key];
+    const pair = this.spec[key];
     return Util.lerp(pair[0], pair[1], this.dangerAt(x, y));
   },
 
@@ -267,27 +281,34 @@ const World = {
     this.wetNoise = this.makeNoise(seed + 11, 7, 5);
     this.openNoise = this.makeNoise(seed + 29, 10, 8);
     const bloom = this.makeNoise(seed + 53, 12, 9);
-    this.shade = new Uint8Array(W * H);   // 빽빽한 숲 바닥은 그늘져서 잔디가 어둡다
-    // 시작 지점(숲 한가운데) 주변은 물 없이 비워둔다
+    this.shade = new Uint8Array(W * H);      // 빽빽한 숲 바닥은 그늘져서 잔디가 어둡다
+    this.colorRow = new Uint8Array(W * H);   // 경계 흐리기·미니맵이 쓰는 색 줄 (숲: 볕 0 / 그늘 1, 사막: 0)
+    const desert = this.spec.theme === 'desert';
+    const base = desert ? TILE_SAND : TILE_GRASS;   // 바탕 타일 — 사막은 모래
+    // 시작 지점(맵 한가운데) 주변은 물 없이 비워둔다
     const cx = this.startX / CONFIG.TILE, cy = this.startY / CONFIG.TILE;
 
     for (let ty = 0; ty < H; ty++) {
       for (let tx = 0; tx < W; tx++) {
         const fx = tx / W, fy = ty / H;
         const nearStart = Util.dist(tx, ty, cx, cy) < cfg.startClearTiles;
-        let t = TILE_GRASS;
+        let t = base;
 
         const wet = this.wetNoise(fx, fy);
         if (!nearStart) {
-          if (wet > cfg.waterLevel) t = TILE_WATER;
+          if (desert) {
+            // 사막의 물은 드문 오아시스 — 물 둘레에만 풀이 자란다
+            if (wet > cfg.oasisLevel) t = TILE_WATER;
+            else if (wet > cfg.oasisGrassLevel) t = TILE_GRASS;
+          } else if (wet > cfg.waterLevel) t = TILE_WATER;
           else if (wet > cfg.shoreLevel) t = TILE_SAND;
         }
-        if (t === TILE_GRASS) {
-          if (this.openNoise(fx, fy) < cfg.clearingLevel) t = TILE_DIRT;
-          else if (bloom(fx, fy) > cfg.meadowLevel) t = TILE_MEADOW;
+        if (t === base) {
+          if (this.openNoise(fx, fy) < cfg.clearingLevel) t = TILE_DIRT;      // 공터 (사막: 갈라진 땅)
+          else if (bloom(fx, fy) > cfg.meadowLevel) t = TILE_MEADOW;          // 꽃밭 (사막: 모래언덕)
         }
         this.tiles[ty * W + tx] = t;
-        if (this.openNoise(fx, fy) > CONFIG.forest.shadeLevel && !nearStart) this.shade[ty * W + tx] = 1;
+        if (this.openNoise(fx, fy) > this.spec.shadeLevel && !nearStart) { this.shade[ty * W + tx] = 1; this.colorRow[ty * W + tx] = 1; }
       }
     }
 
@@ -349,7 +370,7 @@ const World = {
     for (let ty = 0; ty < H; ty++) {
       for (let tx = 0; tx < W; tx++) {
         const i = ty * W + tx;
-        const set = this.groundSet(this.tiles[i], this.shade[i] ? 'shade' : 'forest');
+        const set = this.groundSet(this.tiles[i], this.spec.theme === 'desert' ? 'desert' : (this.shade[i] ? 'shade' : 'forest'));
         ctx.drawImage(set[Math.floor(rng() * set.length)], tx * T, ty * T);
       }
     }
@@ -362,7 +383,7 @@ const World = {
   groundSet(tile, setName) {
     const g = SPRITES.groundSets[setName] || SPRITES.groundSets.forest;
     if (tile === TILE_DIRT) return g.dirt;
-    if (tile === TILE_SAND) return SPRITES.sand;    // 물가 모래는 어디서나 같다
+    if (tile === TILE_SAND) return g.sand || SPRITES.sand;    // 물가 모래 (사막은 자기 모래)
     if (tile === TILE_WATER) return SPRITES.water;
     if (tile === TILE_MEADOW) return g.meadow;
     return g.grass;
@@ -372,7 +393,8 @@ const World = {
   // 타일 종류가 같아도 그늘 여부가 다르면 색이 다르므로 그늘 경계도 함께 흐려진다.
   ditherEdges(ctx, rng) {
     const T = CONFIG.TILE, W = this.cols, H = this.rows;
-    const colorAt = (i) => TILE_BASE_COLOR[this.shade[i]][this.tiles[i]];
+    const rows = TILE_BASE_COLOR[this.spec.theme] || TILE_BASE_COLOR.forest;
+    const colorAt = (i) => rows[this.colorRow[i]][this.tiles[i]];
     const sprinkle = (x, y, w, h, color, n) => {
       ctx.fillStyle = color;
       for (let i = 0; i < n; i++) {
@@ -404,11 +426,20 @@ const World = {
   // 지형에 어울리는 잔디테일을 바닥에 직접 찍는다 (움직이지 않으므로 구워도 된다)
   bakeDetails(ctx, rng) {
     const T = CONFIG.TILE, W = this.cols, H = this.rows;
+    const desert = this.spec.theme === 'desert';
     for (let ty = 0; ty < H; ty++) {
       for (let tx = 0; tx < W; tx++) {
         const i = ty * W + tx;
         const t = this.tiles[i], shaded = this.shade[i];
         const x = tx * T, y = ty * T;
+
+        if (desert) {
+          // 사막 — 오아시스 풀에만 꽃, 모래엔 아주 드문 돌멩이, 갈라진 땅엔 자갈
+          if (t === TILE_GRASS && rng() < 0.14) ctx.drawImage(Util.choice(SPRITES.flower), x + Math.floor(rng() * 12), y + Math.floor(rng() * 11));
+          else if (t === TILE_DIRT && rng() < 0.03) ctx.drawImage(SPRITES.rock[0], x + Math.floor(rng() * 5), y + Math.floor(rng() * 6));
+          else if (t === TILE_SAND && rng() < 0.008) ctx.drawImage(SPRITES.rock[0], x + Math.floor(rng() * 5), y + Math.floor(rng() * 6));
+          continue;
+        }
 
         // 그늘진 바닥은 꽃이 훨씬 드물다
         const flowerRate = shaded ? 0.05 : 0.16;
@@ -450,11 +481,13 @@ const World = {
     return p;
   },
 
-  // 나무는 개방도 노이즈가 높은 곳(=숲)에 빽빽하게, 공터에는 드물게 심는다
+  // 나무는 개방도 노이즈가 높은 곳(=숲)에 빽빽하게, 공터에는 드물게 심는다.
+  // 사막에서는 같은 자리에 선인장·바위기둥이 서고, 오아시스 풀밭에는 야자수가 선다
   placeTrees(rng) {
     const W = this.cols, H = this.rows, cfg = CONFIG.world;
     const minGap = 26;
     const cx = this.startX, cy = this.startY;
+    const desert = this.spec.theme === 'desert';
 
     /* 나무끼리 너무 붙지 않게 간격을 확인한다.
        심은 나무를 전부 훑으면 맵이 커질수록 급격히 느려지므로(개수의 제곱),
@@ -480,22 +513,29 @@ const World = {
       if (x < 20 || x > this.w - 20 || y < 46 || y > this.h - 10) return;
       if (!force && Util.dist(x, y, cx, cy) < cfg.startClearTiles * CONFIG.TILE) return;
       const t = this.tileAt(x, y);
-      if (t === TILE_WATER || t === TILE_SAND || t === TILE_DIRT) return;
+      if (t === TILE_WATER || t === TILE_DIRT) return;
+      if (!desert && t === TILE_SAND) return;   // 숲의 물가 모래엔 나무가 없다
       if (tooClose(x, y)) return;
       const k = bkey(x, y);
       if (!buckets.has(k)) buckets.set(k, []);
       buckets.get(k).push({ x: x, y: y });
 
-      // 시작점에서 멀어질수록 침엽수와 고사목이 늘어난다 — 숲이 점점 험해 보인다
       let sprite, solid;
-      if (rng() < this.forestAt('pineChance', x, y)) {
+      if (desert) {
+        // 오아시스 풀밭엔 야자수, 가장자리 담장과 먼 곳엔 바위기둥, 나머지는 선인장 (고사목이 조금 섞인다)
+        if (t === TILE_GRASS) { sprite = Util.choice(SPRITES.palm); solid = [5, 5, 8]; }
+        else if (force || rng() < this.forestAt('pineChance', x, y)) { sprite = Util.choice(SPRITES.rockSpire); solid = [7, 5, 8]; }
+        else if (rng() < this.forestAt('deadChance', x, y)) { sprite = Util.choice(SPRITES.deadTree); solid = [4, 4, 7]; }
+        else { sprite = Util.choice(SPRITES.cactus); solid = [4, 4, 7]; }
+      } else if (rng() < this.forestAt('pineChance', x, y)) {
+        // 시작점에서 멀어질수록 침엽수와 고사목이 늘어난다 — 숲이 점점 험해 보인다
         sprite = Util.choice(SPRITES.pine); solid = [5, 5, 8];
       } else if (rng() < this.forestAt('deadChance', x, y)) {
         sprite = Util.choice(SPRITES.deadTree); solid = [4, 4, 7];
       } else {
         sprite = Util.choice(SPRITES.tree); solid = [6, 5, 8];
       }
-      this.addProp(sprite, x, y, { solid: solid }).tree = true;   // 미니맵에 숲으로 표시된다
+      this.addProp(sprite, x, y, { solid: solid }).tree = true;   // 미니맵에 숲으로 표시되고, 뒤에 서면 옅어진다
     };
 
     // 맵 가장자리는 나무로 둘러 벽처럼 막는다
@@ -535,6 +575,9 @@ const World = {
       return null;
     };
 
+    const desert = this.spec.theme === 'desert';
+    if (desert) { this.placeDesertDecor(rng, spot); return; }
+
     // 흔들리는 풀 — 숲을 살아있게 만드는 가장 큰 요소
     for (let i = 0, n = this.scaled(260); i < n; i++) {
       const s = spot();
@@ -558,7 +601,7 @@ const World = {
        방향은 120도씩 벌려 서로 다른 쪽에 두고, 맵마다 돌아가는 각도가 달라 매번 다른 자리다.
        흔하면 이정표 구실을 못 하므로 희소하게 두었다. 미니맵에 따로 찍힌다. */
     const base = rng() * Math.PI * 2;
-    CONFIG.forest.caves.forEach((spec, index) => {
+    this.spec.caves.forEach((spec, index) => {
       const want = base + index * (Math.PI * 2 / 3);
       for (let i = 0; i < 3000; i++) {
         // 원하는 방향 ±30도, 원하는 고리 ±0.05 안에서 빈자리를 찾는다
@@ -596,6 +639,53 @@ const World = {
       const s = spot(TILE_SAND);
       if (s) this.addProp(Util.choice(SPRITES.cattail), s.x, s.y, { footHeight: 1 });
     }
+  },
+
+  // 사막 소품 — 마른 풀, 마른 수풀, 바위(많다), 공 선인장(부딪힌다), 뼈
+  placeDesertDecor(rng, spot) {
+    for (let i = 0, n = this.scaled(200); i < n; i++) {
+      const s = spot();
+      if (!s) continue;
+      const t = this.tileAt(s.x, s.y);
+      if (t === TILE_DIRT) continue;
+      const frames = t === TILE_GRASS ? Util.choice(SPRITES.tuft) : Util.choice(SPRITES.dryTuft);   // 오아시스엔 푸른 풀
+      this.addProp(frames[1], s.x, s.y, { frames: frames, footHeight: 1 });
+    }
+    for (let i = 0, n = this.scaled(60); i < n; i++) {
+      const s = spot();
+      if (s) this.addProp(Util.choice(SPRITES.dryBush), s.x, s.y, { footHeight: 3 });
+    }
+    for (let i = 0, n = this.scaled(110); i < n; i++) {
+      const s = spot();
+      if (!s) continue;
+      if (rng() > this.forestAt('boulders', s.x, s.y) * 0.4) continue;
+      this.addProp(Util.choice(SPRITES.boulder), s.x, s.y, { solid: [7, 4, 6], footHeight: 3 });
+    }
+    for (let i = 0, n = this.scaled(50); i < n; i++) {
+      const s = spot();
+      if (s && this.tileAt(s.x, s.y) !== TILE_GRASS) this.addProp(Util.choice(SPRITES.barrelCactus), s.x, s.y, { solid: [5, 3, 5], footHeight: 3 });
+    }
+    for (let i = 0, n = this.scaled(26); i < n; i++) {
+      const s = spot();
+      if (s) this.addProp(Util.choice(SPRITES.bones), s.x, s.y, { footHeight: 2 });
+    }
+  },
+
+  /* ── 텔레포트 비석 ──────────────────────────────────────
+     시작 지점 왼쪽(상인 반대편)에 하나. 앞에서 F 를 누르면 다른 맵의 비석 앞으로 옮겨간다.
+     룬이 0.5초마다 깜빡이고 푸른 알갱이가 피어올라 멀리서도 눈에 띈다. */
+  placePortal() {
+    const x = this.startX - 44, y = this.startY - 6;
+    const p = this.addProp(SPRITES.obelisk[0], x, y, { solid: [7, 3, 5], footHeight: 3 });
+    p.portal = true;
+    p.landmark = 'portal';   // 미니맵에 하늘색으로 찍힌다
+    p.draw = (ctx, cam) => {
+      const sx = Math.round(p.x - cam.x), sy = Math.round(p.y - cam.y);
+      fillCircle(ctx, sx, sy + 1, 7, 'rgba(0,0,0,0.28)');
+      const sp = (Math.floor(World.time * 2) % 2 === 0) ? SPRITES.obelisk[0] : SPRITES.obelisk[1];
+      ctx.drawImage(sp, sx + p.ox, sy + p.oy);
+    };
+    this.portal = p;
   },
 
   /* ── 충돌 ──────────────────────────────────────────────── */

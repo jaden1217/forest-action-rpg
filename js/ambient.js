@@ -41,7 +41,7 @@ const Ambient = {
       fall: Util.rand(9, 20),
       phase: Util.rand(0, Math.PI * 2),
       wobble: Util.rand(6, 16),
-      sprite: Util.choice(SPRITES.leaf),
+      sprite: Util.choice(World.spec && World.spec.theme === 'desert' ? SPRITES.sandGrain : SPRITES.leaf),   // 사막엔 모래 알갱이가 날린다
       t: Util.rand(0, 6),
     };
   },

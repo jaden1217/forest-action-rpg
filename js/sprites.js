@@ -352,6 +352,9 @@ const LEVEL_PALETTES = [
   { m: '#1e3a72', M: '#3f6ec9', n: '#93b7ff' },  // Lv3 파랑
   { m: '#4a2170', M: '#8a45c9', n: '#d3a2ff' },  // Lv4 보라
   { m: '#6e1c1c', M: '#c93f3f', n: '#ffa08f' },  // Lv5 빨강
+  { m: '#7a4a10', M: '#d98a2b', n: '#ffd27a' },  // 사막 24~29 호박
+  { m: '#5a6470', M: '#a9b4c0', n: '#f0f4f8' },  // 사막 30~35 은빛
+  { m: '#1a1220', M: '#4a3760', n: '#b48fd8' },  // 사막 36~   흑요석
 ];
 
 /* ── 절차적 생성 스프라이트 ────────────────────────────────── */
@@ -405,15 +408,16 @@ function makeTree(seed) {
   return cv;
 }
 
-function makeBush(seed) {
+function makeBush(seed, pal) {
+  pal = pal || { out: '#0e2f16', dark: '#22622c', mid: '#34873c', lit: '#49a750', shade: '#1a4a22' };
   const cv = makeCanvas(18, 15), ctx = cv.getContext('2d');
   const rng = Util.makeRng(seed);
   const blobs = [[6, 9, 5], [12, 9, 5], [9, 7, 5]];
-  for (const b of blobs) fillCircle(ctx, b[0], b[1], b[2] + 1, '#0e2f16');
-  for (const b of blobs) fillCircle(ctx, b[0], b[1], b[2], '#22622c');
-  for (const b of blobs) fillCircle(ctx, b[0] - 1, b[1] - 2, b[2] - 2, '#34873c');
+  for (const b of blobs) fillCircle(ctx, b[0], b[1], b[2] + 1, pal.out);
+  for (const b of blobs) fillCircle(ctx, b[0], b[1], b[2], pal.dark);
+  for (const b of blobs) fillCircle(ctx, b[0] - 1, b[1] - 2, b[2] - 2, pal.mid);
   for (let i = 0; i < 14; i++) {
-    ctx.fillStyle = rng() < 0.5 ? '#49a750' : '#1a4a22';
+    ctx.fillStyle = rng() < 0.5 ? pal.lit : pal.shade;
     ctx.fillRect(2 + Math.floor(rng() * 14), 3 + Math.floor(rng() * 9), 1, 1);
   }
   return cv;
@@ -650,6 +654,164 @@ function makeBoulder(seed) {
   return cv;
 }
 
+/* ── 사막 바닥·소품 ───────────────────────────────────────── */
+
+// 사막 모래 — 물가 모래보다 따뜻하고 밝다
+function makeDesertSandTile(seed) {
+  return makeNoiseTile(seed, '#d9c27f', '#c9b06e', '#e6d191');
+}
+
+// 모래언덕 — 바람결 무늬가 진 밝은 모래 (꽃밭 자리에 쓴다)
+function makeDuneTile(seed) {
+  const cv = makeNoiseTile(seed, '#e0cc8a', '#d1bb79', '#ecd99c');
+  const ctx = cv.getContext('2d');
+  const rng = Util.makeRng(seed + 17);
+  for (let i = 0; i < 3; i++) {
+    const x = Math.floor(rng() * 8), y = 2 + Math.floor(rng() * 12);
+    ctx.fillStyle = '#c4aa66';
+    ctx.fillRect(x, y, 4, 1);
+    ctx.fillRect(x + 4, y + 1, 4, 1);
+  }
+  return cv;
+}
+
+// 갈라진 땅 — 마른 진흙. 숲의 흙 자리(공터·길)에 쓴다
+function makeCrackedTile(seed) {
+  const cv = makeNoiseTile(seed, '#9a6b3c', '#8a5e33', '#a97a47');
+  const ctx = cv.getContext('2d');
+  const rng = Util.makeRng(seed + 23);
+  for (let i = 0; i < 3; i++) {   // 갈라진 금
+    let x = Math.floor(rng() * 14), y = Math.floor(rng() * 14);
+    ctx.fillStyle = '#6a4424';
+    for (let k = 0; k < 4; k++) {
+      ctx.fillRect(x, y, 1, 1);
+      x += rng() < 0.5 ? 1 : 0; y += rng() < 0.6 ? 1 : 0;
+      if (x > 15 || y > 15) break;
+    }
+  }
+  return cv;
+}
+
+// 기둥 선인장 (22x40) — 몸통 하나에 팔 둘. 나무 자리에 선다 (부딪힌다)
+function makeCactus(seed) {
+  const cv = makeCanvas(22, 40), ctx = cv.getContext('2d');
+  const rng = Util.makeRng(seed);
+  const OUT = '#12330f', DARK = '#2a6a2a', MID = '#3f9040', LIT = '#5ab05a';
+  const col = (x, y0, y1, w) => {   // 위가 둥근 세로 기둥
+    ctx.fillStyle = OUT; ctx.fillRect(x - 1, y0 - 1, w + 2, y1 - y0 + 2);
+    ctx.fillStyle = DARK; ctx.fillRect(x, y0, w, y1 - y0);
+    ctx.fillStyle = MID; ctx.fillRect(x + 1, y0, w - 2, y1 - y0);
+    ctx.fillStyle = LIT; ctx.fillRect(x + 1, y0 + 1, 1, y1 - y0 - 2);
+    ctx.fillStyle = OUT; ctx.fillRect(x - 1, y0 - 1, 1, 1); ctx.fillRect(x + w, y0 - 1, 1, 1);
+    ctx.fillStyle = MID; ctx.fillRect(x, y0 - 1, w, 1);
+  };
+  const armL = 5 + Math.floor(rng() * 4), armR = 6 + Math.floor(rng() * 4);
+  col(3, 22 - armL, 27, 4);  ctx.fillStyle = OUT; ctx.fillRect(7, 24, 1, 4); ctx.fillStyle = DARK; ctx.fillRect(7, 25, 2, 2);   // 왼팔
+  col(15, 20 - armR, 26, 4); ctx.fillStyle = OUT; ctx.fillRect(14, 23, 1, 4); ctx.fillStyle = DARK; ctx.fillRect(13, 24, 2, 2);  // 오른팔
+  col(8, 6, 39, 6);          // 몸통
+  // 가시 — 밝은 점을 세로로 띄엄띄엄
+  for (let i = 0; i < 26; i++) {
+    const x = Math.floor(rng() * 22), y = Math.floor(rng() * 38);
+    const px = ctx.getImageData(x, y, 1, 1).data;
+    if (px[3] === 0) continue;
+    ctx.fillStyle = rng() < 0.5 ? '#d8e8b0' : '#1e4d1e';
+    ctx.fillRect(x, y, 1, 1);
+  }
+  // 꽃 하나 (가끔)
+  if (rng() < 0.5) { ctx.fillStyle = '#e56b7a'; ctx.fillRect(10, 4, 2, 2); ctx.fillStyle = '#ffd0d8'; ctx.fillRect(10, 4, 1, 1); }
+  return cv;
+}
+
+// 공 선인장 (14x13) — 낮고 둥글다. 그루터기 자리에 선다 (부딪힌다)
+function makeBarrelCactus(seed) {
+  const cv = makeCanvas(14, 13), ctx = cv.getContext('2d');
+  const rng = Util.makeRng(seed);
+  fillCircle(ctx, 7, 7, 6, '#12330f');
+  fillCircle(ctx, 7, 7, 5, '#2a6a2a');
+  fillCircle(ctx, 6, 6, 3.5, '#3f9040');
+  ctx.fillStyle = '#2a6a2a';
+  for (let x = 3; x <= 11; x += 2) ctx.fillRect(x, 3, 1, 8);   // 세로 골
+  for (let i = 0; i < 10; i++) { ctx.fillStyle = '#d8e8b0'; ctx.fillRect(2 + Math.floor(rng() * 10), 2 + Math.floor(rng() * 9), 1, 1); }
+  ctx.fillStyle = '#e56b7a'; ctx.fillRect(6, 1, 2, 2); ctx.fillStyle = '#ffd0d8'; ctx.fillRect(6, 1, 1, 1);
+  return cv;
+}
+
+// 야자수 (30x44) — 오아시스 둘레. 휘어진 줄기 위에 잎이 사방으로 늘어진다
+function makePalm(seed) {
+  const cv = makeCanvas(30, 44), ctx = cv.getContext('2d');
+  const rng = Util.makeRng(seed);
+  const lean = rng() < 0.5 ? -1 : 1;
+  // 줄기 — 아래에서 위로 살짝 휜다
+  for (let y = 43; y >= 12; y--) {
+    const t = (43 - y) / 31;
+    const x = 14 + Math.round(lean * t * t * 5);
+    ctx.fillStyle = '#4a3018'; ctx.fillRect(x - 1, y, 5, 1);
+    ctx.fillStyle = (y % 3 === 0) ? '#8a6a3a' : '#6e4e2a'; ctx.fillRect(x, y, 3, 1);
+  }
+  const cx = 14 + lean * 5, cy = 12;
+  // 잎 — 여덟 방향으로 늘어지는 선
+  const OUT = '#12330f', LEAF = '#3f9040', LIT = '#6bb35b';
+  for (let i = 0; i < 8; i++) {
+    const a = -Math.PI * 0.9 + (i / 7) * Math.PI * 0.8 * 2;
+    const len = 9 + Math.floor(rng() * 4);
+    for (let k = 0; k < len; k++) {
+      const droop = k * k * 0.06;
+      const x = Math.round(cx + Math.cos(a) * k), y = Math.round(cy + Math.sin(a) * k * 0.5 + droop);
+      ctx.fillStyle = OUT; ctx.fillRect(x - 1, y - 1, 3, 3);
+    }
+  }
+  for (let i = 0; i < 8; i++) {
+    const a = -Math.PI * 0.9 + (i / 7) * Math.PI * 0.8 * 2;
+    const len = 9 + Math.floor(rng() * 4);
+    for (let k = 0; k < len; k++) {
+      const droop = k * k * 0.06;
+      const x = Math.round(cx + Math.cos(a) * k), y = Math.round(cy + Math.sin(a) * k * 0.5 + droop);
+      ctx.fillStyle = k % 2 ? LEAF : LIT; ctx.fillRect(x, y, 1, 1);
+    }
+  }
+  ctx.fillStyle = '#6e4e2a'; ctx.fillRect(cx - 1, cy - 1, 3, 3);   // 잎 뿌리
+  // 열매
+  ctx.fillStyle = '#c96a3a'; ctx.fillRect(cx - 2, cy + 2, 2, 2); ctx.fillRect(cx + 1, cy + 3, 2, 2);
+  return cv;
+}
+
+// 바위기둥 (22x34) — 사막의 침엽수 자리. 맵 가장자리 담장으로도 쓴다 (부딪힌다)
+function makeRockSpire(seed) {
+  const cv = makeCanvas(22, 34), ctx = cv.getContext('2d');
+  const rng = Util.makeRng(seed);
+  const OUT = '#3a2a1a', DARK = '#8a6a44', MID = '#b08a5a', LIT = '#d0aa74';
+  const topX = 8 + Math.floor(rng() * 6);
+  for (let y = 2; y < 33; y++) {
+    const t = (y - 2) / 31;
+    const half = 1 + Math.round(t * 8 + (rng() - 0.5) * 1.5);
+    const cx = Math.round(topX + (11 - topX) * t);
+    ctx.fillStyle = OUT; ctx.fillRect(cx - half - 1, y, half * 2 + 3, 1);
+    ctx.fillStyle = y < 6 ? LIT : DARK; ctx.fillRect(cx - half, y, half * 2 + 1, 1);
+    ctx.fillStyle = MID; ctx.fillRect(cx - half, y, Math.max(1, half), 1);
+    if (rng() < 0.3) { ctx.fillStyle = LIT; ctx.fillRect(cx - half + 1, y, 1, 1); }
+  }
+  ctx.fillStyle = OUT; ctx.fillRect(1, 33, 20, 1);
+  return cv;
+}
+
+// 뼈 (16x9) — 해골과 갈비. 지나갈 수 있는 장식
+function makeBones(seed) {
+  const cv = makeCanvas(16, 9), ctx = cv.getContext('2d');
+  const rng = Util.makeRng(seed);
+  const OUT = '#6a5a44', BONE = '#efe6d0', DARK = '#c9bb9c';
+  fillCircle(ctx, 4, 4, 3.5, OUT); fillCircle(ctx, 4, 4, 2.5, BONE);
+  ctx.fillStyle = OUT; ctx.fillRect(3, 4, 1, 1); ctx.fillRect(5, 4, 1, 1);   // 눈구멍
+  ctx.fillStyle = DARK; ctx.fillRect(3, 6, 3, 1);
+  for (let i = 0; i < 4; i++) {   // 갈비
+    const x = 8 + i * 2;
+    ctx.fillStyle = OUT; ctx.fillRect(x, 2 + (i % 2), 1, 5);
+    ctx.fillStyle = BONE; ctx.fillRect(x, 3 + (i % 2), 1, 3);
+  }
+  ctx.fillStyle = OUT; ctx.fillRect(8, 1, 8, 1); ctx.fillStyle = BONE; ctx.fillRect(9, 1, 6, 1);
+  if (rng() < 0.5) { ctx.fillStyle = BONE; ctx.fillRect(12, 8, 3, 1); }
+  return cv;
+}
+
 // 버섯 (9x10) — 색만 바꿔 여러 종류를 만든다
 const MUSHROOM = [
   '..ooooo..',
@@ -682,7 +844,8 @@ function makeCattail(seed) {
 }
 
 // 흔들리는 풀 — 같은 시드로 3프레임을 만들어 기울기만 바꾼다
-function makeGrassTuft(seed, lean) {
+function makeGrassTuft(seed, lean, pal) {
+  pal = pal || { tip: '#63c065', dark: '#357936', mid: '#469a48' };
   const cv = makeCanvas(13, 13), ctx = cv.getContext('2d');
   const rng = Util.makeRng(seed);
   for (let i = 0; i < 7; i++) {
@@ -692,7 +855,7 @@ function makeGrassTuft(seed, lean) {
     for (let k = 0; k < h; k++) {
       const t = k / h;
       const x = bx + Math.round(lean * t * 2);
-      ctx.fillStyle = k > h - 3 ? '#63c065' : (dark ? '#357936' : '#469a48');
+      ctx.fillStyle = k > h - 3 ? pal.tip : (dark ? pal.dark : pal.mid);
       ctx.fillRect(x, 12 - k, 1, 1);
     }
   }
@@ -992,6 +1155,151 @@ const LOOT_SPORE = [
   '...oooo...',
 ];
 
+/* ── 사막 몬스터 ─────────────────────────────────────────── */
+
+// 전갈 (24x14, 오른쪽을 본다). 꼬리가 등 위로 말려 올라와 침이 앞을 향한다. 다리 11~13줄은 두 프레임
+// M = 몸통, m = 마디 그늘·다리, n = 밝은면, k = 눈, S = 침
+const SCORPION_BODY = [
+  '......ooo...............',
+  '.....onnMo..............',
+  '....onMoooo.............',
+  '....oMo..oSSo...........',
+  '....oMo...oSo...........',
+  '...oMMo....o......ooo...',
+  '..oMMMoooooooooooooMMMo.',
+  '.oMMMMMMMMMMMMMMMMMMkMMo',
+  'oMMmMMmMMmMMmMMmMMMMMMMo',
+  '.ommmmmmmmmmmmmmmmmoMMMo',
+  '..ooooooooooooooooo.ooo.',
+];
+const SCORPION_LEGS = [
+  ['...mm...mm...mm...mm....', '..mm...mm...mm...mm.....', '..m....m....m....m......'],
+  ['....mm...mm...mm...mm...', '...mm...mm...mm...mm....', '...m....m....m....m.....'],
+];
+
+// 선인장 몬스터 (16x17) — 팔 둘 달린 기둥 선인장. 머리에 꽃 하나, 눈은 화났다
+const CACTUS_MOB = [
+  '......oRRo......',
+  '.....onMMMo.....',
+  '.oo..oMMMMo..oo.',
+  'onMo.oMkMkMo.oMo',
+  'oMMooMMMMMMooMMo',
+  'oMMMMMMMMMMMMMMo',
+  '.oMMMMnMMMMMMMo.',
+  '..ooMMMMMMMMoo..',
+  '....oMMnMMMMo...',
+  '....nMMMMMMMn...',
+  '....oMmMMmMMo...',
+  '....nMMMMMMMn...',
+  '....oMmMMMmMo...',
+  '....nMMMMMMMn...',
+  '....oMMMmMMMo...',
+  '.....oMMMMMo....',
+  '......ooooo.....',
+];
+
+// 모래벌레 — 땅속에서는 모래 언덕(16x8)만 보이고, 솟구치면 입을 벌린 몸통(16x21)이 선다
+const WORM_MOUND = [
+  '......oooo......',
+  '....ooDDDDoo....',
+  '..ooDDDdddDDoo..',
+  '.oDDDdddddddDDo.',
+  'oDDdddddddddddDo',
+  'oddddddddddddddo',
+  '.oooooooooooooo.',
+  '................',
+];
+const WORM_BODY = [
+  '.oo.........oo..',
+  'onMo.......onMo.',
+  '.oMMo..oo..oMMo.',
+  '..oMMooRRooMMo..',
+  '...oMMRRRRMMo...',
+  '...oMkRRRRkMo...',
+  '...oMMMRRMMMo...',
+  '...oMMMMMMMMo...',
+  '...onMMMMMMno...',
+  '...ommMMMMmmo...',
+  '...oMMMMMMMMo...',
+  '...onMMMMMMno...',
+  '...ommMMMMmmo...',
+  '...oMMMMMMMMo...',
+  '...onMMMMMMno...',
+  '...ommMMMMmmo...',
+  '...oMMMMMMMMo...',
+  '..oMMMMMMMMMMo..',
+  '.oDDMMMMMMMMDDo.',
+  'oDDDDDMMMMDDDDDo',
+  '.oooooooooooooo.',
+];
+
+// 사막 전리품 — 전갈 침 / 선인장 열매 / 벌레 비늘
+const LOOT_STINGER = [
+  '......oo',
+  '.....oSo',
+  '....oSSo',
+  '...oSSo.',
+  '..oSSo..',
+  '.oYSo...',
+  'oYYo....',
+  '.oo.....',
+];
+const LOOT_FRUIT = [
+  '...oo...',
+  '..oGGo..',
+  '.oRRRRo.',
+  'oRRnRRRo',
+  'oRRRRnRo',
+  'oRnRRRRo',
+  '.oRRRRo.',
+  '..oooo..',
+];
+const LOOT_SCALE = [
+  '...oooo...',
+  '..oDDDDo..',
+  '.oDDddDDo.',
+  'oDDddddDDo',
+  'oDDddddDDo',
+  '.oDDddDDo.',
+  '..oDDDDo..',
+  '...oooo...',
+];
+
+/* 텔레포트 비석 (18x30) — 위로 갈수록 좁아지는 돌기둥. 가운데 룬(C)이 빛나고, 두 번째 그림은 룬이 어둡다.
+   맵마다 시작점 옆에 하나씩 서 있고, 앞에서 F 를 누르면 다른 맵으로 옮겨간다. */
+const OBELISK = [
+  '........oo........',
+  '.......oGGo.......',
+  '.......oGGo.......',
+  '......oGGGGo......',
+  '......oGgGGo......',
+  '......oGgGGo......',
+  '.....oGGgGGGo.....',
+  '.....oGGgGGGo.....',
+  '.....oGGCCGGo.....',
+  '.....oGCggCGo.....',
+  '.....oGCgGCGo.....',
+  '.....oGGCCGGo.....',
+  '....oGGGgGGGGo....',
+  '....oGGGgGGGGo....',
+  '....oGGGgGGGGo....',
+  '....oGGGCGGGGo....',
+  '....oGGCgCGGGo....',
+  '....oGGGCGGGGo....',
+  '....oGGGgGGGGo....',
+  '...oGGGGgGGGGGo...',
+  '...oGGGGgGGGGGo...',
+  '...oGGGGgGGGGGo...',
+  '...oGGGGgGGGGGo...',
+  '...oGGGGgGGGGGo...',
+  '..oGGGGGGGGGGGGo..',
+  '..oGGGGGGGGGGGGo..',
+  '.oGGGGGGGGGGGGGGo.',
+  '.oBBBBBBBBBBBBBBo.',
+  '.oBBBBBBBBBBBBBBo.',
+  '..oooooooooooooo..',
+];
+
 /* 9주차: 상인 (16x16) — 두건을 쓴 보라 로브. 시작 지점 옆 가판대에 서 있다.
    두 번째 그림은 눈을 감은 것(깜빡임)이라 살아 있는 느낌이 난다. */
 const MERCHANT = [
@@ -1038,6 +1346,9 @@ function buildSprites() {
     { w: '#4a80b8', W: '#bfe0ff' },   // Lv3 파랑
     { w: '#8055ae', W: '#dfc0f5' },   // Lv4 보라
     { w: '#b8763a', W: '#ffd9a0' },   // Lv5 황금
+    { w: '#c25a2a', W: '#ffb08a' },   // 사막 24~29 구리
+    { w: '#8fa0b0', W: '#ffffff' },   // 사막 30~35 은
+    { w: '#3d2e4a', W: '#b48fd8' },   // 사막 36~   흑요석
   ];
   SPRITES.weapons = {};
   for (const id in WEAPON_SHAPES) {
@@ -1055,6 +1366,9 @@ function buildSprites() {
     slimeCore: makeSprite('loot_core', LOOT_CORE, { M: '#35a0b0', n: '#8fe6f0' }),
     alphaFang: makeSprite('loot_alpha', LOOT_ALPHA_FANG, { W: '#ffd0d0', w: '#c05a5a' }),
     elderSpore: makeSprite('loot_spore', LOOT_SPORE, { M: '#8055ae', n: '#dfc0f5' }),
+    stinger: makeSprite('loot_stinger', LOOT_STINGER, { S: '#3a2a1a', Y: '#ffd27a' }),
+    cactusFruit: makeSprite('loot_fruit', LOOT_FRUIT, { R: '#e56b7a', n: '#ffd0d8', G: '#3f9040' }),
+    wormScale: makeSprite('loot_scale', LOOT_SCALE, { D: '#c9bb9c', d: '#e8dcc0' }),
   };
   SPRITES.merchant = [makeSprite('merchant', MERCHANT), makeSprite('merchant_blink', MERCHANT_BLINK)];
   SPRITES.stall = makeStall(1201);
@@ -1083,6 +1397,24 @@ function buildSprites() {
 
   SPRITES.spore = LEVEL_PALETTES.map((pal, i) => makeSprite('spore_lv' + (i + 1), SPORE, pal));
 
+  // ── 사막 몬스터 — 색은 같은 레벨 등급 규칙을 따른다
+  SPRITES.scorpion = LEVEL_PALETTES.map((pal, i) =>
+    SCORPION_LEGS.map((legs, f) => makeSprite('scorpion_lv' + (i + 1) + '_' + f, SCORPION_BODY.concat(legs), Object.assign({ S: '#2b1d12' }, pal))));
+  SPRITES.scorpionLeft = SPRITES.scorpion.map(frames => frames.map(flipX));
+  SPRITES.scorpionFlash = SPRITES.scorpion.map(frames => frames.map(s => makeSilhouette(s, '#ffffff')));
+  SPRITES.scorpionLeftFlash = SPRITES.scorpionLeft.map(frames => frames.map(s => makeSilhouette(s, '#ffffff')));
+  SPRITES.cactusMob = LEVEL_PALETTES.map((pal, i) => makeSprite('cactus_lv' + (i + 1), CACTUS_MOB, Object.assign({ R: '#e56b7a' }, pal)));
+  SPRITES.cactusMobFlash = SPRITES.cactusMob.map(s => makeSilhouette(s, '#ffffff'));
+  SPRITES.wormMound = makeSprite('worm_mound', WORM_MOUND, { o: '#9a8560', D: '#e0cc8a', d: '#c9b06e' });
+  SPRITES.worm = LEVEL_PALETTES.map((pal, i) => makeSprite('worm_lv' + (i + 1), WORM_BODY, Object.assign({ R: '#8e2a2a', D: '#e0cc8a' }, pal)));
+  SPRITES.wormFlash = SPRITES.worm.map(s => makeSilhouette(s, '#ffffff'));
+
+  // 텔레포트 비석 — 룬이 밝은 것 / 어두운 것
+  SPRITES.obelisk = [
+    makeSprite('obelisk_on', OBELISK, { G: '#7d8493', g: '#5e6572', C: '#5ff0ff', B: '#4a4f5a' }),
+    makeSprite('obelisk_off', OBELISK, { G: '#7d8493', g: '#5e6572', C: '#2a8fa0', B: '#4a4f5a' }),
+  ];
+
   // 보스 — 레벨 색 등급별 5종 + 피격 실루엣, 착지 충격파 4프레임
   SPRITES.giantSlime = LEVEL_PALETTES.map(makeGiantSlime);
   SPRITES.giantSlimeFlash = SPRITES.giantSlime.map(s => makeSilhouette(s, '#ffffff'));
@@ -1100,6 +1432,9 @@ function buildSprites() {
   SPRITES.darkGrass = [0, 1, 2, 3].map(i => makeDarkGrassTile(5000 + i * 613));
   SPRITES.stone = [0, 1, 2, 3].map(i => makeStoneTile(6000 + i * 571));
   SPRITES.gravel = [0, 1, 2].map(i => makeGravelTile(7000 + i * 487));
+  SPRITES.desertSand = [0, 1, 2, 3].map(i => makeDesertSandTile(8000 + i * 419));
+  SPRITES.dune = [0, 1, 2].map(i => makeDuneTile(9000 + i * 383));
+  SPRITES.cracked = [0, 1, 2].map(i => makeCrackedTile(9500 + i * 347));
 
   /* 바닥 타일 묶음 — 볕 드는 숲 바닥 / 빽빽한 숲의 그늘진 바닥 / 보스 방의 돌바닥.
      같은 "풀"이라도 어느 묶음이냐에 따라 밝은 잔디 / 그늘진 잔디 / 돌바닥이 된다. */
@@ -1107,12 +1442,21 @@ function buildSprites() {
     forest: { grass: SPRITES.grass, dirt: SPRITES.dirt, meadow: SPRITES.grass },
     shade:  { grass: SPRITES.darkGrass, dirt: SPRITES.dirt, meadow: SPRITES.darkGrass },
     stone:  { grass: SPRITES.stone, dirt: SPRITES.gravel, meadow: SPRITES.stone },
+    // 사막 — 풀은 오아시스 둘레에만, 흙 자리는 갈라진 땅, 꽃밭 자리는 모래언덕, 바탕은 사막 모래
+    desert: { grass: SPRITES.grass, dirt: SPRITES.cracked, meadow: SPRITES.dune, sand: SPRITES.desertSand },
   };
 
   // 나무 — 활엽수 / 침엽수 / 고사목
   SPRITES.tree = [0, 1, 2, 3].map(i => makeTree(31 + i * 613));
   SPRITES.pine = [0, 1].map(i => makePine(101 + i * 547));
   SPRITES.deadTree = [0, 1].map(i => makeDeadTree(211 + i * 379));
+  // 사막 초목 — 기둥 선인장 / 공 선인장 / 야자수 / 바위기둥 / 뼈
+  SPRITES.cactus = [0, 1, 2].map(i => makeCactus(1301 + i * 271));
+  SPRITES.barrelCactus = [0, 1].map(i => makeBarrelCactus(1401 + i * 191));
+  SPRITES.palm = [0, 1].map(i => makePalm(1501 + i * 233));
+  SPRITES.rockSpire = [0, 1, 2].map(i => makeRockSpire(1601 + i * 211));
+  SPRITES.bones = [0, 1].map(i => makeBones(1701 + i * 157));
+  SPRITES.dryBush = [0, 1].map(i => makeBush(1801 + i * 431, { out: '#3a2a10', dark: '#7a6a2a', mid: '#a08e3a', lit: '#c9b25a', shade: '#5a4a1a' }));
 
   // 바닥 소품
   SPRITES.bush = [0, 1, 2].map(i => makeBush(77 + i * 431));
@@ -1134,11 +1478,18 @@ function buildSprites() {
 
   // 흔들리는 풀 — [왼쪽, 가운데, 오른쪽] 3프레임 x 3종
   SPRITES.tuft = [0, 1, 2].map(k => [-1, 0, 1].map(lean => makeGrassTuft(811 + k * 127, lean)));
+  SPRITES.dryTuft = [0, 1, 2].map(k => [-1, 0, 1].map(lean => makeGrassTuft(911 + k * 127, lean, { tip: '#e0cc8a', dark: '#8a7a3a', mid: '#b09a4a' })));
 
   SPRITES.vignette = makeVignette(CONFIG.VIEW_W, CONFIG.VIEW_H, CONFIG.ambient.vignette);
   SPRITES.leaf = ['#4f9a3f', '#7fae3a', '#b8933a', '#c07a35'].map(c => {
     const cv = makeCanvas(3, 2), ctx = cv.getContext('2d');
     ctx.fillStyle = c; ctx.fillRect(0, 0, 3, 1); ctx.fillRect(1, 1, 1, 1);
+    return cv;
+  });
+  // 사막에서는 나뭇잎 대신 모래 알갱이가 날린다
+  SPRITES.sandGrain = ['#e6d191', '#d9c27f', '#c9b06e'].map(c => {
+    const cv = makeCanvas(2, 1), ctx = cv.getContext('2d');
+    ctx.fillStyle = c; ctx.fillRect(0, 0, 2, 1);
     return cv;
   });
 
