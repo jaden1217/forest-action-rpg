@@ -136,8 +136,8 @@ const Game = {
 
       const e = make(x, y, level);
       this.enemies.push(e);
-      // 등장 연출
-      const pal = LEVEL_PALETTES[levelTier(level)];
+      // 등장 연출 — 그 종류의 색으로 터진다
+      const pal = e.palette;
       FX.burst(x, y, 8, [pal.M, pal.n], { speed: 30, life: 0.35, gravity: 40 });
       return e;
     }
@@ -333,7 +333,7 @@ const Game = {
     this.updateCamera(true);
     FX.addShake(6);
     Sound.play('caveIn');
-    const pal = LEVEL_PALETTES[levelTier(b.level)];
+    const pal = b.palette;
     FX.burst(b.x, b.y + 8, 40, [pal.M, pal.n, '#12100e'], { speed: 110, life: 0.8 });
   },
 

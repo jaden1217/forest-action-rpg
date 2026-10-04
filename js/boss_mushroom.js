@@ -106,7 +106,7 @@ class ElderShroom extends Boss {
       Projectiles.spawn(ox, oy, base + (i / shots) * Math.PI * 2, {
         speed: cfg.ring.speed,
         damage: Math.round(this.stats.atk * cfg.ring.damageMult),
-        level: this.level,
+        type: 'mushroom',
         life: cfg.ring.life,
       });
     }
@@ -208,10 +208,8 @@ class ElderShroom extends Boss {
   }
 
   drawBody(ctx, sx, sy) {
-    const tier = levelTier(this.level);
     this.drawShadow(ctx, sx, sy, 6 * this.scale);
-    const set = this.hurtFlash > 0 ? SPRITES.mushroomEnemyFlash : SPRITES.mushroomEnemy;
-    const sprite = set[tier];
+    const sprite = this.hurtFlash > 0 ? SPRITES.mushroomEnemyFlash : SPRITES.mushroomEnemy;
     const w = Math.round(sprite.width * this.scale * (1 + this.grow * 0.5));
     const h = Math.round(sprite.height * this.scale * (1 + this.grow * 0.5));
     ctx.drawImage(sprite, sx - Math.round(w / 2), Math.round(sy + 7 - h), w, h);

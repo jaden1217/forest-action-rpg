@@ -77,7 +77,7 @@ const Minimap = {
     // 지역 이름 대신 이 자리의 몬스터 기준 레벨을 붙여둔다 — 어디까지 왔는지 한눈에 보인다
     const lv = World.levelAt(player.x, player.y);
     const label = 'LV ' + lv + ' AREA';
-    UI.drawText(ctx, label, x + bw - UI.textWidth(label), y - 7, LEVEL_PALETTES[levelTier(lv)].n, false);
+    UI.drawText(ctx, label, x + bw - UI.textWidth(label), y - 7, difficultyColor(lv, player.level), false);
   },
 
   /* ── 전체 지도 ─────────────────────────────────────────── */
@@ -121,7 +121,8 @@ const Minimap = {
     }
     for (const s of enemies) {
       if (s.dead) continue;
-      put(s.x, s.y, LEVEL_PALETTES[levelTier(s.level)].M, 1);
+      // 점 색도 이름표와 같은 규칙 — 지도만 봐도 어느 쪽이 버거운지 보인다
+      put(s.x, s.y, difficultyColor(s.level, player.level), 1);
     }
 
     // 플레이어는 흰 십자로 늘 그려서 점들 사이에서도 바로 찾을 수 있다 (깜빡이지 않는다)

@@ -22,7 +22,7 @@ const Projectiles = {
       vx: Math.cos(angle) * opts.speed,
       vy: Math.sin(angle) * opts.speed,
       damage: opts.damage,
-      level: opts.level || 1,
+      type: opts.type || 'mushroom',   // 색은 쏜 몬스터의 종류를 따른다
       life: opts.life,
       maxLife: opts.life,
       radius: opts.radius || 3,
@@ -63,7 +63,7 @@ const Projectiles = {
   },
 
   burst(p) {
-    const pal = LEVEL_PALETTES[levelTier(p.level)];
+    const pal = ENEMY_COLORS[p.type] || ENEMY_COLORS.mushroom;
     FX.burst(p.x, p.y, 6, [pal.M, pal.n, '#ffffff'], { speed: 34, life: 0.28, gravity: 20, size: 1 });
   },
 
@@ -73,7 +73,7 @@ const Projectiles = {
       // 사라지기 직전에는 깜빡여서 곧 없어짐을 알린다
       if (p.life < 0.3 && Math.floor(p.life * 24) % 2 === 0) continue;
       if (p.kind === 'needle') {
-        const pal = LEVEL_PALETTES[levelTier(p.level)];
+        const pal = ENEMY_COLORS[p.type] || ENEMY_COLORS.cactus;
         ctx.save();
         ctx.translate(sx, sy);
         ctx.rotate(p.angle);
@@ -82,7 +82,7 @@ const Projectiles = {
         ctx.restore();
         continue;
       }
-      const sprite = SPRITES.spore[levelTier(p.level)];
+      const sprite = SPRITES.spore[p.type] || SPRITES.spore.mushroom;
       // 살짝 위아래로 흔들리며 날아간다
       const bob = Math.round(Math.sin(p.spin) * 1.2);
       ctx.drawImage(sprite, sx - 2, sy - 2 + bob);

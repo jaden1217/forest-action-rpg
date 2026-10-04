@@ -24,7 +24,7 @@ class AlphaWolf extends Boss {
     this.target = { x: x, y: y };
     this.circleDir = 1;      // 도는 방향
     // 몸통: 늑대 도트 x3, 아랫단은 y+7
-    const sp = SPRITES.wolf[0][0];
+    const sp = SPRITES.wolf[0];
     this.bodyW = Math.round(sp.width * this.scale * 0.85);
     this.bodyH = Math.round(sp.height * this.scale * 0.9);
     this.bodyBottom = 7;
@@ -218,13 +218,12 @@ class AlphaWolf extends Boss {
   }
 
   drawBody(ctx, sx, sy) {
-    const tier = levelTier(this.level);
     const y = sy - Math.round(this.airHeight);
     const moving = this.state === 'lunge' || this.state === 'circle' || this.state === 'idle';
     const frame = moving ? (Math.floor(this.stepTime * 6) % 2) : 0;
     const flash = this.hurtFlash > 0;
     const set = this.facing >= 0 ? (flash ? SPRITES.wolfFlash : SPRITES.wolf) : (flash ? SPRITES.wolfLeftFlash : SPRITES.wolfLeft);
-    const sprite = set[tier][frame];
+    const sprite = set[frame];
 
     const lift = this.airHeight / 34;
     this.drawShadow(ctx, sx, sy, 7 * this.scale * (1 - lift * 0.4));

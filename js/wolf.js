@@ -107,7 +107,7 @@ class Wolf extends Enemy {
     const set = this.facing >= 0
       ? (flash ? SPRITES.wolfFlash : SPRITES.wolf)
       : (flash ? SPRITES.wolfLeftFlash : SPRITES.wolfLeft);
-    const sprite = set[levelTier(this.level)][frame];
+    const sprite = set[frame];
 
     // 웅크릴 때는 납작해지고, 돌진할 때는 앞으로 길어진다
     let sxScale = 1, syScale = 1;

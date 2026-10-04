@@ -99,7 +99,7 @@ class Scorpion extends Enemy {
     const set = this.facing >= 0
       ? (flash ? SPRITES.scorpionFlash : SPRITES.scorpion)
       : (flash ? SPRITES.scorpionLeftFlash : SPRITES.scorpionLeft);
-    const sprite = set[levelTier(this.level)][frame];
+    const sprite = set[frame];
 
     // 예고 때는 뒤로 움츠리고, 찌를 때는 앞으로 길어진다
     let sxScale = 1, syScale = 1;

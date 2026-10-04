@@ -33,8 +33,14 @@ class Enemy {
     this.kx = 0; this.ky = 0;   // 넉백 속도
   }
 
+  // 종류 색 (피 튀김·죽을 때 터지는 알갱이·체력바에 쓴다)
   get palette() {
-    return LEVEL_PALETTES[levelTier(this.level)];
+    return ENEMY_COLORS[this.TYPE] || ENEMY_COLORS.slime;
+  }
+
+  // 이름표 색 — 지금 내 레벨에 견줘 얼마나 벅찬가 (빨강 / 주황 / 흰색)
+  get labelColor() {
+    return difficultyColor(this.level, Game.player ? Game.player.level : 1);
   }
 
   get hurtBox() {
@@ -182,7 +188,7 @@ class Enemy {
   // 레벨 표시와 체력바 — 모든 몬스터가 같은 자리에 같은 모양으로 띄운다
   drawLabel(ctx, sx, topY) {
     const pal = this.palette;
-    UI.drawText(ctx, 'L' + this.level, sx - 4, topY - 5, pal.n, false);
+    UI.drawText(ctx, 'L' + this.level, sx - 4, topY - 5, this.labelColor, false);
 
     if (this.showHp > 0) {
       const w = Math.max(12, Math.round(14 * this.scale));

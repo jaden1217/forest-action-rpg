@@ -45,7 +45,7 @@ class Cactus extends Enemy {
       Projectiles.spawn(this.x, this.y - 4, offset + (i / n) * Math.PI * 2, {
         speed: cfg.needleSpeed,
         damage: this.stats.atk,
-        level: this.level,
+        type: 'cactus',
         life: cfg.needleLife,
         kind: 'needle',
       });
@@ -67,7 +67,7 @@ class Cactus extends Enemy {
     if (this.windup > 0) grow = 1 + (1 - this.windup / cfg.windup) * 0.14;
     else if (this.puff > 0) grow = 1 - (this.puff / 0.18) * 0.1;
 
-    const sprite = this.hurtFlash > 0 ? SPRITES.cactusMobFlash[levelTier(this.level)] : SPRITES.cactusMob[levelTier(this.level)];
+    const sprite = this.hurtFlash > 0 ? SPRITES.cactusMobFlash : SPRITES.cactusMob;
     const w = Math.round(sprite.width * this.scale * grow);
     const h = Math.round(sprite.height * this.scale * grow);
     this.drawShadow(ctx, sx, sy, 5.5 * this.scale);

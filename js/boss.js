@@ -186,7 +186,7 @@ class GiantSlime extends Boss {
       Projectiles.spawn(ox, oy, aim + (i / shots) * Math.PI * 2, {
         speed: cfg.spit.speed,
         damage: Math.round(this.stats.atk * cfg.spit.damageMult),
-        level: this.level,
+        type: 'slime',
         life: cfg.spit.life,
       });
     }
@@ -201,7 +201,6 @@ class GiantSlime extends Boss {
   }
 
   drawBody(ctx, sx, sy) {
-    const tier = levelTier(this.level);
     const y = sy - Math.round(this.airHeight);
 
     // 그림자 — 떠 있을수록 작고 옅어진다 (어디에 떨어질지 알려주는 표시이기도 하다)
@@ -216,7 +215,7 @@ class GiantSlime extends Boss {
     }
 
     // 몸 — squash 로 눌리고 늘어난다 (예고 동작이 전부 여기서 보인다)
-    const sprite = this.hurtFlash > 0 ? SPRITES.giantSlimeFlash[tier] : SPRITES.giantSlime[tier];
+    const sprite = this.hurtFlash > 0 ? SPRITES.giantSlimeFlash : SPRITES.giantSlime;
     const bounce = this.state === 'idle' ? Math.sin(this.hopTimer * 4) * 0.05 : 0;
     const sq = this.squash + bounce;
     const w = Math.round(sprite.width * (1 - sq * 0.5));

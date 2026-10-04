@@ -8,16 +8,49 @@ const LEVEL_MAX = 23;
    23을 넘어 계속 세져야 한다. 사막 몬스터(24~40)가 떨구는 무기도 자기 레벨을 그대로 따른다. */
 const WEAPON_LEVEL_MAX = 60;
 
-/* 레벨을 색 등급으로 묶는다.
-   레벨 숫자를 읽지 않아도 색만 보고 위험도를 가늠할 수 있게 하기 위한 것이다.
-   (1~4 초록 / 5~8 청록 / 9~13 파랑 / 14~18 보라 / 19~23 빨강 — 숲)
-   (24~29 호박 / 30~35 은빛 / 36~ 흑요석 — 사막) */
+/* 레벨을 색 등급으로 묶는다 — 이제 무기(칼날 색)와 드랍 양에만 쓴다.
+   몬스터 색은 종류가 정하고(ENEMY_COLORS), 위험도는 이름표 색이 알려준다.
+   (1~4 / 5~8 / 9~13 / 14~18 / 19~23 — 숲, 24~29 / 30~35 / 36~ — 사막) */
 const LEVEL_TIER_BREAKS = [4, 8, 13, 18, 23, 29, 35];
 function levelTier(level) {
   for (let i = 0; i < LEVEL_TIER_BREAKS.length; i++) {
     if (level <= LEVEL_TIER_BREAKS[i]) return i;
   }
   return LEVEL_TIER_BREAKS.length;
+}
+
+/* 몬스터 색 — 종류마다 하나로 고정한다.
+   예전에는 레벨 등급이 색을 정해서 같은 슬라임도 레벨에 따라 초록·파랑·빨강이었는데,
+   그러면 색을 보고 "저게 무슨 몬스터인가"를 알 수 없었다.
+   이제 색은 종류를 뜻하고, "나한테 센가"는 이름표 색(difficultyColor)이 알려준다.
+   m = 어두운면, M = 본체, n = 하이라이트 */
+const ENEMY_COLORS = {
+  slime:    { m: '#1a6b4a', M: '#35c08a', n: '#9ff0c8' },   // 숲 — 민트빛 젤리 (풀밭 위에서 묻히지 않게 잔디보다 맑게)
+  mushroom: { m: '#6e1c1c', M: '#c93f3f', n: '#ffa08f' },   // 숲 — 붉은 갓
+  wolf:     { m: '#39414f', M: '#6d7a8c', n: '#c2cddb' },   // 숲 — 잿빛 털
+  scorpion: { m: '#7a4a10', M: '#d98a2b', n: '#ffd27a' },   // 사막 — 호박빛 껍질
+  cactus:   { m: '#4a6a12', M: '#8fbf3a', n: '#e0f08a' },   // 사막 — 라임빛 (배경 선인장보다 밝아야 몬스터로 읽힌다)
+  sandworm: { m: '#3e2d4a', M: '#7a5f96', n: '#c7b0e0' },   // 사막 — 자줏빛 (모래 위에서 한눈에 보인다)
+};
+
+/* 이름표 색 — 그 몬스터가 지금 나에게 얼마나 벅찬가 (레벨 차이로 잰다).
+   몬스터 몸 색이 종류로 고정됐으므로, 위험도는 이 색이 혼자 짊어진다.
+     내 레벨보다 3 이상 높다  -> 빨강 (버겁다)
+     ±2 안쪽                 -> 주황 (해볼 만하다)
+     3 이상 낮다             -> 흰색 (쉽다) */
+const DIFFICULTY = {
+  hardAt: 3,
+  easyAt: -3,
+  hard: '#ff5c5c',
+  normal: '#ffb35c',
+  easy: '#f0f4f8',
+};
+
+function difficultyColor(enemyLevel, playerLevel) {
+  const diff = enemyLevel - (playerLevel || 1);
+  if (diff >= DIFFICULTY.hardAt) return DIFFICULTY.hard;
+  if (diff <= DIFFICULTY.easyAt) return DIFFICULTY.easy;
+  return DIFFICULTY.normal;
 }
 
 // 몬스터가 주는 경험치 전체 배수 — 성장 속도를 한 곳에서 조절한다

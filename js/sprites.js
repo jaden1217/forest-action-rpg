@@ -344,18 +344,7 @@ const SPORE = [
   '.ooo.',
 ];
 
-// 몬스터 레벨별 색 (1레벨 초록 -> 5레벨 붉은색).
-// 종류가 달라도 같은 색 규칙을 쓰므로 색만 보고 레벨을 알 수 있다.
-const LEVEL_PALETTES = [
-  { m: '#1f5f28', M: '#3fa347', n: '#8fe098' },  // Lv1 초록
-  { m: '#1a5560', M: '#35a0b0', n: '#8fe6f0' },  // Lv2 청록
-  { m: '#1e3a72', M: '#3f6ec9', n: '#93b7ff' },  // Lv3 파랑
-  { m: '#4a2170', M: '#8a45c9', n: '#d3a2ff' },  // Lv4 보라
-  { m: '#6e1c1c', M: '#c93f3f', n: '#ffa08f' },  // Lv5 빨강
-  { m: '#7a4a10', M: '#d98a2b', n: '#ffd27a' },  // 사막 24~29 호박
-  { m: '#5a6470', M: '#a9b4c0', n: '#f0f4f8' },  // 사막 30~35 은빛
-  { m: '#1a1220', M: '#4a3760', n: '#b48fd8' },  // 사막 36~   흑요석
-];
+// 몬스터 색은 종류가 정한다 (CONFIG 쪽 ENEMY_COLORS). 레벨은 이름표 색으로만 보여준다.
 
 /* ── 절차적 생성 스프라이트 ────────────────────────────────── */
 
@@ -1373,41 +1362,40 @@ function buildSprites() {
   SPRITES.merchant = [makeSprite('merchant', MERCHANT), makeSprite('merchant_blink', MERCHANT_BLINK)];
   SPRITES.stall = makeStall(1201);
 
-  // 몬스터: 레벨별 색상 5종 + 피격용 흰 실루엣
-  SPRITES.slime = LEVEL_PALETTES.map((pal, i) => makeSprite('slime_lv' + (i + 1), SLIME, pal));
-  SPRITES.slimeFlash = SPRITES.slime.map(s => makeSilhouette(s, '#ffffff'));
+  /* 몬스터 — 종류마다 색이 하나다. 레벨은 머리 위 이름표 색이 알려준다.
+     (예전에는 레벨 등급 8종을 전부 찍어 두고 골라 썼다) */
+  const EC = ENEMY_COLORS;
+  SPRITES.slime = makeSprite('slime', SLIME, EC.slime);
+  SPRITES.slimeFlash = makeSilhouette(SPRITES.slime, '#ffffff');
 
-  // 버섯 — 갓은 레벨 색, 기둥은 공통
+  // 버섯 — 갓은 종류 색, 기둥은 공통
   const STALK = { S: '#e8dcc0', s: '#c9bb9c' };
-  SPRITES.mushroomEnemy = LEVEL_PALETTES.map(
-    (pal, i) => makeSprite('mushroom_lv' + (i + 1), ENEMY_MUSHROOM, Object.assign({}, pal, STALK))
-  );
-  SPRITES.mushroomEnemyFlash = SPRITES.mushroomEnemy.map(s => makeSilhouette(s, '#ffffff'));
+  SPRITES.mushroomEnemy = makeSprite('mushroom_enemy', ENEMY_MUSHROOM, Object.assign({}, EC.mushroom, STALK));
+  SPRITES.mushroomEnemyFlash = makeSilhouette(SPRITES.mushroomEnemy, '#ffffff');
 
-  // 늑대 — 털색은 레벨 색을 조금 어둡게 쓴다. [레벨][다리프레임], 왼쪽은 좌우 반전
-  SPRITES.wolf = LEVEL_PALETTES.map((pal, i) => {
-    const fur = { G: pal.M, g: pal.n, d: pal.m, D: '#7a6a55', S: '#4a3d32' };
-    return WOLF_LEGS.map(
-      (legs, f) => makeSprite('wolf_lv' + (i + 1) + '_' + f, WOLF_BODY.concat(legs), fur)
-    );
-  });
-  SPRITES.wolfLeft = SPRITES.wolf.map(frames => frames.map(flipX));
-  SPRITES.wolfFlash = SPRITES.wolf.map(frames => frames.map(s => makeSilhouette(s, '#ffffff')));
-  SPRITES.wolfLeftFlash = SPRITES.wolfLeft.map(frames => frames.map(s => makeSilhouette(s, '#ffffff')));
+  // 늑대 — [다리프레임] 두 장, 왼쪽은 좌우 반전
+  const fur = { G: EC.wolf.M, g: EC.wolf.n, d: EC.wolf.m, D: '#7a6a55', S: '#4a3d32' };
+  SPRITES.wolf = WOLF_LEGS.map((legs, f) => makeSprite('wolf_' + f, WOLF_BODY.concat(legs), fur));
+  SPRITES.wolfLeft = SPRITES.wolf.map(flipX);
+  SPRITES.wolfFlash = SPRITES.wolf.map(s => makeSilhouette(s, '#ffffff'));
+  SPRITES.wolfLeftFlash = SPRITES.wolfLeft.map(s => makeSilhouette(s, '#ffffff'));
 
-  SPRITES.spore = LEVEL_PALETTES.map((pal, i) => makeSprite('spore_lv' + (i + 1), SPORE, pal));
+  // 탄 — 쏜 몬스터의 색을 따른다 (버섯 포자 / 거대 슬라임이 뱉는 덩이)
+  SPRITES.spore = {
+    mushroom: makeSprite('spore_mushroom', SPORE, EC.mushroom),
+    slime: makeSprite('spore_slime', SPORE, EC.slime),
+  };
 
-  // ── 사막 몬스터 — 색은 같은 레벨 등급 규칙을 따른다
-  SPRITES.scorpion = LEVEL_PALETTES.map((pal, i) =>
-    SCORPION_LEGS.map((legs, f) => makeSprite('scorpion_lv' + (i + 1) + '_' + f, SCORPION_BODY.concat(legs), Object.assign({ S: '#2b1d12' }, pal))));
-  SPRITES.scorpionLeft = SPRITES.scorpion.map(frames => frames.map(flipX));
-  SPRITES.scorpionFlash = SPRITES.scorpion.map(frames => frames.map(s => makeSilhouette(s, '#ffffff')));
-  SPRITES.scorpionLeftFlash = SPRITES.scorpionLeft.map(frames => frames.map(s => makeSilhouette(s, '#ffffff')));
-  SPRITES.cactusMob = LEVEL_PALETTES.map((pal, i) => makeSprite('cactus_lv' + (i + 1), CACTUS_MOB, Object.assign({ R: '#e56b7a' }, pal)));
-  SPRITES.cactusMobFlash = SPRITES.cactusMob.map(s => makeSilhouette(s, '#ffffff'));
+  // ── 사막 몬스터
+  SPRITES.scorpion = SCORPION_LEGS.map((legs, f) => makeSprite('scorpion_' + f, SCORPION_BODY.concat(legs), Object.assign({ S: '#2b1d12' }, EC.scorpion)));
+  SPRITES.scorpionLeft = SPRITES.scorpion.map(flipX);
+  SPRITES.scorpionFlash = SPRITES.scorpion.map(s => makeSilhouette(s, '#ffffff'));
+  SPRITES.scorpionLeftFlash = SPRITES.scorpionLeft.map(s => makeSilhouette(s, '#ffffff'));
+  SPRITES.cactusMob = makeSprite('cactus_mob', CACTUS_MOB, Object.assign({ R: '#e56b7a' }, EC.cactus));
+  SPRITES.cactusMobFlash = makeSilhouette(SPRITES.cactusMob, '#ffffff');
   SPRITES.wormMound = makeSprite('worm_mound', WORM_MOUND, { o: '#9a8560', D: '#e0cc8a', d: '#c9b06e' });
-  SPRITES.worm = LEVEL_PALETTES.map((pal, i) => makeSprite('worm_lv' + (i + 1), WORM_BODY, Object.assign({ R: '#8e2a2a', D: '#e0cc8a' }, pal)));
-  SPRITES.wormFlash = SPRITES.worm.map(s => makeSilhouette(s, '#ffffff'));
+  SPRITES.worm = makeSprite('worm', WORM_BODY, Object.assign({ R: '#8e2a2a', D: '#e0cc8a' }, EC.sandworm));
+  SPRITES.wormFlash = makeSilhouette(SPRITES.worm, '#ffffff');
 
   // 텔레포트 비석 — 룬이 밝은 것 / 어두운 것
   SPRITES.obelisk = [
@@ -1415,9 +1403,9 @@ function buildSprites() {
     makeSprite('obelisk_off', OBELISK, { G: '#7d8493', g: '#5e6572', C: '#2a8fa0', B: '#4a4f5a' }),
   ];
 
-  // 보스 — 레벨 색 등급별 5종 + 피격 실루엣, 착지 충격파 4프레임
-  SPRITES.giantSlime = LEVEL_PALETTES.map(makeGiantSlime);
-  SPRITES.giantSlimeFlash = SPRITES.giantSlime.map(s => makeSilhouette(s, '#ffffff'));
+  // 보스 — 거대 슬라임도 슬라임 색을 쓴다 (덩치와 붉은 눈으로 구별된다). 착지 충격파 4프레임
+  SPRITES.giantSlime = makeGiantSlime(EC.slime);
+  SPRITES.giantSlimeFlash = makeSilhouette(SPRITES.giantSlime, '#ffffff');
   SPRITES.shockRing = [0, 0.34, 0.67, 1].map(t => makeShockRing(t, CONFIG.bosses.slime.slam.radius));
   SPRITES.playerFlash = {};
   for (const dir in SPRITES.player) {

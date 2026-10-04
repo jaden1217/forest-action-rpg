@@ -25,7 +25,7 @@ class Boss extends Enemy {
       knockback: 0,          // 보스는 밀리지 않는다
     });
     this.spec = spec;
-    this.TYPE = 'boss';
+    this.TYPE = spec.type;   // 색은 종류를 따른다 (보스인지는 isBoss 로 가린다)
     this.isBoss = true;
     this.name = spec.name;
     this.reward = spec.reward;

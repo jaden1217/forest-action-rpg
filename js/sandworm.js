@@ -130,13 +130,13 @@ class Sandworm extends Enemy {
       ctx.drawImage(sp, sx - Math.round(w / 2) + jitter, Math.round(sy + 7 - h), w, h);
       const topY = Math.round(sy + 7 - h);
       if (this.state === 'rise') this.drawWarning(ctx, sx, topY, 1 - this.timer / cfg.windup);
-      UI.drawText(ctx, 'L' + this.level, sx - 4, topY - 5, this.palette.n, false);
+      UI.drawText(ctx, 'L' + this.level, sx - 4, topY - 5, this.labelColor, false);
       return;
     }
     // 밖에 나온 몸통 — 막 솟았을 땐 위로 늘어났다가 자리를 잡는다
-    const age = cfg.surfaced - this.timer;
+    const age = Math.max(0, cfg.surfaced - this.timer);   // 음수가 되면 몸이 화면만큼 늘어난다
     const stretch = age < 0.25 ? 1 + (0.25 - age) * 1.2 : 1;
-    const sprite = this.hurtFlash > 0 ? SPRITES.wormFlash[levelTier(this.level)] : SPRITES.worm[levelTier(this.level)];
+    const sprite = this.hurtFlash > 0 ? SPRITES.wormFlash : SPRITES.worm;
     const w = Math.round(sprite.width * this.scale), h = Math.round(sprite.height * this.scale * stretch);
     this.drawShadow(ctx, sx, sy, 6 * this.scale);
     ctx.drawImage(sprite, sx - Math.round(w / 2), Math.round(sy + 7 - h), w, h);
