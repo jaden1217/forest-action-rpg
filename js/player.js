@@ -32,7 +32,9 @@ class Player {
 
     // 장비 — 머리 / 몸 / 장신구 세 칸. 여기 걸친 것이 recalcStats 를 거쳐 능력치에 더해진다
     this.gear = { head: null, body: null, trinket: null };
+    // 입은 것들의 수치 합 — 바탕 네 가지 + 굴려 붙은 옵션들 (recalcStats 가 채운다)
     this.gearStats = { armor: 0, maxHp: 0, power: 0, speed: 0 };
+    this.skillCooldownMax = {};   // 쿨다운 감소가 붙으면 스킬 바의 기준도 같이 줄어든다
 
     // 여러 칸짜리 가방 — 첫 칸은 포션 주머니, 나머지엔 무기·전리품·장비 (Inventory 가 다룬다)
     this.bagSlots = CONFIG.inventory.baseSlots;
@@ -117,7 +119,11 @@ class Player {
       const item = this.gear && this.gear[slot];
       if (!item) continue;
       const stats = Gear.statsOf(item);
-      for (const k in stats) g[k] += stats[k];
+      for (const k in stats) g[k] = (g[k] || 0) + stats[k];
+    }
+    // 퍼센트 옵션은 겹쳐 입으면 금세 터무니없어진다 — 총합을 묶어둔다
+    for (const k in CONFIG.affixes.caps) {
+      if (g[k]) g[k] = Math.min(g[k], CONFIG.affixes.caps[k]);
     }
     this.gearStats = g;
 
@@ -142,6 +148,21 @@ class Player {
   speedMult() {
     return Math.max(0.3, 1 + (this.gearStats.speed || 0) / 100);
   }
+
+  // 옵션 하나를 꺼내 쓴다 (안 붙어 있으면 0)
+  stat(key) { return this.gearStats[key] || 0; }
+
+  // 치명타 — 기본값에 KEEN(확률)·CRUEL(배수) 옵션을 얹는다
+  critChance() { return CONFIG.player.critChance + this.stat('crit') / 100; }
+  critMult() { return CONFIG.player.critMult * (1 + this.stat('critMult') / 100); }
+
+  // 손 빠르기 — QUICK 옵션과 광폭화 버프가 함께 곱해진다
+  attackSpeedMult() {
+    return (1 + this.stat('attackSpeed') / 100) * (this.buff ? this.buff.attackSpeed : 1);
+  }
+
+  // 스킬 쿨다운 — ARCANE 옵션만큼 줄어든다
+  cooldownMult() { return 1 - this.stat('cooldown') / 100; }
 
   /* 스킬 위력의 기준 — 무기 종류 배수를 뺀 평타 (기본 공격 x 무기 레벨 배수 x 강화).
      단검을 들었다고 스킬까지 약해지면 안 되므로 종류 배수는 빼고 잰다. */
@@ -242,7 +263,8 @@ class Player {
     this.skillHitIds = new Set();
     this.skillHitTimer = 0;
     this.skillHits = 0;
-    this.skillCooldowns[spec.id] = spec.cooldown;
+    this.skillCooldowns[spec.id] = spec.cooldown * this.cooldownMult();
+    this.skillCooldownMax[spec.id] = this.skillCooldowns[spec.id];   // 스킬 바가 이 값을 기준으로 찬다
     this.swingAngle = this.aim;
     this.spinAngle = 0;
     this.attackTimer = 0;
@@ -475,7 +497,7 @@ class Player {
     const wantsAttack = this.attackBuffer > 0 || Input.attackHeld();
     if (wantsAttack && this.cooldown <= 0 && this.attackTimer <= 0 && this.dashTimer <= 0 && !this.activeSkill) {
       this.attackTimer = w.duration;
-      this.cooldown = w.cooldown / (this.buff ? this.buff.attackSpeed : 1);   // 광폭화 중엔 손이 빠르다
+      this.cooldown = w.cooldown / this.attackSpeedMult();   // 광폭화와 QUICK 옵션만큼 손이 빨라진다
       this.hitIds = new Set();
       this.attackBuffer = 0;
       this.swingAngle = this.aim;   // 휘두르는 동안에는 이 각도로 고정된다
@@ -552,15 +574,22 @@ class Player {
       if (!omni && d > 3 && Math.abs(Util.angleDiff(toEnemy, base)) > arc) continue;
 
       ids.add(s.id);
-      const crit = (opts && opts.forceCrit) || Math.random() < c.critChance;   // 치명타율은 무기와 무관하게 동일
+      const crit = (opts && opts.forceCrit) || Math.random() < this.critChance();   // 치명타율은 무기와 무관하게 동일
       // 스킬은 무기 종류 배수를 뺀 기준값으로 — 단검 스킬이 도끼 스킬보다 약하지 않게
       const dmgBase = (opts && opts.skill) ? this.skillBase() : this.attackDamage();
       let dmg = Math.round((dmgBase + Util.randInt(-1, 1)) * dmgMult);
-      if (crit) dmg = Math.round(dmg * c.critMult);
+      if (crit) dmg = Math.round(dmg * this.critMult());
       dmg = Math.max(1, dmg);
       // 사방 공격은 바깥쪽으로, 베는 공격은 휘두른 방향으로 날린다
       s.takeHit(dmg, omni ? toEnemy : base, crit, this, knockMult);
       this.sinceCombat = 0;   // 때리는 중에도 자연 회복은 멈춘다
+      // 흡혈(VAMPIRIC) — 때린 만큼 조금 돌려받는다. 체력이 가득이면 아무 일도 없다
+      const leech = this.stat('lifesteal');
+      if (leech > 0 && this.hp < this.maxHp) {
+        const healed = Math.max(1, Math.round(dmg * leech / 100));
+        this.hp = Math.min(this.maxHp, this.hp + healed);
+        if (Math.random() < 0.3) FX.burst(this.x, this.y - 2, 2, ['#ff6b6b', '#ffd0d0'], { speed: 14, life: 0.3, gravity: -20, size: 1 });
+      }
       // 처치 > 치명타 > 보통 순으로 화면이 더 오래 멈춘다. 카메라도 휘두른 쪽으로 살짝 밀린다
       const fx = CONFIG.fx;
       FX.freeze(s.dead ? fx.hitStopKill : (crit ? fx.hitStopCrit : fx.hitStop));
@@ -578,8 +607,9 @@ class Player {
     this.invuln = c.invulnTime;
     this.sinceCombat = 0;      // 맞으면 자연 회복은 처음부터 다시 기다린다
     const a = Math.atan2(this.y - fromY, this.x - fromX);
-    this.kx = Math.cos(a) * c.knockbackTaken;
-    this.ky = Math.sin(a) * c.knockbackTaken;
+    const knock = c.knockbackTaken * (1 - this.stat('knockRes') / 100);   // STEADY 옵션만큼 덜 밀린다
+    this.kx = Math.cos(a) * knock;
+    this.ky = Math.sin(a) * knock;
     FX.number(this.x, this.y - 12, '-' + amount, '#ff6b6b');
     FX.addShake(CONFIG.fx.shakeOnHurt);
     FX.spray(this.x, this.y, a, 8, ['#ff6b6b', '#ffffff']);
@@ -641,6 +671,7 @@ class Player {
 
   // 골드는 바닥에 떨어지지 않고 잡는 즉시 들어온다. 액수는 잡은 자리에 띄운다
   addGold(amount, x, y) {
+    amount = Math.max(1, Math.round(amount * (1 + this.stat('gold') / 100)));   // GILDED 옵션만큼 더 번다
     this.gold += amount;
     if (x === undefined) { x = this.x; y = this.y; }
     FX.number(x, y - 14, '+' + amount + ' G', CONFIG.gold.color);
@@ -705,7 +736,8 @@ class Player {
   // 포션 한 개가 채우는 양 — 최대 체력의 30%, 최소 30
   potionHeal() {
     const cfg = CONFIG.items;
-    return Math.max(cfg.potionHealMin, Math.round(this.maxHp * cfg.potionHealRatio));
+    const base = Math.max(cfg.potionHealMin, Math.round(this.maxHp * cfg.potionHealRatio));
+    return Math.round(base * (1 + this.stat('potion') / 100));   // HEALERS 옵션만큼 더 찬다
   }
 
   usePotion() {

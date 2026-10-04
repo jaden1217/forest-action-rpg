@@ -42,7 +42,7 @@ const Save = {
       },
       drops: drops.map(d => ({
         kind: d.kind, weapon: d.weapon, level: d.level, amount: d.amount, id: d.id,
-        growing: !!d.growing,
+        item: d.item, growing: !!d.growing,
         x: Math.round(d.x), y: Math.round(d.y), life: Math.round(d.life),
       })),
     };
@@ -122,7 +122,7 @@ const Save = {
     Items.reset();
     for (const d of (data.drops || [])) {
       if (d.kind === 'weapon') Items.spawnWeapon(d.x, d.y, d.weapon, d.level, { growing: d.growing });
-      else if (d.kind === 'gear') Items.spawnGear(d.x, d.y, d.id, d.level);
+      else if (d.kind === 'gear') Items.spawnGear(d.x, d.y, d.id, d.level, { item: Gear.sanitize(d.item) });
       else if (d.kind === 'loot') Items.spawnLoot(d.x, d.y, d.id, d.amount);
       else Items.spawn(d.x, d.y, d.amount);
       // spawn 은 빈 자리를 찾아 위치를 흔들므로 저장된 자리로 되돌린다

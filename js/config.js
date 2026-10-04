@@ -800,6 +800,51 @@ const CONFIG = {
     },
   },
 
+  /* ── 등급과 랜덤 옵션 (로드맵 2주차) ─────────────────────
+     장비는 떨어질 때 등급을 하나 굴리고, 등급이 정한 수만큼 옵션이 붙는다.
+     **몬스터 레벨이 옵션의 크기를, 운이 개수를 정한다** — 그래서 같은 '가죽 모자'라도
+     버리기 아까운 것과 아닌 것이 생긴다 (그게 이 주차의 목표다).
+
+     이름은 가장 센 옵션이 앞에 붙어 지어진다: SWIFT LEATHER CAP, VAMPIRIC CHAIN MAIL.
+
+     수치는 range 에서 하나 뽑고 레벨마다 perLevel 만큼 더한다.
+     퍼센트 옵션(pct)은 여러 점을 겹쳐 입으면 금세 터무니없어지므로 caps 로 총합을 묶는다. */
+  rarity: {
+    // [이름, 색, 옵션 수, 뽑기 가중치]
+    list: [
+      { name: 'COMMON', color: '#c8d0d8', affixes: 1, weight: 60 },
+      { name: 'FINE',   color: '#8fe0a8', affixes: 2, weight: 27 },
+      { name: 'RARE',   color: '#7ec8ff', affixes: 3, weight: 10 },
+      { name: 'LEGEND', color: '#ffb35c', affixes: 4, weight: 3 },
+    ],
+  },
+
+  affixes: {
+    /* word  — 이름 앞에 붙는 말
+       label — 인벤토리에 찍히는 짧은 이름
+       range — 1레벨에서 뽑는 범위, perLevel — 레벨마다 더해지는 양
+       pct   — 퍼센트로 읽는 값 */
+    list: {
+      attackSpeed: { word: 'QUICK',    label: 'ASPD',  range: [3, 7],  perLevel: 0.12, pct: true },
+      crit:        { word: 'KEEN',     label: 'CRIT',  range: [2, 5],  perLevel: 0.08, pct: true },
+      critMult:    { word: 'CRUEL',    label: 'CDMG',  range: [6, 14], perLevel: 0.25, pct: true },
+      speed:       { word: 'SWIFT',    label: 'SPD',   range: [3, 7],  perLevel: 0.08, pct: true },
+      lifesteal:   { word: 'VAMPIRIC', label: 'LEECH', range: [1, 3],  perLevel: 0.05, pct: true },
+      potion:      { word: 'HEALERS',  label: 'POTION',range: [5, 12], perLevel: 0.3,  pct: true },
+      cooldown:    { word: 'ARCANE',   label: 'CDR',   range: [3, 8],  perLevel: 0.12, pct: true },
+      knockRes:    { word: 'STEADY',   label: 'BRACE', range: [6, 14], perLevel: 0.3,  pct: true },
+      gold:        { word: 'GILDED',   label: 'GOLD',  range: [8, 18], perLevel: 0.4,  pct: true },
+      armor:       { word: 'STURDY',   label: 'ARM',   range: [2, 5],  perLevel: 0.12 },
+      maxHp:       { word: 'HEARTY',   label: 'HP',    range: [5, 12], perLevel: 0.8 },
+      power:       { word: 'BRUTAL',   label: 'ATK',   range: [1, 2],  perLevel: 0.12 },
+    },
+    // 여러 점을 겹쳐 입었을 때의 총합 상한 (없는 것은 안 묶는다)
+    caps: {
+      attackSpeed: 40, crit: 25, critMult: 120, speed: 40,
+      lifesteal: 20, potion: 100, cooldown: 45, knockRes: 80, gold: 150,
+    },
+  },
+
   /* ── 인벤토리 — 여러 칸짜리 가방 ──────────────────────────
      첫 칸은 늘 포션 주머니(개수는 player.potions, 상한은 maxPotions 그대로)이고,
      나머지 칸에 무기와 전리품이 하나씩 들어간다. 전리품은 같은 종류끼리 한 칸에 쌓인다.

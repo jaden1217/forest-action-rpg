@@ -240,9 +240,10 @@ const UI = {
       ctx.fillStyle = locked ? '#1d211b' : '#252c22';
       ctx.fillRect(x, y, slotW, slotH);
 
-      // 쿨다운이 도는 동안에는 아래쪽부터 차오른다
+      // 쿨다운이 도는 동안에는 아래쪽부터 차오른다 (쿨다운 감소가 붙으면 기준도 줄어든다)
       if (cd > 0) {
-        const filled = Math.round(slotH * (1 - cd / spec.cooldown));
+        const full = (player.skillCooldownMax && player.skillCooldownMax[spec.id]) || spec.cooldown;
+        const filled = Math.round(slotH * (1 - cd / full));
         ctx.fillStyle = '#38452f';
         ctx.fillRect(x, y + slotH - filled, slotW, filled);
       }

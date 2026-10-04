@@ -53,12 +53,13 @@ const Inventory = {
     return true;
   },
 
-  // 장비 한 점 — 역시 빈 칸이 있어야 한다 (입는 건 나중에 내가 고른다)
-  addGear(player, id, level) {
+  /* 장비 한 점 — 역시 빈 칸이 있어야 한다 (입는 건 나중에 내가 고른다).
+     item 을 그대로 넘기거나(바닥에서 주운 것), id/레벨만 주면 여기서 굴린다(시험용) */
+  addGear(player, item, level) {
     const i = this.firstEmpty(player);
     if (i < 0) return false;
-    player.bag[i] = { kind: 'gear', id: id, level: level };
-    return true;
+    player.bag[i] = (typeof item === 'string') ? Gear.roll(item, level || 1) : item;
+    return !!player.bag[i];
   },
 
   /* 커서가 가리키는 것 — 가방 칸이거나, 그 뒤에 이어 붙은 장비 세 칸 */
@@ -325,6 +326,10 @@ const Inventory = {
       } else if (s && s.kind === 'weapon' && s.growing) {
         ctx.strokeStyle = UI.rainbowNow(0);
         ctx.strokeRect(sx + 0.5, sy + 0.5, L.slot - 1, L.slot - 1);
+      } else if (s && s.kind === 'gear' && s.rarity >= 2) {
+        // 희귀·전설은 칸 테두리만 봐도 가려낼 수 있다
+        ctx.strokeStyle = Gear.color(s);
+        ctx.strokeRect(sx + 0.5, sy + 0.5, L.slot - 1, L.slot - 1);
       }
     }
 
@@ -360,9 +365,11 @@ const Inventory = {
 
   /* 오른쪽 — 지금 입고 든 것, 그리고 고른 칸의 설명.
      장착 줄은 [무기][머리][몸][장신구] 네 칸이다. 무기는 보여주기만 하고(바꾸는 건 가방에서),
-     장비 세 칸은 커서로 고를 수 있다 — 거기서 Space 는 '벗다'. */
+     장비 세 칸은 커서로 고를 수 있다 — 거기서 Space 는 '벗다'.
+
+     줄 간격이 8px 로 빡빡한 이유: 옵션이 네 개까지 붙을 수 있어서 설명이 일곱 줄까지 간다. */
   drawDetails(ctx, player, L) {
-    const x = L.panelX, top = L.gridY;
+    const x = L.panelX, top = L.gridY, wide = L.x + L.w - 8 - x;
     UI.drawText(ctx, 'EQUIPPED', x, top, '#7fa86a');
 
     const slots = CONFIG.gear.slots;
@@ -380,6 +387,9 @@ const Inventory = {
       if (i > 0 && this.cursor === player.bag.length + (i - 1)) {
         ctx.strokeStyle = '#ffe066';
         ctx.strokeRect(bx + 0.5, by + 0.5, L.box - 1, L.box - 1);
+      } else if (item && item.rarity >= 2) {
+        ctx.strokeStyle = Gear.color(item);
+        ctx.strokeRect(bx + 0.5, by + 0.5, L.box - 1, L.box - 1);
       }
     }
 
@@ -387,76 +397,100 @@ const Inventory = {
     const spec = player.weaponSpec(), dmg = player.attackDamage();
     if (player.weaponGrowing) UI.drawRainbowText(ctx, player.weaponLabel(), x, top + 26);
     else UI.drawText(ctx, player.weaponLabel(), x, top + 26, player.weaponColor());
-    UI.drawText(ctx, 'DMG ' + dmg + '  DPS ' + Math.round(dmg / spec.cooldown), x, top + 35, '#f0d9b5');
+    UI.drawText(ctx, 'DMG ' + dmg + '  DPS ' + Math.round(dmg / spec.cooldown), x, top + 34, '#f0d9b5');
 
-    // 장비가 더해주는 것 (아무것도 안 입었으면 0 으로 보인다 — 비어 있다는 걸 알려주려고 늘 띄운다)
+    /* 입은 것이 더해주는 것 — 앞줄은 늘 있는 네 가지, 뒷줄은 굴려 붙은 옵션들.
+       아무것도 안 입었어도 0 으로 띄운다 (비어 있다는 걸 알려주려고) */
     const g = player.gearStats;
-    UI.drawText(ctx, 'ARM ' + g.armor + ' (-' + Math.round(player.damageReduction() * 100) + '%)', x, top + 44, '#7ec8ff');
-    UI.drawText(ctx, 'HP +' + g.maxHp + '  ATK +' + g.power + '  SPD ' + (g.speed >= 0 ? '+' : '') + g.speed + '%', x, top + 52, '#7ec8ff');
+    UI.drawText(ctx, 'ARM ' + (g.armor || 0) + ' (-' + Math.round(player.damageReduction() * 100) + '%)  HP +' + (g.maxHp || 0), x, top + 42, '#7ec8ff');
+    const extras = {};
+    for (const k in g) if (k !== 'armor' && k !== 'maxHp' && g[k]) extras[k] = g[k];
+    const extraLine = Gear.statLine(extras).slice(0, 4).join(' ');
+    UI.drawText(ctx, extraLine || 'NO BONUSES YET', x, top + 50, extraLine ? '#7ec8ff' : '#5f6b59');
 
     ctx.fillStyle = '#3a442f';
-    ctx.fillRect(x, top + 61, L.x + L.w - 8 - x, 1);
+    ctx.fillRect(x, top + 59, wide, 1);
 
     const at = this.at(player, this.cursor);
     const s = at.item;
-    const y = top + 67;
+    let y = top + 64;
+    const line = (text, color) => { UI.drawText(ctx, text, x, y, color); y += 8; };
+
     if (!s) {
-      UI.drawText(ctx, at.zone === 'gear' ? CONFIG.gear.slotNames[at.slot] + ' — EMPTY' : 'EMPTY SLOT', x, y, '#5f6b59');
+      line(at.zone === 'gear' ? CONFIG.gear.slotNames[at.slot] + ' — EMPTY' : 'EMPTY SLOT', '#5f6b59');
       return;
     }
 
     if (s.kind === 'potion') {
-      UI.drawText(ctx, 'POTION X' + player.potions + '/' + player.maxPotions, x, y, '#ffd93d');
-      UI.drawText(ctx, 'HEALS ' + player.potionHeal() + ' HP', x, y + 9, '#f0d9b5');
-      UI.drawText(ctx, 'SPACE DRINK (OR E)', x, y + 22, '#9be564');
+      line('POTION X' + player.potions + '/' + player.maxPotions, '#ffd93d');
+      line('HEALS ' + player.potionHeal() + ' HP', '#f0d9b5');
+      y += 5;
+      line('SPACE DRINK (OR E)', '#9be564');
       return;
     }
 
     if (s.kind === 'gear') {
-      const slot = Gear.slotOf(s);
-      UI.drawText(ctx, Gear.name(s), x, y, Gear.color(s));
-      UI.drawText(ctx, CONFIG.gear.slotNames[slot], x, y + 9, '#7fa86a');
-      const mine = Gear.statsOf(s);
-      UI.drawText(ctx, Gear.statLine(mine).join('  '), x, y + 18, '#f0d9b5');
+      const slot = Gear.slotOf(s), r = Gear.rarity(s);
+      line(Gear.name(s), r.color);
+      line(r.name + ' . ' + CONFIG.gear.slotNames[slot] + ' . L' + s.level, '#7fa86a');
+      line(Gear.statLine(Gear.baseStats(s)).join('  '), '#f0d9b5');
+      // 굴려 붙은 옵션 — 두 개씩 끊어 적는다
+      const ax = Gear.statLine(Gear.affixStats(s));
+      for (let i = 0; i < ax.length; i += 2) line(ax.slice(i, i + 2).join('  '), '#c79ce8');
+
       if (at.zone === 'gear') {
-        UI.drawText(ctx, 'SPACE TAKE OFF  X DROP', x, y + 31, '#9be564');
+        y += 4;
+        line('SPACE TAKE OFF  X DROP', '#9be564');
         return;
       }
       // 입으면 얼마나 달라지는지 — 그 자리에 입고 있는 것과 견준다
-      const worn = player.gear[slot] ? Gear.statsOf(player.gear[slot]) : {};
-      const diff = {};
-      for (const k of ['armor', 'maxHp', 'power', 'speed']) {
-        const d = (mine[k] || 0) - (worn[k] || 0);
-        if (d) diff[k] = d;
+      const worn = player.gear[slot];
+      if (!worn) line('NOTHING WORN YET', '#9be564');
+      else {
+        const mine = Gear.statsOf(s), old = Gear.statsOf(worn), diff = {};
+        for (const k in mine) if ((mine[k] || 0) - (old[k] || 0)) diff[k] = (mine[k] || 0) - (old[k] || 0);
+        for (const k in old) if (diff[k] === undefined && -(old[k] || 0)) diff[k] = -(old[k] || 0);
+        /* 어느 쪽이 나은지는 무게를 달아 더한다 — 방어력은 비율로 막으니 체력보다 무겁고,
+           공격력은 한 점이 레벨업 하나의 절반이라 가장 무겁다 */
+        const w = { armor: 1.5, maxHp: 0.3, power: 3 };
+        const weight = (k) => (w[k] === undefined ? 1 : w[k]);
+        let better = 0;
+        for (const k in diff) better += diff[k] * weight(k);
+        /* 한 줄에 다 못 적으므로 **크게 달라지는 것부터** 세 개만 적고 나머지는 '..' 로 줄인다.
+           (안 보이는 것까지 포함해서 색을 정하므로, 초록인데 적힌 건 작아 보일 수 있다) */
+        const keys = Object.keys(diff).sort((p, q) => Math.abs(diff[q] * weight(q)) - Math.abs(diff[p] * weight(p)));
+        const top = {};
+        for (const k of keys.slice(0, 3)) top[k] = diff[k];
+        const text = Gear.statLine(top);
+        line(keys.length ? 'VS ' + text.join(' ') + (keys.length > 3 ? ' ..' : '') : 'SAME AS WORN',
+          better > 0 ? '#9be564' : (better < 0 ? '#c05a5a' : '#7fa86a'));
       }
-      const better = (diff.armor || 0) * 1.5 + (diff.maxHp || 0) * 0.3 + (diff.power || 0) * 3 + (diff.speed || 0);
-      const vs = !player.gear[slot] ? 'NOTHING WORN YET'
-        : (Object.keys(diff).length ? Gear.statLine(diff).join('  ') + ' VS WORN' : 'SAME AS WORN');
-      UI.drawText(ctx, vs, x, y + 27, better > 0 ? '#9be564' : (better < 0 ? '#c05a5a' : '#7fa86a'));
-      UI.drawText(ctx, 'SPACE WEAR  X DROP', x, y + 40, '#9be564');
+      line('SPACE WEAR  X DROP', '#9be564');
       return;
     }
 
     if (s.kind === 'weapon') {
       const lv = this.weaponLevel(player, s);
       const w = CONFIG.weapons[s.weapon];
-      if (s.growing) UI.drawRainbowText(ctx, this.itemName(player, s), x, y);
-      else UI.drawText(ctx, this.itemName(player, s), x, y, CONFIG.weapons.levelColor[levelTier(lv)]);
+      if (s.growing) { UI.drawRainbowText(ctx, this.itemName(player, s), x, y); y += 8; }
+      else line(this.itemName(player, s), CONFIG.weapons.levelColor[levelTier(lv)]);
       // 끼면 위력이 얼마나 달라지는지 — 지금 든 무기와 바로 비교
       const wd = player.damageWith(s.weapon, lv, s.growing);
       const d = wd - dmg;
-      UI.drawText(ctx, 'DMG ' + wd + ' RNG ' + w.reach, x, y + 9, '#f0d9b5');
-      UI.drawText(ctx, (d >= 0 ? '+' : '') + d + ' VS EQUIPPED', x, y + 18, d > 0 ? '#9be564' : (d < 0 ? '#c05a5a' : '#7fa86a'));
-      UI.drawText(ctx, 'SPD ' + UI.speedWord(w.cooldown) + ' DPS ' + Math.round(wd / w.cooldown), x, y + 27, '#7fa86a');
-      UI.drawText(ctx, 'SPACE EQUIP  X DROP', x, y + 40, '#9be564');
+      line('DMG ' + wd + ' RNG ' + w.reach, '#f0d9b5');
+      line((d >= 0 ? '+' : '') + d + ' VS EQUIPPED', d > 0 ? '#9be564' : (d < 0 ? '#c05a5a' : '#7fa86a'));
+      line('SPD ' + UI.speedWord(w.cooldown) + ' DPS ' + Math.round(wd / w.cooldown), '#7fa86a');
+      y += 5;
+      line('SPACE EQUIP  X DROP', '#9be564');
       return;
     }
 
     const ls = this.spec(s.id);
-    UI.drawText(ctx, ls.name, x, y, ls.color);
-    UI.drawText(ctx, 'X' + s.amount + '  WORTH ' + (ls.value * s.amount) + ' G', x, y + 9, '#f0d9b5');
-    UI.drawText(ctx, ls.trophy ? 'BOSS TROPHY' : 'MONSTER LOOT', x, y + 18, '#7fa86a');
-    UI.drawText(ctx, 'SELL AT THE SHOP', x, y + 31, '#ffe066');
-    UI.drawText(ctx, 'X DROP', x, y + 40, '#9be564');
+    line(ls.name, ls.color);
+    line('X' + s.amount + '  WORTH ' + (ls.value * s.amount) + ' G', '#f0d9b5');
+    line(ls.trophy ? 'BOSS TROPHY' : 'MONSTER LOOT', '#7fa86a');
+    y += 5;
+    line('SELL AT THE SHOP', '#ffe066');
+    line('X DROP', '#9be564');
   },
 };

@@ -143,7 +143,7 @@ html, body {
 }
 
 </style>
-<!-- built 2026-10-04 11:52 by tools/build.js -->
+<!-- built 2026-10-04 12:08 by tools/build.js -->
 </head>
 <body>
   <div id="stage">
@@ -966,6 +966,51 @@ const CONFIG = {
         stats: { power: [1, 0.3] } },
       vitalCharm: { slot: 'trinket', name: 'VITAL CHARM', sprite: 'charm',
         stats: { maxHp: [14, 1.8] } },
+    },
+  },
+
+  /* ── 등급과 랜덤 옵션 (로드맵 2주차) ─────────────────────
+     장비는 떨어질 때 등급을 하나 굴리고, 등급이 정한 수만큼 옵션이 붙는다.
+     **몬스터 레벨이 옵션의 크기를, 운이 개수를 정한다** — 그래서 같은 '가죽 모자'라도
+     버리기 아까운 것과 아닌 것이 생긴다 (그게 이 주차의 목표다).
+
+     이름은 가장 센 옵션이 앞에 붙어 지어진다: SWIFT LEATHER CAP, VAMPIRIC CHAIN MAIL.
+
+     수치는 range 에서 하나 뽑고 레벨마다 perLevel 만큼 더한다.
+     퍼센트 옵션(pct)은 여러 점을 겹쳐 입으면 금세 터무니없어지므로 caps 로 총합을 묶는다. */
+  rarity: {
+    // [이름, 색, 옵션 수, 뽑기 가중치]
+    list: [
+      { name: 'COMMON', color: '#c8d0d8', affixes: 1, weight: 60 },
+      { name: 'FINE',   color: '#8fe0a8', affixes: 2, weight: 27 },
+      { name: 'RARE',   color: '#7ec8ff', affixes: 3, weight: 10 },
+      { name: 'LEGEND', color: '#ffb35c', affixes: 4, weight: 3 },
+    ],
+  },
+
+  affixes: {
+    /* word  — 이름 앞에 붙는 말
+       label — 인벤토리에 찍히는 짧은 이름
+       range — 1레벨에서 뽑는 범위, perLevel — 레벨마다 더해지는 양
+       pct   — 퍼센트로 읽는 값 */
+    list: {
+      attackSpeed: { word: 'QUICK',    label: 'ASPD',  range: [3, 7],  perLevel: 0.12, pct: true },
+      crit:        { word: 'KEEN',     label: 'CRIT',  range: [2, 5],  perLevel: 0.08, pct: true },
+      critMult:    { word: 'CRUEL',    label: 'CDMG',  range: [6, 14], perLevel: 0.25, pct: true },
+      speed:       { word: 'SWIFT',    label: 'SPD',   range: [3, 7],  perLevel: 0.08, pct: true },
+      lifesteal:   { word: 'VAMPIRIC', label: 'LEECH', range: [1, 3],  perLevel: 0.05, pct: true },
+      potion:      { word: 'HEALERS',  label: 'POTION',range: [5, 12], perLevel: 0.3,  pct: true },
+      cooldown:    { word: 'ARCANE',   label: 'CDR',   range: [3, 8],  perLevel: 0.12, pct: true },
+      knockRes:    { word: 'STEADY',   label: 'BRACE', range: [6, 14], perLevel: 0.3,  pct: true },
+      gold:        { word: 'GILDED',   label: 'GOLD',  range: [8, 18], perLevel: 0.4,  pct: true },
+      armor:       { word: 'STURDY',   label: 'ARM',   range: [2, 5],  perLevel: 0.12 },
+      maxHp:       { word: 'HEARTY',   label: 'HP',    range: [5, 12], perLevel: 0.8 },
+      power:       { word: 'BRUTAL',   label: 'ATK',   range: [1, 2],  perLevel: 0.12 },
+    },
+    // 여러 점을 겹쳐 입었을 때의 총합 상한 (없는 것은 안 묶는다)
+    caps: {
+      attackSpeed: 40, crit: 25, critMult: 120, speed: 40,
+      lifesteal: 20, potion: 100, cooldown: 45, knockRes: 80, gold: 150,
     },
   },
 
@@ -4405,7 +4450,7 @@ const Save = {
       },
       drops: drops.map(d => ({
         kind: d.kind, weapon: d.weapon, level: d.level, amount: d.amount, id: d.id,
-        growing: !!d.growing,
+        item: d.item, growing: !!d.growing,
         x: Math.round(d.x), y: Math.round(d.y), life: Math.round(d.life),
       })),
     };
@@ -4485,7 +4530,7 @@ const Save = {
     Items.reset();
     for (const d of (data.drops || [])) {
       if (d.kind === 'weapon') Items.spawnWeapon(d.x, d.y, d.weapon, d.level, { growing: d.growing });
-      else if (d.kind === 'gear') Items.spawnGear(d.x, d.y, d.id, d.level);
+      else if (d.kind === 'gear') Items.spawnGear(d.x, d.y, d.id, d.level, { item: Gear.sanitize(d.item) });
       else if (d.kind === 'loot') Items.spawnLoot(d.x, d.y, d.id, d.amount);
       else Items.spawn(d.x, d.y, d.amount);
       // spawn 은 빈 자리를 찾아 위치를 흔들므로 저장된 자리로 되돌린다
@@ -4545,7 +4590,9 @@ class Player {
 
     // 장비 — 머리 / 몸 / 장신구 세 칸. 여기 걸친 것이 recalcStats 를 거쳐 능력치에 더해진다
     this.gear = { head: null, body: null, trinket: null };
+    // 입은 것들의 수치 합 — 바탕 네 가지 + 굴려 붙은 옵션들 (recalcStats 가 채운다)
     this.gearStats = { armor: 0, maxHp: 0, power: 0, speed: 0 };
+    this.skillCooldownMax = {};   // 쿨다운 감소가 붙으면 스킬 바의 기준도 같이 줄어든다
 
     // 여러 칸짜리 가방 — 첫 칸은 포션 주머니, 나머지엔 무기·전리품·장비 (Inventory 가 다룬다)
     this.bagSlots = CONFIG.inventory.baseSlots;
@@ -4630,7 +4677,11 @@ class Player {
       const item = this.gear && this.gear[slot];
       if (!item) continue;
       const stats = Gear.statsOf(item);
-      for (const k in stats) g[k] += stats[k];
+      for (const k in stats) g[k] = (g[k] || 0) + stats[k];
+    }
+    // 퍼센트 옵션은 겹쳐 입으면 금세 터무니없어진다 — 총합을 묶어둔다
+    for (const k in CONFIG.affixes.caps) {
+      if (g[k]) g[k] = Math.min(g[k], CONFIG.affixes.caps[k]);
     }
     this.gearStats = g;
 
@@ -4655,6 +4706,21 @@ class Player {
   speedMult() {
     return Math.max(0.3, 1 + (this.gearStats.speed || 0) / 100);
   }
+
+  // 옵션 하나를 꺼내 쓴다 (안 붙어 있으면 0)
+  stat(key) { return this.gearStats[key] || 0; }
+
+  // 치명타 — 기본값에 KEEN(확률)·CRUEL(배수) 옵션을 얹는다
+  critChance() { return CONFIG.player.critChance + this.stat('crit') / 100; }
+  critMult() { return CONFIG.player.critMult * (1 + this.stat('critMult') / 100); }
+
+  // 손 빠르기 — QUICK 옵션과 광폭화 버프가 함께 곱해진다
+  attackSpeedMult() {
+    return (1 + this.stat('attackSpeed') / 100) * (this.buff ? this.buff.attackSpeed : 1);
+  }
+
+  // 스킬 쿨다운 — ARCANE 옵션만큼 줄어든다
+  cooldownMult() { return 1 - this.stat('cooldown') / 100; }
 
   /* 스킬 위력의 기준 — 무기 종류 배수를 뺀 평타 (기본 공격 x 무기 레벨 배수 x 강화).
      단검을 들었다고 스킬까지 약해지면 안 되므로 종류 배수는 빼고 잰다. */
@@ -4755,7 +4821,8 @@ class Player {
     this.skillHitIds = new Set();
     this.skillHitTimer = 0;
     this.skillHits = 0;
-    this.skillCooldowns[spec.id] = spec.cooldown;
+    this.skillCooldowns[spec.id] = spec.cooldown * this.cooldownMult();
+    this.skillCooldownMax[spec.id] = this.skillCooldowns[spec.id];   // 스킬 바가 이 값을 기준으로 찬다
     this.swingAngle = this.aim;
     this.spinAngle = 0;
     this.attackTimer = 0;
@@ -4988,7 +5055,7 @@ class Player {
     const wantsAttack = this.attackBuffer > 0 || Input.attackHeld();
     if (wantsAttack && this.cooldown <= 0 && this.attackTimer <= 0 && this.dashTimer <= 0 && !this.activeSkill) {
       this.attackTimer = w.duration;
-      this.cooldown = w.cooldown / (this.buff ? this.buff.attackSpeed : 1);   // 광폭화 중엔 손이 빠르다
+      this.cooldown = w.cooldown / this.attackSpeedMult();   // 광폭화와 QUICK 옵션만큼 손이 빨라진다
       this.hitIds = new Set();
       this.attackBuffer = 0;
       this.swingAngle = this.aim;   // 휘두르는 동안에는 이 각도로 고정된다
@@ -5065,15 +5132,22 @@ class Player {
       if (!omni && d > 3 && Math.abs(Util.angleDiff(toEnemy, base)) > arc) continue;
 
       ids.add(s.id);
-      const crit = (opts && opts.forceCrit) || Math.random() < c.critChance;   // 치명타율은 무기와 무관하게 동일
+      const crit = (opts && opts.forceCrit) || Math.random() < this.critChance();   // 치명타율은 무기와 무관하게 동일
       // 스킬은 무기 종류 배수를 뺀 기준값으로 — 단검 스킬이 도끼 스킬보다 약하지 않게
       const dmgBase = (opts && opts.skill) ? this.skillBase() : this.attackDamage();
       let dmg = Math.round((dmgBase + Util.randInt(-1, 1)) * dmgMult);
-      if (crit) dmg = Math.round(dmg * c.critMult);
+      if (crit) dmg = Math.round(dmg * this.critMult());
       dmg = Math.max(1, dmg);
       // 사방 공격은 바깥쪽으로, 베는 공격은 휘두른 방향으로 날린다
       s.takeHit(dmg, omni ? toEnemy : base, crit, this, knockMult);
       this.sinceCombat = 0;   // 때리는 중에도 자연 회복은 멈춘다
+      // 흡혈(VAMPIRIC) — 때린 만큼 조금 돌려받는다. 체력이 가득이면 아무 일도 없다
+      const leech = this.stat('lifesteal');
+      if (leech > 0 && this.hp < this.maxHp) {
+        const healed = Math.max(1, Math.round(dmg * leech / 100));
+        this.hp = Math.min(this.maxHp, this.hp + healed);
+        if (Math.random() < 0.3) FX.burst(this.x, this.y - 2, 2, ['#ff6b6b', '#ffd0d0'], { speed: 14, life: 0.3, gravity: -20, size: 1 });
+      }
       // 처치 > 치명타 > 보통 순으로 화면이 더 오래 멈춘다. 카메라도 휘두른 쪽으로 살짝 밀린다
       const fx = CONFIG.fx;
       FX.freeze(s.dead ? fx.hitStopKill : (crit ? fx.hitStopCrit : fx.hitStop));
@@ -5091,8 +5165,9 @@ class Player {
     this.invuln = c.invulnTime;
     this.sinceCombat = 0;      // 맞으면 자연 회복은 처음부터 다시 기다린다
     const a = Math.atan2(this.y - fromY, this.x - fromX);
-    this.kx = Math.cos(a) * c.knockbackTaken;
-    this.ky = Math.sin(a) * c.knockbackTaken;
+    const knock = c.knockbackTaken * (1 - this.stat('knockRes') / 100);   // STEADY 옵션만큼 덜 밀린다
+    this.kx = Math.cos(a) * knock;
+    this.ky = Math.sin(a) * knock;
     FX.number(this.x, this.y - 12, '-' + amount, '#ff6b6b');
     FX.addShake(CONFIG.fx.shakeOnHurt);
     FX.spray(this.x, this.y, a, 8, ['#ff6b6b', '#ffffff']);
@@ -5154,6 +5229,7 @@ class Player {
 
   // 골드는 바닥에 떨어지지 않고 잡는 즉시 들어온다. 액수는 잡은 자리에 띄운다
   addGold(amount, x, y) {
+    amount = Math.max(1, Math.round(amount * (1 + this.stat('gold') / 100)));   // GILDED 옵션만큼 더 번다
     this.gold += amount;
     if (x === undefined) { x = this.x; y = this.y; }
     FX.number(x, y - 14, '+' + amount + ' G', CONFIG.gold.color);
@@ -5218,7 +5294,8 @@ class Player {
   // 포션 한 개가 채우는 양 — 최대 체력의 30%, 최소 30
   potionHeal() {
     const cfg = CONFIG.items;
-    return Math.max(cfg.potionHealMin, Math.round(this.maxHp * cfg.potionHealRatio));
+    const base = Math.max(cfg.potionHealMin, Math.round(this.maxHp * cfg.potionHealRatio));
+    return Math.round(base * (1 + this.stat('potion') / 100));   // HEALERS 옵션만큼 더 찬다
   }
 
   usePotion() {
@@ -7374,19 +7451,62 @@ class ElderShroom extends Boss {
 /* 장비 — 무기 말고 몸에 걸치는 것 (머리 / 몸 / 장신구).
 
    가방에 들어오고, 인벤토리에서 Space 로 입고 벗는다. 자동으로 입지는 않는다.
-   수치는 아이템 레벨(떨군 몬스터의 레벨)을 따라 자란다 — CONFIG.gear.items 의
-   [기본값, 레벨당 증가] 표가 전부다. 이 파일은 그 표를 읽고 더하는 일만 한다.
 
-   방어력을 '피해 -N' 이 아니라 비율로 바꾸는 이유는 CONFIG.gear 주석에 적어뒀다. */
+   장비 한 점은 세 가지로 이루어진다.
+     1. 바탕 아이템  CONFIG.gear.items — 가죽 모자, 사슬 갑옷 … 칸과 기본 수치를 정한다
+     2. 등급         CONFIG.rarity    — COMMON / FINE / RARE / LEGEND. 옵션이 몇 개 붙는지를 정한다
+     3. 랜덤 옵션    CONFIG.affixes   — 떨어질 때 굴린다. 몬스터 레벨이 크기를, 운이 개수를 정한다
+
+   그래서 같은 '가죽 모자'라도 버리기 아까운 것과 아닌 것이 생긴다.
+   이름은 가장 센 옵션이 앞에 붙어 지어진다 — SWIFT LEATHER CAP, VAMPIRIC CHAIN MAIL.
+
+   이 파일은 그 표를 읽고, 굴리고, 더하는 일만 한다. */
 
 const Gear = {
   spec(id) { return CONFIG.gear.items[id]; },
   slotOf(item) { return this.spec(item.id).slot; },
+  rarity(item) { return CONFIG.rarity.list[item.rarity || 0] || CONFIG.rarity.list[0]; },
+  affixSpec(type) { return CONFIG.affixes.list[type]; },
 
-  // 이 아이템이 실제로 주는 수치 — { armor, maxHp, power, speed } 중 가진 것만
-  statsOf(item) {
-    const spec = this.spec(item.id);
-    const out = {};
+  /* ── 굴리기 ────────────────────────────────────────────── */
+
+  // 등급 하나 — 가중치대로. 흔한 것이 흔하게 나온다
+  rollRarity() {
+    const list = CONFIG.rarity.list;
+    return Util.weightedIndex(list.map(r => r.weight));
+  },
+
+  // 옵션 하나의 값 — 1레벨 범위에서 뽑고 레벨만큼 더한다
+  rollAffixValue(type, level) {
+    const a = this.affixSpec(type);
+    return Math.max(1, Util.randInt(a.range[0], a.range[1]) + Math.round(a.perLevel * (level - 1)));
+  },
+
+  // 장비 한 점을 통째로 만든다 (바닥에 떨어질 때 한 번만 굴린다)
+  roll(id, level, rarityIndex) {
+    const spec = this.spec(id);
+    if (!spec) return null;
+    level = Util.clamp(Math.round(level) || 1, 1, CONFIG.weapons.levelMult.length);
+    const rarity = rarityIndex === undefined ? this.rollRarity() : rarityIndex;
+
+    // 같은 옵션이 두 번 붙지 않게 후보에서 빼가며 뽑는다
+    const pool = Object.keys(CONFIG.affixes.list);
+    const affixes = [];
+    const n = Math.min(CONFIG.rarity.list[rarity].affixes, pool.length);
+    for (let i = 0; i < n; i++) {
+      const type = pool.splice(Math.floor(Math.random() * pool.length), 1)[0];
+      affixes.push({ t: type, v: this.rollAffixValue(type, level) });
+    }
+    // 이름에 쓸 옵션이 앞에 오도록, 값이 큰 순으로 정렬해 둔다
+    affixes.sort((a, b) => b.v - a.v);
+    return { kind: 'gear', id: id, level: level, rarity: rarity, affixes: affixes };
+  },
+
+  /* ── 수치 ──────────────────────────────────────────────── */
+
+  // 바탕 아이템이 주는 것 (등급·옵션과 무관하다)
+  baseStats(item) {
+    const spec = this.spec(item.id), out = {};
     if (!spec) return out;
     for (const k in spec.stats) {
       const pair = spec.stats[k];
@@ -7395,28 +7515,55 @@ const Gear = {
     return out;
   },
 
+  // 굴려 붙은 옵션들
+  affixStats(item) {
+    const out = {};
+    for (const a of (item.affixes || [])) {
+      if (!this.affixSpec(a.t)) continue;
+      out[a.t] = (out[a.t] || 0) + a.v;
+    }
+    return out;
+  },
+
+  // 바탕 + 옵션을 합친 것 — 실제로 몸에 더해지는 값
+  statsOf(item) {
+    const out = this.baseStats(item);
+    const ax = this.affixStats(item);
+    for (const k in ax) out[k] = (out[k] || 0) + ax[k];
+    return out;
+  },
+
+  /* ── 이름과 색 ─────────────────────────────────────────── */
+
+  // 가장 센 옵션의 말이 앞에 붙는다 (옵션은 굴릴 때 값 순으로 정렬해 뒀다)
   name(item) {
     const spec = this.spec(item.id);
-    return spec ? spec.name + ' L' + item.level : '?';
+    if (!spec) return '?';
+    const first = (item.affixes || [])[0];
+    const word = first && this.affixSpec(first.t) ? this.affixSpec(first.t).word + ' ' : '';
+    return word + spec.name;
   },
 
-  // 등급 색은 아직 없다 (다음 주차) — 지금은 레벨 색 등급을 그대로 쓴다
-  color(item) {
-    return CONFIG.weapons.levelColor[levelTier(item.level)] || '#ffffff';
-  },
+  // 레벨까지 붙인 긴 이름 (바닥 이름표에는 짧은 쪽을 쓴다)
+  fullName(item) { return this.name(item) + ' L' + item.level; },
 
-  sprite(item) {
-    return SPRITES.gear[this.spec(item.id).sprite];
-  },
+  color(item) { return this.rarity(item).color; },
 
-  // 'ARM +7  HP +12' 처럼 사람이 읽는 줄로. diff 를 주면 지금 입은 것과의 차이를 ± 로 보여준다
+  sprite(item) { return SPRITES.gear[this.spec(item.id).sprite]; },
+
+  /* 'ARM +7  HP +12' 처럼 사람이 읽는 줄로.
+     바탕 수치와 옵션이 같은 이름을 쓸 수 있으므로(ARM 등) 이 함수는 받은 것만 그대로 쓴다. */
   statLine(stats) {
-    const order = ['armor', 'maxHp', 'power', 'speed'];
-    const label = { armor: 'ARM', maxHp: 'HP', power: 'ATK', speed: 'SPD' };
+    const order = ['armor', 'maxHp', 'power', 'speed', 'attackSpeed', 'crit', 'critMult',
+                   'lifesteal', 'potion', 'cooldown', 'knockRes', 'gold'];
+    const base = { armor: 'ARM', maxHp: 'HP', power: 'ATK', speed: 'SPD' };
     const out = [];
     for (const k of order) {
       if (!stats[k]) continue;
-      out.push(label[k] + ' ' + (stats[k] > 0 ? '+' : '') + stats[k] + (k === 'speed' ? '%' : ''));
+      const a = CONFIG.affixes.list[k];
+      const label = (base[k] || (a && a.label) || k);
+      const pct = (a && a.pct) || k === 'speed';
+      out.push(label + ' ' + (stats[k] > 0 ? '+' : '') + stats[k] + (pct ? '%' : ''));
     }
     return out;
   },
@@ -7427,10 +7574,19 @@ const Gear = {
     return ids[Math.floor(Math.random() * ids.length)];
   },
 
-  // 저장에서 돌아온 값이 성한지 확인한다 (설정이 바뀌어 사라진 아이템은 버린다)
+  /* 저장에서 돌아온 값이 성한지 확인한다.
+     설정이 바뀌어 사라진 아이템·옵션은 조용히 버린다 (옛 저장도 그대로 열린다). */
   sanitize(s) {
     if (!s || !this.spec(s.id)) return null;
-    return { kind: 'gear', id: s.id, level: Util.clamp(Math.round(s.level) || 1, 1, CONFIG.weapons.levelMult.length) };
+    const level = Util.clamp(Math.round(s.level) || 1, 1, CONFIG.weapons.levelMult.length);
+    const rarity = Util.clamp(Math.round(s.rarity) || 0, 0, CONFIG.rarity.list.length - 1);
+    const affixes = [];
+    for (const a of (s.affixes || [])) {
+      if (!a || !this.affixSpec(a.t)) continue;
+      affixes.push({ t: a.t, v: Math.max(1, Math.round(a.v) || 1) });
+    }
+    affixes.sort((a, b) => b.v - a.v);
+    return { kind: 'gear', id: s.id, level: level, rarity: rarity, affixes: affixes };
   },
 };
 
@@ -7492,12 +7648,13 @@ const Inventory = {
     return true;
   },
 
-  // 장비 한 점 — 역시 빈 칸이 있어야 한다 (입는 건 나중에 내가 고른다)
-  addGear(player, id, level) {
+  /* 장비 한 점 — 역시 빈 칸이 있어야 한다 (입는 건 나중에 내가 고른다).
+     item 을 그대로 넘기거나(바닥에서 주운 것), id/레벨만 주면 여기서 굴린다(시험용) */
+  addGear(player, item, level) {
     const i = this.firstEmpty(player);
     if (i < 0) return false;
-    player.bag[i] = { kind: 'gear', id: id, level: level };
-    return true;
+    player.bag[i] = (typeof item === 'string') ? Gear.roll(item, level || 1) : item;
+    return !!player.bag[i];
   },
 
   /* 커서가 가리키는 것 — 가방 칸이거나, 그 뒤에 이어 붙은 장비 세 칸 */
@@ -7764,6 +7921,10 @@ const Inventory = {
       } else if (s && s.kind === 'weapon' && s.growing) {
         ctx.strokeStyle = UI.rainbowNow(0);
         ctx.strokeRect(sx + 0.5, sy + 0.5, L.slot - 1, L.slot - 1);
+      } else if (s && s.kind === 'gear' && s.rarity >= 2) {
+        // 희귀·전설은 칸 테두리만 봐도 가려낼 수 있다
+        ctx.strokeStyle = Gear.color(s);
+        ctx.strokeRect(sx + 0.5, sy + 0.5, L.slot - 1, L.slot - 1);
       }
     }
 
@@ -7799,9 +7960,11 @@ const Inventory = {
 
   /* 오른쪽 — 지금 입고 든 것, 그리고 고른 칸의 설명.
      장착 줄은 [무기][머리][몸][장신구] 네 칸이다. 무기는 보여주기만 하고(바꾸는 건 가방에서),
-     장비 세 칸은 커서로 고를 수 있다 — 거기서 Space 는 '벗다'. */
+     장비 세 칸은 커서로 고를 수 있다 — 거기서 Space 는 '벗다'.
+
+     줄 간격이 8px 로 빡빡한 이유: 옵션이 네 개까지 붙을 수 있어서 설명이 일곱 줄까지 간다. */
   drawDetails(ctx, player, L) {
-    const x = L.panelX, top = L.gridY;
+    const x = L.panelX, top = L.gridY, wide = L.x + L.w - 8 - x;
     UI.drawText(ctx, 'EQUIPPED', x, top, '#7fa86a');
 
     const slots = CONFIG.gear.slots;
@@ -7819,6 +7982,9 @@ const Inventory = {
       if (i > 0 && this.cursor === player.bag.length + (i - 1)) {
         ctx.strokeStyle = '#ffe066';
         ctx.strokeRect(bx + 0.5, by + 0.5, L.box - 1, L.box - 1);
+      } else if (item && item.rarity >= 2) {
+        ctx.strokeStyle = Gear.color(item);
+        ctx.strokeRect(bx + 0.5, by + 0.5, L.box - 1, L.box - 1);
       }
     }
 
@@ -7826,77 +7992,101 @@ const Inventory = {
     const spec = player.weaponSpec(), dmg = player.attackDamage();
     if (player.weaponGrowing) UI.drawRainbowText(ctx, player.weaponLabel(), x, top + 26);
     else UI.drawText(ctx, player.weaponLabel(), x, top + 26, player.weaponColor());
-    UI.drawText(ctx, 'DMG ' + dmg + '  DPS ' + Math.round(dmg / spec.cooldown), x, top + 35, '#f0d9b5');
+    UI.drawText(ctx, 'DMG ' + dmg + '  DPS ' + Math.round(dmg / spec.cooldown), x, top + 34, '#f0d9b5');
 
-    // 장비가 더해주는 것 (아무것도 안 입었으면 0 으로 보인다 — 비어 있다는 걸 알려주려고 늘 띄운다)
+    /* 입은 것이 더해주는 것 — 앞줄은 늘 있는 네 가지, 뒷줄은 굴려 붙은 옵션들.
+       아무것도 안 입었어도 0 으로 띄운다 (비어 있다는 걸 알려주려고) */
     const g = player.gearStats;
-    UI.drawText(ctx, 'ARM ' + g.armor + ' (-' + Math.round(player.damageReduction() * 100) + '%)', x, top + 44, '#7ec8ff');
-    UI.drawText(ctx, 'HP +' + g.maxHp + '  ATK +' + g.power + '  SPD ' + (g.speed >= 0 ? '+' : '') + g.speed + '%', x, top + 52, '#7ec8ff');
+    UI.drawText(ctx, 'ARM ' + (g.armor || 0) + ' (-' + Math.round(player.damageReduction() * 100) + '%)  HP +' + (g.maxHp || 0), x, top + 42, '#7ec8ff');
+    const extras = {};
+    for (const k in g) if (k !== 'armor' && k !== 'maxHp' && g[k]) extras[k] = g[k];
+    const extraLine = Gear.statLine(extras).slice(0, 4).join(' ');
+    UI.drawText(ctx, extraLine || 'NO BONUSES YET', x, top + 50, extraLine ? '#7ec8ff' : '#5f6b59');
 
     ctx.fillStyle = '#3a442f';
-    ctx.fillRect(x, top + 61, L.x + L.w - 8 - x, 1);
+    ctx.fillRect(x, top + 59, wide, 1);
 
     const at = this.at(player, this.cursor);
     const s = at.item;
-    const y = top + 67;
+    let y = top + 64;
+    const line = (text, color) => { UI.drawText(ctx, text, x, y, color); y += 8; };
+
     if (!s) {
-      UI.drawText(ctx, at.zone === 'gear' ? CONFIG.gear.slotNames[at.slot] + ' — EMPTY' : 'EMPTY SLOT', x, y, '#5f6b59');
+      line(at.zone === 'gear' ? CONFIG.gear.slotNames[at.slot] + ' — EMPTY' : 'EMPTY SLOT', '#5f6b59');
       return;
     }
 
     if (s.kind === 'potion') {
-      UI.drawText(ctx, 'POTION X' + player.potions + '/' + player.maxPotions, x, y, '#ffd93d');
-      UI.drawText(ctx, 'HEALS ' + player.potionHeal() + ' HP', x, y + 9, '#f0d9b5');
-      UI.drawText(ctx, 'SPACE DRINK (OR E)', x, y + 22, '#9be564');
+      line('POTION X' + player.potions + '/' + player.maxPotions, '#ffd93d');
+      line('HEALS ' + player.potionHeal() + ' HP', '#f0d9b5');
+      y += 5;
+      line('SPACE DRINK (OR E)', '#9be564');
       return;
     }
 
     if (s.kind === 'gear') {
-      const slot = Gear.slotOf(s);
-      UI.drawText(ctx, Gear.name(s), x, y, Gear.color(s));
-      UI.drawText(ctx, CONFIG.gear.slotNames[slot], x, y + 9, '#7fa86a');
-      const mine = Gear.statsOf(s);
-      UI.drawText(ctx, Gear.statLine(mine).join('  '), x, y + 18, '#f0d9b5');
+      const slot = Gear.slotOf(s), r = Gear.rarity(s);
+      line(Gear.name(s), r.color);
+      line(r.name + ' . ' + CONFIG.gear.slotNames[slot] + ' . L' + s.level, '#7fa86a');
+      line(Gear.statLine(Gear.baseStats(s)).join('  '), '#f0d9b5');
+      // 굴려 붙은 옵션 — 두 개씩 끊어 적는다
+      const ax = Gear.statLine(Gear.affixStats(s));
+      for (let i = 0; i < ax.length; i += 2) line(ax.slice(i, i + 2).join('  '), '#c79ce8');
+
       if (at.zone === 'gear') {
-        UI.drawText(ctx, 'SPACE TAKE OFF  X DROP', x, y + 31, '#9be564');
+        y += 4;
+        line('SPACE TAKE OFF  X DROP', '#9be564');
         return;
       }
       // 입으면 얼마나 달라지는지 — 그 자리에 입고 있는 것과 견준다
-      const worn = player.gear[slot] ? Gear.statsOf(player.gear[slot]) : {};
-      const diff = {};
-      for (const k of ['armor', 'maxHp', 'power', 'speed']) {
-        const d = (mine[k] || 0) - (worn[k] || 0);
-        if (d) diff[k] = d;
+      const worn = player.gear[slot];
+      if (!worn) line('NOTHING WORN YET', '#9be564');
+      else {
+        const mine = Gear.statsOf(s), old = Gear.statsOf(worn), diff = {};
+        for (const k in mine) if ((mine[k] || 0) - (old[k] || 0)) diff[k] = (mine[k] || 0) - (old[k] || 0);
+        for (const k in old) if (diff[k] === undefined && -(old[k] || 0)) diff[k] = -(old[k] || 0);
+        /* 어느 쪽이 나은지는 무게를 달아 더한다 — 방어력은 비율로 막으니 체력보다 무겁고,
+           공격력은 한 점이 레벨업 하나의 절반이라 가장 무겁다 */
+        const w = { armor: 1.5, maxHp: 0.3, power: 3 };
+        const weight = (k) => (w[k] === undefined ? 1 : w[k]);
+        let better = 0;
+        for (const k in diff) better += diff[k] * weight(k);
+        /* 한 줄에 다 못 적으므로 **크게 달라지는 것부터** 세 개만 적고 나머지는 '..' 로 줄인다.
+           (안 보이는 것까지 포함해서 색을 정하므로, 초록인데 적힌 건 작아 보일 수 있다) */
+        const keys = Object.keys(diff).sort((p, q) => Math.abs(diff[q] * weight(q)) - Math.abs(diff[p] * weight(p)));
+        const top = {};
+        for (const k of keys.slice(0, 3)) top[k] = diff[k];
+        const text = Gear.statLine(top);
+        line(keys.length ? 'VS ' + text.join(' ') + (keys.length > 3 ? ' ..' : '') : 'SAME AS WORN',
+          better > 0 ? '#9be564' : (better < 0 ? '#c05a5a' : '#7fa86a'));
       }
-      const better = (diff.armor || 0) * 1.5 + (diff.maxHp || 0) * 0.3 + (diff.power || 0) * 3 + (diff.speed || 0);
-      const vs = !player.gear[slot] ? 'NOTHING WORN YET'
-        : (Object.keys(diff).length ? Gear.statLine(diff).join('  ') + ' VS WORN' : 'SAME AS WORN');
-      UI.drawText(ctx, vs, x, y + 27, better > 0 ? '#9be564' : (better < 0 ? '#c05a5a' : '#7fa86a'));
-      UI.drawText(ctx, 'SPACE WEAR  X DROP', x, y + 40, '#9be564');
+      line('SPACE WEAR  X DROP', '#9be564');
       return;
     }
 
     if (s.kind === 'weapon') {
       const lv = this.weaponLevel(player, s);
       const w = CONFIG.weapons[s.weapon];
-      if (s.growing) UI.drawRainbowText(ctx, this.itemName(player, s), x, y);
-      else UI.drawText(ctx, this.itemName(player, s), x, y, CONFIG.weapons.levelColor[levelTier(lv)]);
+      if (s.growing) { UI.drawRainbowText(ctx, this.itemName(player, s), x, y); y += 8; }
+      else line(this.itemName(player, s), CONFIG.weapons.levelColor[levelTier(lv)]);
       // 끼면 위력이 얼마나 달라지는지 — 지금 든 무기와 바로 비교
       const wd = player.damageWith(s.weapon, lv, s.growing);
       const d = wd - dmg;
-      UI.drawText(ctx, 'DMG ' + wd + ' RNG ' + w.reach, x, y + 9, '#f0d9b5');
-      UI.drawText(ctx, (d >= 0 ? '+' : '') + d + ' VS EQUIPPED', x, y + 18, d > 0 ? '#9be564' : (d < 0 ? '#c05a5a' : '#7fa86a'));
-      UI.drawText(ctx, 'SPD ' + UI.speedWord(w.cooldown) + ' DPS ' + Math.round(wd / w.cooldown), x, y + 27, '#7fa86a');
-      UI.drawText(ctx, 'SPACE EQUIP  X DROP', x, y + 40, '#9be564');
+      line('DMG ' + wd + ' RNG ' + w.reach, '#f0d9b5');
+      line((d >= 0 ? '+' : '') + d + ' VS EQUIPPED', d > 0 ? '#9be564' : (d < 0 ? '#c05a5a' : '#7fa86a'));
+      line('SPD ' + UI.speedWord(w.cooldown) + ' DPS ' + Math.round(wd / w.cooldown), '#7fa86a');
+      y += 5;
+      line('SPACE EQUIP  X DROP', '#9be564');
       return;
     }
 
     const ls = this.spec(s.id);
-    UI.drawText(ctx, ls.name, x, y, ls.color);
-    UI.drawText(ctx, 'X' + s.amount + '  WORTH ' + (ls.value * s.amount) + ' G', x, y + 9, '#f0d9b5');
-    UI.drawText(ctx, ls.trophy ? 'BOSS TROPHY' : 'MONSTER LOOT', x, y + 18, '#7fa86a');
-    UI.drawText(ctx, 'SELL AT THE SHOP', x, y + 31, '#ffe066');
-    UI.drawText(ctx, 'X DROP', x, y + 40, '#9be564');
+    line(ls.name, ls.color);
+    line('X' + s.amount + '  WORTH ' + (ls.value * s.amount) + ' G', '#f0d9b5');
+    line(ls.trophy ? 'BOSS TROPHY' : 'MONSTER LOOT', '#7fa86a');
+    y += 5;
+    line('SELL AT THE SHOP', '#ffe066');
+    line('X DROP', '#9be564');
   },
 };
 
@@ -7949,7 +8139,7 @@ const Items = {
       this.spawn(enemy.x, enemy.y, amount);
     }
     this.dropWeaponFor(enemy);
-    // 장비 — 종류는 고르게 섞이고, 레벨은 잡은 몬스터를 따른다
+    // 장비 — 종류는 고르게 섞이고, 레벨은 잡은 몬스터를 따른다 (등급과 옵션은 spawnGear 가 굴린다)
     if (Math.random() < CONFIG.gear.dropChance) this.spawnGear(enemy.x, enemy.y, Gear.randomId(), enemy.level);
     // 전리품 — 몬스터 종류마다 정해져 있고, 양은 색 등급이 정한다
     const loot = CONFIG.loot;
@@ -8015,14 +8205,23 @@ const Items = {
   },
 
   // 장비 드랍 (가방에서 버린 것은 opts.dropped)
+  /* 바닥에 장비 한 점. item 을 넘기면 그걸 그대로 두고(가방에서 버린 것),
+     아니면 여기서 등급과 옵션을 굴린다 — 한 번 굴린 뒤로는 바뀌지 않는다. */
   spawnGear(x, y, id, level, opts) {
-    if (!CONFIG.gear.items[id]) return;
+    const item = (opts && opts.item) || Gear.roll(id, level);
+    if (!item) return;
     const d = this.makeDrop(x, y, CONFIG.equipment.weaponLifetime, opts);
     d.kind = 'gear';
-    d.id = id;
-    d.level = Util.clamp(Math.round(level || 1), 1, CONFIG.weapons.levelMult.length);
+    d.item = item;
+    d.id = item.id;
+    d.level = item.level;
     d.amount = 1;
+    d.auraTimer = 0;
     this.drops.push(d);
+    // 희귀한 것이 떨어지면 그 색으로 한 번 터져서 멀리서도 눈에 띈다
+    if (item.rarity >= 2) {
+      FX.burst(d.x, d.y - 4, 18, [Gear.color(item), '#ffffff'], { speed: 70, life: 0.7, gravity: 30 });
+    }
   },
 
   // 전리품 드랍 (가방에서 버린 것은 opts.dropped)
@@ -8115,16 +8314,24 @@ const Items = {
             가방에 빈 칸이 없으면 끌려오지도 않고 그 자리에 그대로 둔다 */
       if (d.kind === 'gear') {
         if (Inventory.firstEmpty(player) < 0) continue;
+        // 희귀한 것은 바닥에서도 색 알갱이가 피어오른다
+        if (d.item.rarity >= 2) {
+          d.auraTimer -= dt;
+          if (d.auraTimer <= 0) {
+            d.auraTimer = 0.3;
+            FX.burst(d.x + Util.rand(-5, 5), d.y - 2, 1, [Gear.color(d.item), '#ffffff'], { speed: 6, life: 0.7, gravity: -30, size: 1 });
+          }
+        }
         if (dist < CONFIG.loot.magnetRadius && dist > 1) {
           const pull = 130 * (1 - dist / CONFIG.loot.magnetRadius) + 40;
           d.x += (player.x - d.x) / dist * pull * dt;
           d.y += (player.y - d.y) / dist * pull * dt;
         }
         if (dist >= cfg.pickupRadius) continue;
-        if (!Inventory.addGear(player, d.id, d.level)) continue;
-        const color = Gear.color(d);
+        if (!Inventory.addGear(player, d.item)) continue;
+        const color = Gear.color(d.item);
         FX.burst(d.x, d.y - 4, 10, [color, '#ffffff'], { speed: 45, life: 0.4, gravity: 60 });
-        FX.number(d.x, d.y - 14, '+' + Gear.spec(d.id).name, color);
+        FX.number(d.x, d.y - 14, '+' + Gear.name(d.item), color);
         Sound.play('pickup');
         this.drops.splice(i, 1);
         continue;
@@ -8253,10 +8460,17 @@ const Items = {
     }
 
     if (d.kind === 'gear') {
-      const sp = Gear.sprite(d);
+      const sp = Gear.sprite(d.item), color = Gear.color(d.item);
       fillCircle(ctx, sx, sy + 5, 5, 'rgba(0,0,0,0.28)');
+      // 희귀한 것은 바닥에 옅은 색 원판이 숨쉰다
+      if (d.item.rarity >= 2) {
+        const pulse = 1 + Math.sin(d.age * 3) * 0.5;
+        ctx.globalAlpha = 0.14 + pulse * 0.06;
+        fillCircle(ctx, sx, sy + 2, 7 + pulse * 2, color);
+        ctx.globalAlpha = 1;
+      }
       ctx.drawImage(sp, sx - Math.floor(sp.width / 2), sy - 8 + bob);
-      UI.drawText(ctx, Gear.spec(d.id).name, sx, sy + 8, Gear.color(d), true);
+      UI.drawText(ctx, Gear.name(d.item), sx, sy + 8, color, true);
       if (Math.floor(d.age * 3) % 2 === 0) { ctx.fillStyle = '#ffffff'; ctx.fillRect(sx + 4, sy - 10 + bob, 1, 1); }
       return;
     }
@@ -8732,9 +8946,10 @@ const UI = {
       ctx.fillStyle = locked ? '#1d211b' : '#252c22';
       ctx.fillRect(x, y, slotW, slotH);
 
-      // 쿨다운이 도는 동안에는 아래쪽부터 차오른다
+      // 쿨다운이 도는 동안에는 아래쪽부터 차오른다 (쿨다운 감소가 붙으면 기준도 줄어든다)
       if (cd > 0) {
-        const filled = Math.round(slotH * (1 - cd / spec.cooldown));
+        const full = (player.skillCooldownMax && player.skillCooldownMax[spec.id]) || spec.cooldown;
+        const filled = Math.round(slotH * (1 - cd / full));
         ctx.fillStyle = '#38452f';
         ctx.fillRect(x, y + slotH - filled, slotW, filled);
       }
@@ -8934,6 +9149,16 @@ const UI = {
    새 작업을 올릴 때 PATCH_NOTES 맨 앞에 한 항목을 추가하면 된다. */
 
 const PATCH_NOTES = [
+  {
+    date: '2026-10-06',
+    notes: [
+      '장비에 등급이 생겼다 — COMMON / FINE / RARE / LEGEND. 등급이 높을수록 옵션이 1→4개 붙는다',
+      '랜덤 옵션 12종: 공격 속도·치명타 확률·치명타 배수·이동 속도·흡혈·포션 효율·쿨다운 감소·넉백 저항·골드 획득·방어·체력·공격력',
+      '몬스터 레벨이 옵션의 크기를, 운이 개수를 정한다 — 같은 가죽 모자도 버리기 아까운 것이 생긴다',
+      '이름은 가장 센 옵션을 따라 지어진다 (SWIFT LEATHER CAP, VAMPIRIC CHAIN MAIL)',
+      '희귀·전설은 가방 칸 테두리가 등급 색으로 둘러지고, 바닥에서도 그 색으로 빛난다',
+    ],
+  },
   {
     date: '2026-10-05',
     notes: [

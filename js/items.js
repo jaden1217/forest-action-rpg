@@ -44,7 +44,7 @@ const Items = {
       this.spawn(enemy.x, enemy.y, amount);
     }
     this.dropWeaponFor(enemy);
-    // 장비 — 종류는 고르게 섞이고, 레벨은 잡은 몬스터를 따른다
+    // 장비 — 종류는 고르게 섞이고, 레벨은 잡은 몬스터를 따른다 (등급과 옵션은 spawnGear 가 굴린다)
     if (Math.random() < CONFIG.gear.dropChance) this.spawnGear(enemy.x, enemy.y, Gear.randomId(), enemy.level);
     // 전리품 — 몬스터 종류마다 정해져 있고, 양은 색 등급이 정한다
     const loot = CONFIG.loot;
@@ -110,14 +110,23 @@ const Items = {
   },
 
   // 장비 드랍 (가방에서 버린 것은 opts.dropped)
+  /* 바닥에 장비 한 점. item 을 넘기면 그걸 그대로 두고(가방에서 버린 것),
+     아니면 여기서 등급과 옵션을 굴린다 — 한 번 굴린 뒤로는 바뀌지 않는다. */
   spawnGear(x, y, id, level, opts) {
-    if (!CONFIG.gear.items[id]) return;
+    const item = (opts && opts.item) || Gear.roll(id, level);
+    if (!item) return;
     const d = this.makeDrop(x, y, CONFIG.equipment.weaponLifetime, opts);
     d.kind = 'gear';
-    d.id = id;
-    d.level = Util.clamp(Math.round(level || 1), 1, CONFIG.weapons.levelMult.length);
+    d.item = item;
+    d.id = item.id;
+    d.level = item.level;
     d.amount = 1;
+    d.auraTimer = 0;
     this.drops.push(d);
+    // 희귀한 것이 떨어지면 그 색으로 한 번 터져서 멀리서도 눈에 띈다
+    if (item.rarity >= 2) {
+      FX.burst(d.x, d.y - 4, 18, [Gear.color(item), '#ffffff'], { speed: 70, life: 0.7, gravity: 30 });
+    }
   },
 
   // 전리품 드랍 (가방에서 버린 것은 opts.dropped)
@@ -210,16 +219,24 @@ const Items = {
             가방에 빈 칸이 없으면 끌려오지도 않고 그 자리에 그대로 둔다 */
       if (d.kind === 'gear') {
         if (Inventory.firstEmpty(player) < 0) continue;
+        // 희귀한 것은 바닥에서도 색 알갱이가 피어오른다
+        if (d.item.rarity >= 2) {
+          d.auraTimer -= dt;
+          if (d.auraTimer <= 0) {
+            d.auraTimer = 0.3;
+            FX.burst(d.x + Util.rand(-5, 5), d.y - 2, 1, [Gear.color(d.item), '#ffffff'], { speed: 6, life: 0.7, gravity: -30, size: 1 });
+          }
+        }
         if (dist < CONFIG.loot.magnetRadius && dist > 1) {
           const pull = 130 * (1 - dist / CONFIG.loot.magnetRadius) + 40;
           d.x += (player.x - d.x) / dist * pull * dt;
           d.y += (player.y - d.y) / dist * pull * dt;
         }
         if (dist >= cfg.pickupRadius) continue;
-        if (!Inventory.addGear(player, d.id, d.level)) continue;
-        const color = Gear.color(d);
+        if (!Inventory.addGear(player, d.item)) continue;
+        const color = Gear.color(d.item);
         FX.burst(d.x, d.y - 4, 10, [color, '#ffffff'], { speed: 45, life: 0.4, gravity: 60 });
-        FX.number(d.x, d.y - 14, '+' + Gear.spec(d.id).name, color);
+        FX.number(d.x, d.y - 14, '+' + Gear.name(d.item), color);
         Sound.play('pickup');
         this.drops.splice(i, 1);
         continue;
@@ -348,10 +365,17 @@ const Items = {
     }
 
     if (d.kind === 'gear') {
-      const sp = Gear.sprite(d);
+      const sp = Gear.sprite(d.item), color = Gear.color(d.item);
       fillCircle(ctx, sx, sy + 5, 5, 'rgba(0,0,0,0.28)');
+      // 희귀한 것은 바닥에 옅은 색 원판이 숨쉰다
+      if (d.item.rarity >= 2) {
+        const pulse = 1 + Math.sin(d.age * 3) * 0.5;
+        ctx.globalAlpha = 0.14 + pulse * 0.06;
+        fillCircle(ctx, sx, sy + 2, 7 + pulse * 2, color);
+        ctx.globalAlpha = 1;
+      }
       ctx.drawImage(sp, sx - Math.floor(sp.width / 2), sy - 8 + bob);
-      UI.drawText(ctx, Gear.spec(d.id).name, sx, sy + 8, Gear.color(d), true);
+      UI.drawText(ctx, Gear.name(d.item), sx, sy + 8, color, true);
       if (Math.floor(d.age * 3) % 2 === 0) { ctx.fillStyle = '#ffffff'; ctx.fillRect(sx + 4, sy - 10 + bob, 1, 1); }
       return;
     }
