@@ -35,6 +35,9 @@ class Player {
     // 입은 것들의 수치 합 — 바탕 네 가지 + 굴려 붙은 옵션들 (recalcStats 가 채운다)
     this.gearStats = { armor: 0, maxHp: 0, power: 0, speed: 0 };
     this.skillCooldownMax = {};   // 쿨다운 감소가 붙으면 스킬 바의 기준도 같이 줄어든다
+    this.uniques = {};            // 지금 켜져 있는 전설 고유 효과 (recalcStats 가 채운다)
+    this.setCounts = {};          // 세트별로 몇 점 입었나
+    this.secondWindTimer = 0;     // SECOND WIND 가 다시 돌기까지
 
     // 여러 칸짜리 가방 — 첫 칸은 포션 주머니, 나머지엔 무기·전리품·장비 (Inventory 가 다룬다)
     this.bagSlots = CONFIG.inventory.baseSlots;
@@ -121,11 +124,42 @@ class Player {
       const stats = Gear.statsOf(item);
       for (const k in stats) g[k] = (g[k] || 0) + stats[k];
     }
+    /* 세트 — 같은 세트를 두 점 이상 입으면 덤이 붙는다.
+       덤도 그냥 수치라서 장비 수치와 똑같이 더하면 된다 (상한도 아래에서 함께 걸린다) */
+    const counts = {};
+    for (const slot of CONFIG.gear.slots) {
+      const item = this.gear && this.gear[slot];
+      if (!item) continue;
+      const key = Gear.setIdOf(item.id);
+      if (key) counts[key] = (counts[key] || 0) + 1;
+    }
+    this.setCounts = counts;
+    for (const key in counts) {
+      const bonus = CONFIG.sets[key].bonus;
+      for (let n = 2; n <= counts[key]; n++) {
+        if (!bonus[n]) continue;
+        for (const k in bonus[n]) g[k] = (g[k] || 0) + bonus[n][k];
+      }
+    }
+
     // 퍼센트 옵션은 겹쳐 입으면 금세 터무니없어진다 — 총합을 묶어둔다
     for (const k in CONFIG.affixes.caps) {
       if (g[k]) g[k] = Math.min(g[k], CONFIG.affixes.caps[k]);
     }
     this.gearStats = g;
+
+    /* 전설 고유 효과 — 입은 전설 장비와 성장 무기에서 모은다.
+       수치가 아니라 규칙이라 합산하지 않고 "켜져 있는가"만 본다 */
+    const uniq = {};
+    for (const slot of CONFIG.gear.slots) {
+      const id = Gear.uniqueIdOf(this.gear && this.gear[slot]);
+      if (id) uniq[id] = true;
+    }
+    if (this.weaponGrowing) {
+      const id = CONFIG.weapons.growUniques[this.weapon];
+      if (id) uniq[id] = true;
+    }
+    this.uniques = uniq;
 
     const gain = (id) => { const u = CONFIG.shop.upgrades.find(x => x.id === id); return u ? u.gain : 0; };
     this.maxHp = c.maxHp + (this.level - 1) * lu.hpGain + (up.hp || 0) * gain('hp') + g.maxHp;
@@ -151,6 +185,13 @@ class Player {
 
   // 옵션 하나를 꺼내 쓴다 (안 붙어 있으면 0)
   stat(key) { return this.gearStats[key] || 0; }
+
+  // 이 고유 효과가 켜져 있는가 / 그 수치표
+  has(id) { return !!this.uniques[id]; }
+  uniq(id) { return CONFIG.uniques[id]; }
+
+  // 대시 충전 수 — SWIFT FOOT 가 하나 늘려준다
+  dashMax() { return CONFIG.dash.charges + (this.has('swiftFoot') ? 1 : 0); }
 
   // 치명타 — 기본값에 KEEN(확률)·CRUEL(배수) 옵션을 얹는다
   critChance() { return CONFIG.player.critChance + this.stat('crit') / 100; }
@@ -309,13 +350,15 @@ class Player {
     this.dashIFrames = Math.max(0, this.dashIFrames - dt);
     if (this.dashTimer > 0) this.dashTimer -= dt;
 
-    if (this.dashCharges < d.charges) {
-      this.dashRecharge -= dt;
+    if (this.dashCharges < this.dashMax()) {
+      // PHANTOM 이 켜져 있으면 두 배로 빨리 찬다
+      this.dashRecharge -= dt * (this.has('phantom') ? this.uniq('phantom').mult : 1);
       if (this.dashRecharge <= 0) {
         this.dashCharges++;
         this.dashRecharge = d.recharge;
       }
     } else {
+      this.dashCharges = Math.min(this.dashCharges, this.dashMax());
       this.dashRecharge = d.recharge;
     }
 
@@ -433,6 +476,7 @@ class Player {
     this.potionCooldown = Math.max(0, this.potionCooldown - dt);
     this.updateRegen(dt);
     this.updatePoison(dt);
+    this.updateSecondWind(dt);
 
     // ── 이동 입력
     let ix = Input.axisX(), iy = Input.axisY();
@@ -579,10 +623,21 @@ class Player {
       const dmgBase = (opts && opts.skill) ? this.skillBase() : this.attackDamage();
       let dmg = Math.round((dmgBase + Util.randInt(-1, 1)) * dmgMult);
       if (crit) dmg = Math.round(dmg * this.critMult());
+      // OVERLOAD — 스킬만 더 세진다
+      if (opts && opts.skill && this.has('overload')) dmg = Math.round(dmg * this.uniq('overload').mult);
+      // EXECUTIONER — 빈사의 적을 끝낸다
+      if (this.has('executioner') && s.maxHp && s.hp / s.maxHp <= this.uniq('executioner').ratio) {
+        dmg = Math.round(dmg * this.uniq('executioner').mult);
+      }
       dmg = Math.max(1, dmg);
       // 사방 공격은 바깥쪽으로, 베는 공격은 휘두른 방향으로 날린다
       s.takeHit(dmg, omni ? toEnemy : base, crit, this, knockMult);
       this.sinceCombat = 0;   // 때리는 중에도 자연 회복은 멈춘다
+      // MOMENTUM — 치명타가 터지면 모든 스킬 쿨다운이 조금씩 당겨진다
+      if (crit && this.has('momentum')) {
+        const cut = this.uniq('momentum').cut;
+        for (const k in this.skillCooldowns) this.skillCooldowns[k] = Math.max(0, this.skillCooldowns[k] - cut);
+      }
       // 흡혈(VAMPIRIC) — 때린 만큼 조금 돌려받는다. 체력이 가득이면 아무 일도 없다
       const leech = this.stat('lifesteal');
       if (leech > 0 && this.hp < this.maxHp) {
@@ -616,6 +671,15 @@ class Player {
     FX.flash('#ff3b3b', 0.22, 0.18);   // 화면이 붉게 번쩍 — 맞았다는 걸 눈이 놓치지 않게
     FX.freeze(0.03);
     Sound.play('hurt');
+    // THORNS — 맞으면 주위에 되돌려준다 (때린 놈만이 아니라 둘러싼 것들 전부)
+    if (this.has('thorns') && typeof Game !== 'undefined' && Game.enemies) {
+      const u = this.uniq('thorns'), back = Math.max(1, Math.round(amount * u.ratio));
+      for (const s of Game.enemies) {
+        if (s.dead || Util.dist(s.x, s.y, this.x, this.y) > u.radius) continue;
+        s.takeHit(back, Math.atan2(s.y - this.y, s.x - this.x), false, this, 0.5);
+      }
+      FX.ring(this.x, this.y + 2, u.radius, '#ffb35c');
+    }
     if (this.hp <= 0) this.die();
   }
 
@@ -708,6 +772,19 @@ class Player {
     return !this.dead && this.sinceCombat >= CONFIG.player.regenDelay && this.hp < this.maxHp;
   }
 
+  /* SECOND WIND — 체력이 바닥나기 전에 알아서 포션을 한 병 비운다.
+     마시는 걸 잊어서 죽는 일을 막아주는 효과라, 너무 자주 돌면 포션이 순식간에 마른다 */
+  updateSecondWind(dt) {
+    this.secondWindTimer = Math.max(0, this.secondWindTimer - dt);
+    if (!this.has('secondWind') || this.dead || this.secondWindTimer > 0) return;
+    const u = this.uniq('secondWind');
+    if (this.potions <= 0 || this.hp / this.maxHp > u.ratio) return;
+    this.secondWindTimer = u.cooldown;
+    this.potionCooldown = 0;
+    this.usePotion();
+    FX.number(this.x, this.y - 30, 'SECOND WIND', '#ffb35c');
+  }
+
   /* 독 — 전갈에게 찔리면 걸린다. 무적 시간과 무관하게 tick 초마다 dmg 만큼 깎이되 1 아래로는 안 내려간다
      (독만으로 죽지는 않는다). 걸려 있는 동안 자연 회복은 멈춘다. 다시 찔리면 시간이 새로 시작된다. */
   applyPoison(dmg, time, tick) {
@@ -759,6 +836,12 @@ class Player {
     const healed = Math.min(this.potionHeal(), Math.ceil(this.maxHp - this.hp));
     this.hp = Math.min(this.maxHp, this.hp + healed);
     Sound.play('potion');
+    // AEGIS — 포션을 마시면 잠깐 아무것도 안 통한다
+    if (this.has('aegis')) {
+      this.invuln = Math.max(this.invuln, this.uniq('aegis').time);
+      FX.ring(this.x, this.y + 2, 16, '#7ec8ff');
+      FX.number(this.x, this.y - 30, 'AEGIS', '#7ec8ff');
+    }
     FX.number(this.x, this.y - 20, '+' + healed, '#7dff8a');
     FX.burst(this.x, this.y, 14, ['#7dff8a', '#ffffff', '#e5484d'], { speed: 45, life: 0.5, gravity: 30 });
   }
@@ -775,6 +858,7 @@ class Player {
     this.weapon = id;
     this.weaponLevel = level;
     this.weaponGrowing = growing;
+    this.recalcStats();   // 성장 무기는 고유 효과를 들고 온다
     const color = this.weaponColor();
     FX.number(this.x, this.y - 22, this.weaponLabel() + '!', color);
     // 성장하는 무기는 조용히 손에 들어온다 (바닥 오라가 이미 충분히 화려하다)

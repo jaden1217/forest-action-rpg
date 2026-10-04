@@ -315,6 +315,8 @@ const CONFIG = {
     /* 성장하는 무기의 이름 — 어느 보스가 떨구느냐에 따라 다르다.
        (픽셀 폰트가 대문자뿐이라 게임 안에서는 전부 대문자로 보인다) */
     growNames: { dagger: 'SLIMELORD', sword: 'WOLFLORD', axe: 'SPORELORD' },
+    // 성장 무기의 고유 효과 (CONFIG.uniques 에서 하나씩) — 전설 장비와 같은 규칙으로 켜진다
+    growUniques: { dagger: 'momentum', sword: 'swiftFoot', axe: 'executioner' },
     /* 성장하는 무기의 이름표와 바닥 오라에 쓰는 무지개.
        hsl 로 매끈하게 돌리지 않고 일곱 색을 딱딱 끊어 쓴다 — 도트 그림에는 이쪽이 어울린다 */
     rainbow: ['#ff5c5c', '#ffb35c', '#ffe066', '#7dff8a', '#5cd8ff', '#8f8fff', '#e08fff'],
@@ -777,27 +779,66 @@ const CONFIG = {
 
     items: {
       // 머리 — 가벼운 가죽이냐, 무겁고 단단한 쇠냐
-      leatherCap: { slot: 'head', name: 'LEATHER CAP', sprite: 'cap',
+      leatherCap: { slot: 'head', name: 'LEATHER CAP', sprite: 'cap', unique: 'executioner',
         stats: { armor: [4, 0.14], maxHp: [4, 0.6] } },
-      ironHelm: { slot: 'head', name: 'IRON HELM', sprite: 'helm',
+      ironHelm: { slot: 'head', name: 'IRON HELM', sprite: 'helm', unique: 'thorns',
         stats: { armor: [8, 0.26], speed: [-2, 0] } },
 
       // 몸 — 방어력의 중심. 사슬 갑옷은 느려지는 대신 가장 단단하다
-      leatherArmor: { slot: 'body', name: 'LEATHER VEST', sprite: 'vest',
+      leatherArmor: { slot: 'body', name: 'LEATHER VEST', sprite: 'vest', unique: 'swiftFoot',
         stats: { armor: [7, 0.2], maxHp: [6, 0.9] } },
-      chainMail: { slot: 'body', name: 'CHAIN MAIL', sprite: 'mail',
+      chainMail: { slot: 'body', name: 'CHAIN MAIL', sprite: 'mail', unique: 'aegis',
         stats: { armor: [13, 0.38], speed: [-6, 0] } },
-      travelCloak: { slot: 'body', name: 'TRAVEL CLOAK', sprite: 'cloak',
+      travelCloak: { slot: 'body', name: 'TRAVEL CLOAK', sprite: 'cloak', unique: 'phantom',
         stats: { armor: [4, 0.12], speed: [7, 0] } },
 
       // 장신구 — 방어력 대신 성격을 준다
-      swiftRing: { slot: 'trinket', name: 'SWIFT RING', sprite: 'ring',
+      swiftRing: { slot: 'trinket', name: 'SWIFT RING', sprite: 'ring', unique: 'momentum',
         stats: { speed: [9, 0] } },
-      powerAmulet: { slot: 'trinket', name: 'POWER AMULET', sprite: 'amulet',
+      powerAmulet: { slot: 'trinket', name: 'POWER AMULET', sprite: 'amulet', unique: 'overload',
         stats: { power: [1, 0.3] } },
-      vitalCharm: { slot: 'trinket', name: 'VITAL CHARM', sprite: 'charm',
+      vitalCharm: { slot: 'trinket', name: 'VITAL CHARM', sprite: 'charm', unique: 'secondWind',
         stats: { maxHp: [14, 1.8] } },
     },
+  },
+
+  /* ── 세트 (로드맵 3주차) ────────────────────────────────
+     같은 세트의 아이템을 두 점 이상 입으면 덤이 붙는다. 칸이 셋뿐이라 세 점이 최대다.
+     덤은 그냥 수치라서 recalcStats 가 장비 수치와 똑같이 더한다 (상한도 같이 적용된다).
+
+     이걸 넣는 이유: 옵션만 있으면 "제일 센 거 아무거나"가 되는데,
+     세트가 있으면 **조금 약한 걸 일부러 입는 선택**이 생긴다. */
+  sets: {
+    ranger: {
+      name: 'RANGER', items: ['leatherCap', 'leatherArmor', 'swiftRing'],
+      bonus: { 2: { speed: 8, attackSpeed: 8 }, 3: { crit: 8 } },
+    },
+    guardian: {
+      name: 'GUARDIAN', items: ['ironHelm', 'chainMail', 'vitalCharm'],
+      bonus: { 2: { armor: 12 }, 3: { maxHp: 40, knockRes: 25 } },
+    },
+    wanderer: {
+      name: 'WANDERER', items: ['travelCloak', 'powerAmulet'],
+      bonus: { 2: { cooldown: 10, gold: 25 } },
+    },
+  },
+
+  /* ── 전설 고유 효과 (로드맵 3주차) ───────────────────────
+     전설(LEGEND) 등급으로 떨어진 장비에만 켜진다. 바탕 아이템마다 정해져 있어서
+     "그 효과를 노리고 그 아이템을 모은다"가 된다.
+
+     수치가 아니라 **규칙을 바꾸는 한 줄**이어야 한다 — +10% 는 옵션이 할 일이고,
+     여기서는 '포션을 마시면 무적', '치명타가 쿨다운을 깎는다' 같은 것만 둔다.
+     성장 무기(SLIMELORD 등)도 같은 목록에서 하나씩 가져간다 (weapons.growUniques). */
+  uniques: {
+    executioner: { name: 'EXECUTIONER', text: 'LOW HP FOES TAKE +50%',      ratio: 0.25, mult: 1.5 },
+    thorns:      { name: 'THORNS',      text: 'STRIKE BACK WHEN HURT',      ratio: 0.6, radius: 34 },
+    swiftFoot:   { name: 'SWIFT FOOT',  text: '+1 DASH CHARGE' },
+    aegis:       { name: 'AEGIS',       text: 'POTION GIVES 3S SHIELD',     time: 3 },
+    phantom:     { name: 'PHANTOM',     text: 'DASH REFILLS TWICE AS FAST', mult: 2 },
+    momentum:    { name: 'MOMENTUM',    text: 'CRIT CUTS SKILL COOLDOWN',   cut: 0.7 },
+    overload:    { name: 'OVERLOAD',    text: 'SKILL DAMAGE +25%',          mult: 1.25 },
+    secondWind:  { name: 'SECOND WIND', text: 'AUTO POTION AT LOW HP',      ratio: 0.3, cooldown: 30 },
   },
 
   /* ── 등급과 랜덤 옵션 (로드맵 2주차) ─────────────────────

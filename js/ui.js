@@ -49,6 +49,7 @@ const FONT = {
   '?': ['## ', '  #', ' ##', '   ', ' # '],
   '>': ['#  ', ' # ', '  #', ' # ', '#  '],   // 상점 커서
   '%': ['# #', '  #', ' # ', '#  ', '# #'],
+  '*': ['   ', '# #', ' # ', '# #', '   '],   // 전설 고유 효과 앞에 붙는 표
   '(': ['  #', ' # ', ' # ', ' # ', '  #'],
   ')': ['#  ', ' # ', ' # ', ' # ', '#  '],
   ' ': ['   ', '   ', '   ', '   ', '   '],
@@ -150,8 +151,8 @@ const UI = {
 
     // ── 대시 충전 — 남은 칸은 밝게, 채워지는 중인 칸은 게이지로 보여준다
     if (player.dashCharges !== undefined) {
-      const d = CONFIG.dash;
-      for (let i = 0; i < d.charges; i++) {
+      const d = CONFIG.dash, charges = player.dashMax ? player.dashMax() : d.charges;
+      for (let i = 0; i < charges; i++) {
         const x = 8 + i * 12, y = 76;
         ctx.fillStyle = '#17110d';
         ctx.fillRect(x - 1, y - 1, 11, 5);
@@ -169,7 +170,7 @@ const UI = {
           }
         }
       }
-      this.drawText(ctx, 'DASH', 8 + d.charges * 12 + 2, 76, '#7ec8ff');
+      this.drawText(ctx, 'DASH', 8 + charges * 12 + 2, 76, '#7ec8ff');
     }
 
     // ── 가방 — 몇 칸이 찼는지. 꽉 차면 붉게 (전리품이 더 안 끌려온다는 뜻)

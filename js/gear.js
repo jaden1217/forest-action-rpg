@@ -120,6 +120,31 @@ const Gear = {
     return out;
   },
 
+  /* ── 세트 ──────────────────────────────────────────────── */
+
+  // 이 바탕 아이템이 어느 세트에 속하는가 (없으면 null)
+  setIdOf(id) {
+    for (const key in CONFIG.sets) if (CONFIG.sets[key].items.indexOf(id) >= 0) return key;
+    return null;
+  },
+  setOf(item) {
+    const key = this.setIdOf(item.id);
+    return key ? CONFIG.sets[key] : null;
+  },
+
+  /* ── 전설 고유 효과 ─────────────────────────────────────
+     전설 등급으로 떨어진 것만 효과가 켜진다. 어떤 효과인지는 바탕 아이템이 정해두고 있어서
+     "그 효과를 노리고 그 아이템을 모은다"가 된다. */
+  uniqueIdOf(item) {
+    if (!item || item.rarity < CONFIG.rarity.list.length - 1) return null;
+    const spec = this.spec(item.id);
+    return (spec && spec.unique) || null;
+  },
+  uniqueOf(item) {
+    const id = this.uniqueIdOf(item);
+    return id ? CONFIG.uniques[id] : null;
+  },
+
   // 몬스터가 떨구는 장비 하나 고르기 — 종류는 고르게 섞인다
   randomId() {
     const ids = Object.keys(CONFIG.gear.items);

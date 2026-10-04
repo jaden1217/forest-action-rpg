@@ -12,6 +12,16 @@
 
 const PATCH_NOTES = [
   {
+    date: '2026-10-07',
+    notes: [
+      '세트 셋 — RANGER(사냥꾼) / GUARDIAN(파수꾼) / WANDERER(방랑자). 같은 세트를 두 점 이상 입으면 덤이 붙는다',
+      '전설 고유 효과 여덟 — 수치가 아니라 규칙을 바꾸는 한 줄 (포션을 마시면 무적, 치명타가 쿨다운을 깎는다, 대시 충전 +1 …)',
+      '고유 효과는 바탕 아이템이 정해두고 있다 — 전설 가죽 모자는 언제나 EXECUTIONER',
+      '성장 무기도 고유 효과를 하나씩 가져간다 (SLIMELORD MOMENTUM / WOLFLORD SWIFT FOOT / SPORELORD EXECUTIONER)',
+      '인벤토리에 지금 켜진 세트와 고유 효과가 뜬다',
+    ],
+  },
+  {
     date: '2026-10-06',
     notes: [
       '장비에 등급이 생겼다 — COMMON / FINE / RARE / LEGEND. 등급이 높을수록 옵션이 1→4개 붙는다',

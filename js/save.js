@@ -110,6 +110,7 @@ const Save = {
       player.weaponGrowing = !!s.weaponGrowing;
       player.weaponLevel = Util.clamp(s.weaponLevel || 1, 1, CONFIG.weapons.levelMult.length);
       player.syncWeaponLevel();   // 성장하는 무기는 레벨을 다시 맞춰둔다
+      player.recalcStats();       // 성장 무기의 고유 효과까지 반영한다
     }
 
     // 저장된 자리가 막혀 있으면(설정을 바꿔 지형이 달라진 경우) 시작 지점으로 되돌린다

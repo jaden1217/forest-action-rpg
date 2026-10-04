@@ -278,7 +278,7 @@ const Inventory = {
   layout(player) {
     const cols = CONFIG.inventory.cols, slot = 18, gap = 2;
     const rows = Math.ceil(player.bag.length / cols);
-    const w = 258, h = 24 + Math.max(rows, 5) * (slot + gap) + 34;   // 오른쪽 장비 줄과 아래쪽 안내 두 줄이 들어갈 자리
+    const w = 258, h = 24 + Math.max(rows, 6) * (slot + gap) + 34;   // 오른쪽 설명(세트·고유 효과까지)과 아래쪽 안내 두 줄이 들어갈 자리
     const x = Math.round((CONFIG.VIEW_W - w) / 2), y = Math.round((CONFIG.VIEW_H - h) / 2);
     const panelX = x + 8 + cols * (slot + gap) + 6;
     return { x: x, y: y, w: w, h: h, gridX: x + 8, gridY: y + 18, cols: cols, rows: rows, slot: slot, gap: gap,
@@ -408,12 +408,26 @@ const Inventory = {
     const extraLine = Gear.statLine(extras).slice(0, 4).join(' ');
     UI.drawText(ctx, extraLine || 'NO BONUSES YET', x, top + 50, extraLine ? '#7ec8ff' : '#5f6b59');
 
+    /* 세트와 고유 효과 — 지금 켜져 있는 것만 한 줄씩. 없으면 그 줄을 쓰지 않는다 */
+    let sy = top + 58;
+    const onSets = [];
+    for (const key in player.setCounts) {
+      const n = player.setCounts[key];
+      if (n >= 2) onSets.push(CONFIG.sets[key].name + ' ' + n);
+    }
+    if (onSets.length) { UI.drawText(ctx, 'SET ' + onSets.join('  '), x, sy, '#9be564'); sy += 8; }
+    const onUniq = Object.keys(player.uniques);
+    if (onUniq.length) {
+      UI.drawText(ctx, onUniq.map(id => CONFIG.uniques[id].name).join(' . ').slice(0, 33), x, sy, '#ffb35c');
+      sy += 8;
+    }
+
     ctx.fillStyle = '#3a442f';
-    ctx.fillRect(x, top + 59, wide, 1);
+    ctx.fillRect(x, sy + 1, wide, 1);
 
     const at = this.at(player, this.cursor);
     const s = at.item;
-    let y = top + 64;
+    let y = sy + 6;
     const line = (text, color) => { UI.drawText(ctx, text, x, y, color); y += 8; };
 
     if (!s) {
@@ -437,6 +451,17 @@ const Inventory = {
       // 굴려 붙은 옵션 — 두 개씩 끊어 적는다
       const ax = Gear.statLine(Gear.affixStats(s));
       for (let i = 0; i < ax.length; i += 2) line(ax.slice(i, i + 2).join('  '), '#c79ce8');
+
+      // 세트 — 지금 몇 점 입었는지 함께 보여준다 (이걸 입으면 몇 점이 되는지가 중요하다)
+      const set = Gear.setOf(s), setKey = Gear.setIdOf(s.id);
+      if (set) {
+        const worn = player.setCounts[setKey] || 0;
+        const have = at.zone === 'gear' ? worn : worn + (player.gear[Gear.slotOf(s)] && Gear.setIdOf(player.gear[Gear.slotOf(s)].id) === setKey ? 0 : 1);
+        line('SET ' + set.name + ' ' + Math.min(have, set.items.length) + '/' + set.items.length, have >= 2 ? '#9be564' : '#7fa86a');
+      }
+      // 전설 고유 효과 — 수치가 아니라 규칙을 바꾸는 한 줄
+      const uq = Gear.uniqueOf(s);
+      if (uq) line('* ' + uq.text, '#ffb35c');
 
       if (at.zone === 'gear') {
         y += 4;
