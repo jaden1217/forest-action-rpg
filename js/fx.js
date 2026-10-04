@@ -193,10 +193,7 @@ const FX = {
       if (n.big) {
         // 치명타 — 두 배 크기. 처음 0.1초는 살짝 더 커서 "튀어나온다"
         const s = n.life > n.maxLife - 0.1 ? 3 : 2;
-        ctx.save();
-        ctx.scale(s, s);
-        UI.drawText(ctx, n.text, Math.round((n.x - cam.x) / s), Math.round((n.y - cam.y) / s), n.color, true);
-        ctx.restore();
+        UI.drawText(ctx, n.text, n.x - cam.x, n.y - cam.y, n.color, true, true, UI.TEXT_SCALE * s);
         continue;
       }
       UI.drawText(ctx, n.text, Math.round(n.x - cam.x), Math.round(n.y - cam.y), n.color, true);

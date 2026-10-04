@@ -159,12 +159,10 @@ const Shop = {
   draw(ctx, player) {
     const w = 190, h = 130;
     const x = Math.round((CONFIG.VIEW_W - w) / 2), y = Math.round((CONFIG.VIEW_H - h) / 2);
-    ctx.fillStyle = 'rgba(10,12,10,0.88)';
-    ctx.fillRect(x, y, w, h);
-    ctx.strokeStyle = '#4a3f2a';
-    ctx.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1);
+    UI.panel(ctx, x, y, w, h, '#ffe066');
+    UI.divider(ctx, x + 6, y + 15, w - 12);
 
-    UI.drawText(ctx, 'SHOP', x + w / 2, y + 7, '#ffe066', true);
+    UI.drawText(ctx, 'SHOP', x + w / 2, y + 6, '#ffe066', true);
     ctx.drawImage(SPRITES.coin, x + w - 14 - UI.textWidth(String(player.gold)) - 10, y + 6);
     UI.drawText(ctx, String(player.gold), x + w - 14 - UI.textWidth(String(player.gold)), y + 7, '#ffe066');
 

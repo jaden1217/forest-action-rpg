@@ -23,7 +23,7 @@ html, body {
   box-shadow: 0 12px 40px rgba(0, 0, 0, .6);
 }
 
-#game {
+#game, #ui {
   display: block;
   width: 1152px;   /* 384 * 3 */
   height: 648px;   /* 216 * 3 */
@@ -31,8 +31,18 @@ html, body {
   max-height: calc(100vh - 90px);
   image-rendering: pixelated;
   image-rendering: crisp-edges;
-  background: #2c5c2f;
   cursor: none;   /* 조준점은 게임이 캔버스 안에 직접 그린다 */
+}
+
+#game { background: #2c5c2f; }
+
+/* 글자와 창을 그리는 고운 레이어 — 게임 캔버스 위에 딱 포갠다.
+   안쪽 해상도만 세 배(1152x648)이고 화면에서 차지하는 크기는 같다. */
+#ui {
+  position: absolute;
+  left: 0;
+  top: 0;
+  pointer-events: none;   /* 마우스는 아래 캔버스가 받는다 */
 }
 
 /* 패치 노트 — 캔버스 오른쪽 위(골드 아래)의 작은 버튼. 누르면 목록이 펼쳐진다. 한글이라 HTML 로 그린다 */

@@ -36,6 +36,7 @@ const Game = {
     this.canvas = document.getElementById('game');
     this.ctx = this.canvas.getContext('2d');
     this.ctx.imageSmoothingEnabled = false;
+    UI.initLayer(document.getElementById('ui'));   // 글자·창을 그릴 고운 레이어
 
     buildSprites();
     Input.init(this.canvas);
@@ -556,6 +557,7 @@ const Game = {
     const cam = { x: Math.round(this.cam.x + shakeX + FX.kick.x), y: Math.round(this.cam.y + shakeY + FX.kick.y) };
 
     ctx.clearRect(0, 0, CONFIG.VIEW_W, CONFIG.VIEW_H);
+    UI.clearLayer();   // 글자·창 레이어도 매 프레임 새로 그린다
     World.drawGround(ctx, cam);
     Ambient.drawWater(ctx, cam);
     // 보스의 바닥 예고(돌진 경로, 착지 범위, 포자비 표시)는 바닥 바로 위, 캐릭터 아래에
@@ -610,25 +612,28 @@ const Game = {
     UI.drawLowHp(ctx, this.player);
     FX.drawFlashes(ctx);
 
+    /* 여기부터는 고운 레이어(ui 캔버스)에 그린다 — 창과 덮개가 글자보다 위에 와야 하고,
+       세상에 떠 있는 글자(이름표·데미지 숫자)도 이미 그 레이어에 있기 때문이다 */
+    const ui = UI.fx;
     // 보스 방은 겉맵 지도에 없는 곳이라 미니맵을 띄우지 않는다
-    if (!this.showMap && !this.inArena) Minimap.drawCorner(ctx, this.player, this.enemies);
-    UI.draw(ctx, this.player, this.showInventory);
-    if (this.showMap) Minimap.drawFull(ctx, this.player, this.enemies);
-    if (this.boss && !this.boss.dead && !this.showMap) UI.drawBossBar(ctx, this.boss);
-    if (this.cavePrompt) UI.drawCavePrompt(ctx, this.cavePrompt, cam, this.bossReadyIn[this.cavePrompt.caveIndex], 'ENTER');
-    if (this.exitPrompt) UI.drawCavePrompt(ctx, World.arenaExit, cam, 0, 'LEAVE');
-    if (this.shopPrompt && !this.showMap) Shop.drawPrompt(ctx, cam);
-    if (this.portalPrompt && !this.showMap) UI.drawPortalPrompt(ctx, World.portal, cam, CONFIG.maps[World.spec.portalTo]);
-    if (Shop.open) Shop.draw(ctx, this.player);
-    if (this.lairBanner > 0) UI.drawBanner(ctx, this.bossSpec(this.arenaCave).lairName, '#ff6b6b', this.lairBanner);
-    if (this.forestBanner > 0 && !this.showMap && !this.showInventory && !Shop.open && !this.title) UI.drawBanner(ctx, World.spec.name, World.spec.color, this.forestBanner);
-    if (this.confirmNewGame) UI.drawConfirm(ctx);
-    if (this.soundFlash > 0) UI.drawSoundState(ctx, Sound.enabled);
+    if (!this.showMap && !this.inArena) Minimap.drawCorner(ui, this.player, this.enemies);
+    UI.draw(ui, this.player, this.showInventory);
+    if (this.showMap) Minimap.drawFull(ui, this.player, this.enemies);
+    if (this.boss && !this.boss.dead && !this.showMap) UI.drawBossBar(ui, this.boss);
+    if (this.cavePrompt) UI.drawCavePrompt(ui, this.cavePrompt, cam, this.bossReadyIn[this.cavePrompt.caveIndex], 'ENTER');
+    if (this.exitPrompt) UI.drawCavePrompt(ui, World.arenaExit, cam, 0, 'LEAVE');
+    if (this.shopPrompt && !this.showMap) Shop.drawPrompt(ui, cam);
+    if (this.portalPrompt && !this.showMap) UI.drawPortalPrompt(ui, World.portal, cam, CONFIG.maps[World.spec.portalTo]);
+    if (Shop.open) Shop.draw(ui, this.player);
+    if (this.lairBanner > 0) UI.drawBanner(ui, this.bossSpec(this.arenaCave).lairName, '#ff6b6b', this.lairBanner);
+    if (this.forestBanner > 0 && !this.showMap && !this.showInventory && !Shop.open && !this.title) UI.drawBanner(ui, World.spec.name, World.spec.color, this.forestBanner);
+    if (this.confirmNewGame) UI.drawConfirm(ui);
+    if (this.soundFlash > 0) UI.drawSoundState(ui, Sound.enabled);
     // 장면 전환은 맨 위를 덮는다
-    if (this.transition) UI.drawFade(ctx, this.fadeAlpha());
-    if (this.title) UI.drawTitle(ctx, this.hasSave);
+    if (this.transition) UI.drawFade(ui, this.fadeAlpha());
+    if (this.title) UI.drawTitle(ui, this.hasSave);
     // 조준점은 무엇보다 위에 — 창이 열려 있어도 마우스 자리는 보여야 한다
-    else UI.drawCrosshair(ctx, this.player, cam, this.enemies);
+    else UI.drawCrosshair(ui, this.player, cam, this.enemies);
   },
 };
 

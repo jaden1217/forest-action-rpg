@@ -1,97 +1,143 @@
 'use strict';
 
-/* HUD와 3x5 픽셀 폰트.
-   캔버스 기본 폰트는 이 해상도에서 흐릿해지므로 글자도 직접 도트로 찍는다. */
+/* HUD와 픽셀 폰트.
 
+   ── 왜 캔버스가 둘인가 ──────────────────────────────────
+   세상은 384x216 에 그려 3배로 늘린다. 도트가 크고 또렷해야 하는 그림에는 맞지만,
+   글자에는 너무 거칠다 — 3x5 글자는 한 획이 화면에서 3픽셀이라 'M' 과 'W' 가 뭉개졌다.
+
+   그래서 **글자와 창은 세 배 고운 레이어(1152x648)에 따로 그린다.**
+   좌표는 그대로 게임 단위(384x216)를 쓰고(변환 행렬이 3배로 맞춰준다),
+   글자만 그 안에서 실제 픽셀 단위로 찍는다. 한 글자가 5x7 픽셀이고 기본 배율이 2라
+   **차지하는 자리는 예전 3x5 폰트와 같고(글자당 4단위), 획은 절반으로 얇아진다.**
+
+   고운 레이어는 게임 캔버스 위에 겹쳐 있으므로, 창·어둡게 덮기·장면 전환도 전부 여기 그린다
+   (그래야 글자가 창 밑으로 비치지 않는다). 세상 그림만 아래 캔버스에 남는다. */
+
+/* 5x7 픽셀 폰트 — 한 획이 1픽셀이라 글자 속이 트여 있고, M/W/N 처럼 획이 많은 글자도 읽힌다 */
+const FONT_W = 5, FONT_H = 7, FONT_GAP = 1;
 const FONT = {
-  '0': ['###', '# #', '# #', '# #', '###'],
-  '1': [' # ', '## ', ' # ', ' # ', '###'],
-  '2': ['###', '  #', '###', '#  ', '###'],
-  '3': ['###', '  #', '###', '  #', '###'],
-  '4': ['# #', '# #', '###', '  #', '  #'],
-  '5': ['###', '#  ', '###', '  #', '###'],
-  '6': ['###', '#  ', '###', '# #', '###'],
-  '7': ['###', '  #', '  #', '  #', '  #'],
-  '8': ['###', '# #', '###', '# #', '###'],
-  '9': ['###', '# #', '###', '  #', '###'],
-  'A': ['###', '# #', '###', '# #', '# #'],
-  'B': ['## ', '# #', '## ', '# #', '## '],
-  'C': ['###', '#  ', '#  ', '#  ', '###'],
-  'D': ['## ', '# #', '# #', '# #', '## '],
-  'E': ['###', '#  ', '###', '#  ', '###'],
-  'F': ['###', '#  ', '###', '#  ', '#  '],
-  'G': ['###', '#  ', '# #', '# #', '###'],
-  'H': ['# #', '# #', '###', '# #', '# #'],
-  'I': ['###', ' # ', ' # ', ' # ', '###'],
-  'J': ['  #', '  #', '  #', '# #', '###'],
-  'K': ['# #', '# #', '## ', '# #', '# #'],
-  'L': ['#  ', '#  ', '#  ', '#  ', '###'],
-  'M': ['# #', '###', '###', '# #', '# #'],
-  'N': ['## ', '# #', '# #', '# #', '# #'],
-  'O': ['###', '# #', '# #', '# #', '###'],
-  'P': ['###', '# #', '###', '#  ', '#  '],
-  'Q': ['###', '# #', '# #', '###', '  #'],
-  'R': ['###', '# #', '###', '## ', '# #'],
-  'S': ['###', '#  ', '###', '  #', '###'],
-  'T': ['###', ' # ', ' # ', ' # ', ' # '],
-  'U': ['# #', '# #', '# #', '# #', '###'],
-  'V': ['# #', '# #', '# #', '# #', ' # '],
-  'W': ['# #', '# #', '###', '###', '# #'],
-  'X': ['# #', '# #', ' # ', '# #', '# #'],
-  'Y': ['# #', '# #', ' # ', ' # ', ' # '],
-  'Z': ['###', '  #', ' # ', '#  ', '###'],
-  '+': ['   ', ' # ', '###', ' # ', '   '],
-  '-': ['   ', '   ', '###', '   ', '   '],
-  '/': ['  #', '  #', ' # ', '#  ', '#  '],
-  '.': ['   ', '   ', '   ', '   ', ' # '],
-  ':': ['   ', ' # ', '   ', ' # ', '   '],
-  '!': [' # ', ' # ', ' # ', '   ', ' # '],
-  '?': ['## ', '  #', ' ##', '   ', ' # '],
-  '>': ['#  ', ' # ', '  #', ' # ', '#  '],   // 상점 커서
-  '%': ['# #', '  #', ' # ', '#  ', '# #'],
-  '*': ['   ', '# #', ' # ', '# #', '   '],   // 전설 고유 효과 앞에 붙는 표
-  '(': ['  #', ' # ', ' # ', ' # ', '  #'],
-  ')': ['#  ', ' # ', ' # ', ' # ', '#  '],
-  ' ': ['   ', '   ', '   ', '   ', '   '],
+  '0': ['.###.', '#...#', '#..##', '#.#.#', '##..#', '#...#', '.###.'],
+  '1': ['..#..', '.##..', '..#..', '..#..', '..#..', '..#..', '.###.'],
+  '2': ['.###.', '#...#', '....#', '...#.', '..#..', '.#...', '#####'],
+  '3': ['#####', '...#.', '..#..', '...#.', '....#', '#...#', '.###.'],
+  '4': ['...#.', '..##.', '.#.#.', '#..#.', '#####', '...#.', '...#.'],
+  '5': ['#####', '#....', '####.', '....#', '....#', '#...#', '.###.'],
+  '6': ['..##.', '.#...', '#....', '####.', '#...#', '#...#', '.###.'],
+  '7': ['#####', '....#', '...#.', '..#..', '.#...', '.#...', '.#...'],
+  '8': ['.###.', '#...#', '#...#', '.###.', '#...#', '#...#', '.###.'],
+  '9': ['.###.', '#...#', '#...#', '.####', '....#', '...#.', '.##..'],
+  'A': ['.###.', '#...#', '#...#', '#####', '#...#', '#...#', '#...#'],
+  'B': ['####.', '#...#', '#...#', '####.', '#...#', '#...#', '####.'],
+  'C': ['.###.', '#...#', '#....', '#....', '#....', '#...#', '.###.'],
+  'D': ['####.', '#...#', '#...#', '#...#', '#...#', '#...#', '####.'],
+  'E': ['#####', '#....', '#....', '####.', '#....', '#....', '#####'],
+  'F': ['#####', '#....', '#....', '####.', '#....', '#....', '#....'],
+  'G': ['.###.', '#...#', '#....', '#.###', '#...#', '#...#', '.####'],
+  'H': ['#...#', '#...#', '#...#', '#####', '#...#', '#...#', '#...#'],
+  'I': ['.###.', '..#..', '..#..', '..#..', '..#..', '..#..', '.###.'],
+  'J': ['..###', '...#.', '...#.', '...#.', '...#.', '#..#.', '.##..'],
+  'K': ['#...#', '#..#.', '#.#..', '##...', '#.#..', '#..#.', '#...#'],
+  'L': ['#....', '#....', '#....', '#....', '#....', '#....', '#####'],
+  'M': ['#...#', '##.##', '#.#.#', '#.#.#', '#...#', '#...#', '#...#'],
+  'N': ['#...#', '##..#', '#.#.#', '#..##', '#...#', '#...#', '#...#'],
+  'O': ['.###.', '#...#', '#...#', '#...#', '#...#', '#...#', '.###.'],
+  'P': ['####.', '#...#', '#...#', '####.', '#....', '#....', '#....'],
+  'Q': ['.###.', '#...#', '#...#', '#...#', '#.#.#', '#..#.', '.##.#'],
+  'R': ['####.', '#...#', '#...#', '####.', '#.#..', '#..#.', '#...#'],
+  'S': ['.####', '#....', '#....', '.###.', '....#', '....#', '####.'],
+  'T': ['#####', '..#..', '..#..', '..#..', '..#..', '..#..', '..#..'],
+  'U': ['#...#', '#...#', '#...#', '#...#', '#...#', '#...#', '.###.'],
+  'V': ['#...#', '#...#', '#...#', '#...#', '#...#', '.#.#.', '..#..'],
+  'W': ['#...#', '#...#', '#...#', '#.#.#', '#.#.#', '##.##', '#...#'],
+  'X': ['#...#', '#...#', '.#.#.', '..#..', '.#.#.', '#...#', '#...#'],
+  'Y': ['#...#', '#...#', '.#.#.', '..#..', '..#..', '..#..', '..#..'],
+  'Z': ['#####', '....#', '...#.', '..#..', '.#...', '#....', '#####'],
+  '+': ['.....', '..#..', '..#..', '#####', '..#..', '..#..', '.....'],
+  '-': ['.....', '.....', '.....', '#####', '.....', '.....', '.....'],
+  '/': ['....#', '....#', '...#.', '..#..', '.#...', '#....', '#....'],
+  '.': ['.....', '.....', '.....', '.....', '.....', '.##..', '.##..'],
+  ':': ['.....', '.##..', '.##..', '.....', '.##..', '.##..', '.....'],
+  '!': ['..#..', '..#..', '..#..', '..#..', '..#..', '.....', '..#..'],
+  '?': ['.###.', '#...#', '....#', '...#.', '..#..', '.....', '..#..'],
+  '>': ['.....', '#....', '.#...', '..#..', '.#...', '#....', '.....'],   // 상점 커서
+  '*': ['.....', '..#..', '#.#.#', '.###.', '#.#.#', '..#..', '.....'],   // 전설 고유 효과 표
+  '%': ['##..#', '##.#.', '...#.', '..#..', '.#...', '.#.##', '#..##'],
+  '(': ['...#.', '..#..', '.#...', '.#...', '.#...', '..#..', '...#.'],
+  ')': ['.#...', '..#..', '...#.', '...#.', '...#.', '..#..', '.#...'],
+  ' ': ['.....', '.....', '.....', '.....', '.....', '.....', '.....'],
 };
 
 const UI = {
-  // 글자당 4px (3px + 1px 간격)
-  textWidth(text) { return text.length * 4 - 1; },
+  /* 고운 레이어 — 게임 1단위가 여기서는 FINE 픽셀이다.
+     글자 기본 배율 2 = 한 글자가 가로 12 / 세로 14 픽셀 = 게임 단위로 4 x 4.7 (예전 폰트와 같은 자리) */
+  FINE: 3,
+  TEXT_SCALE: 2,
+  fx: null,          // 고운 레이어의 ctx — 글자와 창은 전부 여기 그린다
+  layer: null,
 
-  drawText(ctx, text, x, y, color, centered, shadow) {
+  initLayer(canvas) {
+    this.layer = canvas;
+    this.fx = canvas.getContext('2d');
+    this.fx.imageSmoothingEnabled = false;
+    // 좌표는 게임 단위 그대로 쓰고, 변환 행렬이 고운 픽셀로 늘려준다
+    this.fx.setTransform(this.FINE, 0, 0, this.FINE, 0, 0);
+  },
+
+  clearLayer() {
+    if (!this.fx) return;
+    this.fx.save();
+    this.fx.setTransform(1, 0, 0, 1, 0, 0);
+    this.fx.clearRect(0, 0, this.layer.width, this.layer.height);
+    this.fx.restore();
+  },
+
+  // 글자가 차지하는 너비 (게임 단위). scale 은 글자 배율 — 기본값이 예전 폰트와 같은 크기다
+  textWidth(text, scale) {
+    scale = scale || this.TEXT_SCALE;
+    return (String(text).length * (FONT_W + FONT_GAP) - FONT_GAP) * scale / this.FINE;
+  },
+
+  textHeight(scale) {
+    return FONT_H * (scale || this.TEXT_SCALE) / this.FINE;
+  },
+
+  /* ctx 를 받긴 하지만 글자는 늘 고운 레이어에 그린다 (부르는 쪽을 고치지 않으려고 인자는 남겨뒀다). */
+  drawText(ctx, text, x, y, color, centered, shadow, scale) {
+    scale = scale || this.TEXT_SCALE;
     text = String(text).toUpperCase();
-    if (centered) x -= Math.floor(this.textWidth(text) / 2);
-    x = Math.round(x); y = Math.round(y);
-
-    if (shadow !== false) {   // 어떤 배경 위에서도 읽히도록 검은 그림자를 깐다
-      this.blit(ctx, text, x + 1, y + 1, '#000000');
-    }
-    this.blit(ctx, text, x, y, color);
+    if (centered) x -= this.textWidth(text, scale) / 2;
+    const fx = Math.round(x * this.FINE), fy = Math.round(y * this.FINE);
+    // 어떤 배경 위에서도 읽히도록 검은 그림자를 한 겹 깐다
+    if (shadow !== false) this.blitFine(text, fx + scale, fy + scale, '#000000', scale);
+    this.blitFine(text, fx, fy, color, scale);
   },
 
   /* 무지개 글자 — 성장하는 무기 이름표 전용.
      글자마다 색이 다르고 시간이 흐르면 색이 한 칸씩 흘러가서 반짝이는 것처럼 보인다.
      글자 둘레에는 같은 색을 옅게 한 번 더 깔아 오라처럼 번지게 한다. */
-  drawRainbowText(ctx, text, x, y, centered) {
+  drawRainbowText(ctx, text, x, y, centered, scale) {
+    scale = scale || this.TEXT_SCALE;
     text = String(text).toUpperCase();
-    if (centered) x -= Math.floor(this.textWidth(text) / 2);
-    x = Math.round(x); y = Math.round(y);
+    if (centered) x -= this.textWidth(text, scale) / 2;
+    const fx = Math.round(x * this.FINE), fy = Math.round(y * this.FINE);
+    const adv = (FONT_W + FONT_GAP) * scale;
     const pal = CONFIG.weapons.rainbow;
     const shift = Math.floor(World.time * 9);
+    const g = this.fx;
 
-    this.blit(ctx, text, x + 1, y + 1, '#000000');
-    ctx.globalAlpha = 0.28;
+    this.blitFine(text, fx + scale, fy + scale, '#000000', scale);
+    g.globalAlpha = 0.28;
     for (let i = 0; i < text.length; i++) {
       const c = pal[(i + shift) % pal.length];
-      this.blit(ctx, text[i], x + i * 4 - 1, y, c);
-      this.blit(ctx, text[i], x + i * 4 + 1, y, c);
-      this.blit(ctx, text[i], x + i * 4, y - 1, c);
-      this.blit(ctx, text[i], x + i * 4, y + 1, c);
+      this.blitFine(text[i], fx + i * adv - scale, fy, c, scale);
+      this.blitFine(text[i], fx + i * adv + scale, fy, c, scale);
+      this.blitFine(text[i], fx + i * adv, fy - scale, c, scale);
+      this.blitFine(text[i], fx + i * adv, fy + scale, c, scale);
     }
-    ctx.globalAlpha = 1;
+    g.globalAlpha = 1;
     for (let i = 0; i < text.length; i++) {
-      this.blit(ctx, text[i], x + i * 4, y, pal[(i + shift) % pal.length]);
+      this.blitFine(text[i], fx + i * adv, fy, pal[(i + shift) % pal.length], scale);
     }
   },
 
@@ -101,27 +147,75 @@ const UI = {
     return pal[(Math.floor(World.time * 9) + (offset || 0)) % pal.length];
   },
 
-  blit(ctx, text, x, y, color) {
-    ctx.fillStyle = color;
+  // 고운 레이어에 실제 픽셀 단위로 글자를 찍는다 (변환 행렬을 잠깐 끈다)
+  blitFine(text, fx, fy, color, scale) {
+    const g = this.fx;
+    if (!g) return;
+    g.save();
+    g.setTransform(1, 0, 0, 1, 0, 0);
+    g.fillStyle = color;
+    const adv = (FONT_W + FONT_GAP) * scale;
     for (let i = 0; i < text.length; i++) {
-      const g = FONT[text[i]] || FONT[' '];
-      const gx = x + i * 4;
-      for (let r = 0; r < 5; r++) {
-        const row = g[r];
-        for (let c = 0; c < 3; c++) {
-          if (row[c] === '#') ctx.fillRect(gx + c, y + r, 1, 1);
+      const glyph = FONT[text[i]] || FONT[' '];
+      const gx = fx + i * adv;
+      for (let r = 0; r < FONT_H; r++) {
+        const row = glyph[r];
+        let c = 0;
+        while (c < FONT_W) {
+          if (row[c] !== '#') { c++; continue; }
+          // 가로로 이어진 칸은 한 번에 칠한다 (fillRect 호출을 줄인다)
+          let run = 1;
+          while (c + run < FONT_W && row[c + run] === '#') run++;
+          g.fillRect(gx + c * scale, fy + r * scale, run * scale, scale);
+          c += run;
         }
       }
     }
+    g.restore();
   },
 
+  /* 창 뼈대 — 그림자 한 겹, 바탕, 바깥 테두리, 안쪽 밝은 선.
+     네 겹이라고 해봐야 fillRect 네 번이지만, 이것만으로 창이 바닥에서 떠 보인다.
+     accent 를 주면 위쪽 머리띠가 그 색으로 켜진다 (창마다 성격을 준다). */
+  panel(ctx, x, y, w, h, accent) {
+    ctx.fillStyle = 'rgba(0,0,0,0.35)';           // 그림자
+    ctx.fillRect(x + 2, y + 3, w, h);
+    ctx.fillStyle = 'rgba(12,15,11,0.94)';        // 바탕
+    ctx.fillRect(x, y, w, h);
+    ctx.fillStyle = '#0a0c09';                    // 바깥 테두리
+    ctx.fillRect(x, y, w, 1); ctx.fillRect(x, y + h - 1, w, 1);
+    ctx.fillRect(x, y, 1, h); ctx.fillRect(x + w - 1, y, 1, h);
+    ctx.fillStyle = '#3a442f';                    // 안쪽 선
+    ctx.fillRect(x + 1, y + 1, w - 2, 1); ctx.fillRect(x + 1, y + h - 2, w - 2, 1);
+    ctx.fillRect(x + 1, y + 1, 1, h - 2); ctx.fillRect(x + w - 2, y + 1, 1, h - 2);
+    if (accent) {                                  // 머리띠
+      ctx.fillStyle = accent;
+      ctx.fillRect(x + 1, y + 1, w - 2, 1);
+    }
+  },
+
+  // 창 안을 가르는 가는 선
+  divider(ctx, x, y, w) {
+    ctx.fillStyle = '#2a3222';
+    ctx.fillRect(x, y, w, 1);
+  },
+
+  /* 게이지 — 고운 레이어에 그리므로 1/3 단위까지 쓸 수 있다.
+     차오르는 길이를 1/3 칸씩 끊어 부드럽게 움직이고, 위쪽에 얇은 밝은 선을 얹어 유리처럼 보이게 한다. */
   bar(ctx, x, y, w, h, ratio, fill, back) {
+    const unit = 1 / UI.FINE;
     ctx.fillStyle = '#17110d';
     ctx.fillRect(x - 1, y - 1, w + 2, h + 2);
     ctx.fillStyle = back;
     ctx.fillRect(x, y, w, h);
+    const fw = Math.round(w * Util.clamp(ratio, 0, 1) * UI.FINE) * unit;
+    if (fw <= 0) return;
     ctx.fillStyle = fill;
-    ctx.fillRect(x, y, Math.round(w * Util.clamp(ratio, 0, 1)), h);
+    ctx.fillRect(x, y, fw, h);
+    ctx.globalAlpha = 0.3;
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(x, y, fw, unit);
+    ctx.globalAlpha = 1;
   },
 
   draw(ctx, player, showInventory) {
@@ -390,10 +484,7 @@ const UI = {
     ctx.fillRect(0, 0, CONFIG.VIEW_W, CONFIG.VIEW_H);
     const cx = CONFIG.VIEW_W / 2, cy = CONFIG.VIEW_H / 2;
     // 제목 — 두 배 크기
-    ctx.save();
-    ctx.scale(2, 2);
-    this.drawText(ctx, 'FOREST ADVENTURE', Math.round(cx / 2), Math.round((cy - 30) / 2), '#9be564', true);
-    ctx.restore();
+    this.drawText(ctx, 'FOREST ADVENTURE', cx, cy - 30, '#9be564', true, true, UI.TEXT_SCALE * 2);
     this.drawText(ctx, 'A TINY PIXEL ACTION RPG', cx, cy - 12, '#7fa86a', true);
     // 세상이 멈춰 있으므로 깜빡임은 실제 시계로 돌린다
     if ((Date.now() % 1000) < 650) {
@@ -407,7 +498,8 @@ const UI = {
   drawConfirm(ctx) {
     const w = 148, h = 52;
     const x = Math.round((CONFIG.VIEW_W - w) / 2), y = Math.round((CONFIG.VIEW_H - h) / 2);
-    ctx.fillStyle = 'rgba(10,12,10,0.85)';
+    this.panel(ctx, x, y, w, h, '#ffd93d');
+    ctx.fillStyle = 'rgba(0,0,0,0)';
     ctx.fillRect(0, 0, CONFIG.VIEW_W, CONFIG.VIEW_H);
     ctx.fillStyle = 'rgba(16,20,16,0.96)';
     ctx.fillRect(x, y, w, h);

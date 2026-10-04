@@ -30,7 +30,7 @@ html, body {
   box-shadow: 0 12px 40px rgba(0, 0, 0, .6);
 }
 
-#game {
+#game, #ui {
   display: block;
   width: 1152px;   /* 384 * 3 */
   height: 648px;   /* 216 * 3 */
@@ -38,8 +38,18 @@ html, body {
   max-height: calc(100vh - 90px);
   image-rendering: pixelated;
   image-rendering: crisp-edges;
-  background: #2c5c2f;
   cursor: none;   /* 조준점은 게임이 캔버스 안에 직접 그린다 */
+}
+
+#game { background: #2c5c2f; }
+
+/* 글자와 창을 그리는 고운 레이어 — 게임 캔버스 위에 딱 포갠다.
+   안쪽 해상도만 세 배(1152x648)이고 화면에서 차지하는 크기는 같다. */
+#ui {
+  position: absolute;
+  left: 0;
+  top: 0;
+  pointer-events: none;   /* 마우스는 아래 캔버스가 받는다 */
 }
 
 /* 패치 노트 — 캔버스 오른쪽 위(골드 아래)의 작은 버튼. 누르면 목록이 펼쳐진다. 한글이라 HTML 로 그린다 */
@@ -143,11 +153,13 @@ html, body {
 }
 
 </style>
-<!-- built 2026-10-04 12:24 by tools/build.js -->
+<!-- built 2026-10-04 12:38 by tools/build.js -->
 </head>
 <body>
   <div id="stage">
     <canvas id="game" width="384" height="216"></canvas>
+    <!-- 글자와 창은 세 배 고운 레이어에 그린다 (js/ui.js 맨 위 설명 참고) -->
+    <canvas id="ui" width="1152" height="648"></canvas>
     <div id="patchnotes" hidden></div>
   </div>
   <div id="controls">
@@ -3069,10 +3081,7 @@ const FX = {
       if (n.big) {
         // 치명타 — 두 배 크기. 처음 0.1초는 살짝 더 커서 "튀어나온다"
         const s = n.life > n.maxLife - 0.1 ? 3 : 2;
-        ctx.save();
-        ctx.scale(s, s);
-        UI.drawText(ctx, n.text, Math.round((n.x - cam.x) / s), Math.round((n.y - cam.y) / s), n.color, true);
-        ctx.restore();
+        UI.drawText(ctx, n.text, n.x - cam.x, n.y - cam.y, n.color, true, true, UI.TEXT_SCALE * s);
         continue;
       }
       UI.drawText(ctx, n.text, Math.round(n.x - cam.x), Math.round(n.y - cam.y), n.color, true);
@@ -8047,12 +8056,10 @@ const Inventory = {
 
   draw(ctx, player) {
     const L = this.layout(player);
-    ctx.fillStyle = 'rgba(10,12,10,0.9)';
-    ctx.fillRect(L.x, L.y, L.w, L.h);
-    ctx.strokeStyle = '#3a442f';
-    ctx.strokeRect(L.x + 0.5, L.y + 0.5, L.w - 1, L.h - 1);
+    UI.panel(ctx, L.x, L.y, L.w, L.h, '#9be564');
+    UI.divider(ctx, L.x + 6, L.y + 14, L.w - 12);
 
-    UI.drawText(ctx, 'INVENTORY', L.x + 8, L.y + 6, '#9be564');
+    UI.drawText(ctx, 'INVENTORY', L.x + 8, L.y + 5, '#9be564');
     const bagText = 'BAG ' + this.count(player) + '/' + (player.bag.length - 1);
     UI.drawText(ctx, bagText, L.gridX + L.cols * (L.slot + L.gap) - 2 - UI.textWidth(bagText), L.y + 6, '#7fa86a');
     const g = String(player.gold);
@@ -8161,20 +8168,20 @@ const Inventory = {
       const n = player.setCounts[key];
       if (n >= 2) onSets.push(CONFIG.sets[key].name + ' ' + n);
     }
-    if (onSets.length) { UI.drawText(ctx, 'SET ' + onSets.join('  '), x, sy, '#9be564'); sy += 8; }
+    if (onSets.length) { UI.drawText(ctx, 'SET ' + onSets.join('  '), x, sy, '#9be564'); sy += 7; }
     const onUniq = Object.keys(player.uniques);
     if (onUniq.length) {
-      UI.drawText(ctx, onUniq.map(id => CONFIG.uniques[id].name).join(' . ').slice(0, 33), x, sy, '#ffb35c');
-      sy += 8;
+      UI.drawText(ctx, onUniq.map(id => CONFIG.uniques[id].name).join(' . ').slice(0, 40), x, sy, '#ffb35c');
+      sy += 7;
     }
 
-    ctx.fillStyle = '#3a442f';
-    ctx.fillRect(x, sy + 1, wide, 1);
+    UI.divider(ctx, x, sy + 1, wide);
 
     const at = this.at(player, this.cursor);
     const s = at.item;
-    let y = sy + 6;
-    const line = (text, color) => { UI.drawText(ctx, text, x, y, color); y += 8; };
+    let y = sy + 5;
+    // 설명은 줄이 아홉까지 갈 수 있어서(옵션 넷 + 세트 + 고유 효과) 7칸 간격으로 촘촘히 적는다
+    const line = (text, color) => { UI.drawText(ctx, text, x, y, color); y += 7; };
 
     if (!s) {
       line(at.zone === 'gear' ? CONFIG.gear.slotNames[at.slot] + ' — EMPTY' : 'EMPTY SLOT', '#5f6b59');
@@ -8839,12 +8846,10 @@ const Shop = {
   draw(ctx, player) {
     const w = 190, h = 130;
     const x = Math.round((CONFIG.VIEW_W - w) / 2), y = Math.round((CONFIG.VIEW_H - h) / 2);
-    ctx.fillStyle = 'rgba(10,12,10,0.88)';
-    ctx.fillRect(x, y, w, h);
-    ctx.strokeStyle = '#4a3f2a';
-    ctx.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1);
+    UI.panel(ctx, x, y, w, h, '#ffe066');
+    UI.divider(ctx, x + 6, y + 15, w - 12);
 
-    UI.drawText(ctx, 'SHOP', x + w / 2, y + 7, '#ffe066', true);
+    UI.drawText(ctx, 'SHOP', x + w / 2, y + 6, '#ffe066', true);
     ctx.drawImage(SPRITES.coin, x + w - 14 - UI.textWidth(String(player.gold)) - 10, y + 6);
     UI.drawText(ctx, String(player.gold), x + w - 14 - UI.textWidth(String(player.gold)), y + 7, '#ffe066');
 
@@ -8882,98 +8887,144 @@ const Shop = {
 // ── js/ui.js
 'use strict';
 
-/* HUD와 3x5 픽셀 폰트.
-   캔버스 기본 폰트는 이 해상도에서 흐릿해지므로 글자도 직접 도트로 찍는다. */
+/* HUD와 픽셀 폰트.
 
+   ── 왜 캔버스가 둘인가 ──────────────────────────────────
+   세상은 384x216 에 그려 3배로 늘린다. 도트가 크고 또렷해야 하는 그림에는 맞지만,
+   글자에는 너무 거칠다 — 3x5 글자는 한 획이 화면에서 3픽셀이라 'M' 과 'W' 가 뭉개졌다.
+
+   그래서 **글자와 창은 세 배 고운 레이어(1152x648)에 따로 그린다.**
+   좌표는 그대로 게임 단위(384x216)를 쓰고(변환 행렬이 3배로 맞춰준다),
+   글자만 그 안에서 실제 픽셀 단위로 찍는다. 한 글자가 5x7 픽셀이고 기본 배율이 2라
+   **차지하는 자리는 예전 3x5 폰트와 같고(글자당 4단위), 획은 절반으로 얇아진다.**
+
+   고운 레이어는 게임 캔버스 위에 겹쳐 있으므로, 창·어둡게 덮기·장면 전환도 전부 여기 그린다
+   (그래야 글자가 창 밑으로 비치지 않는다). 세상 그림만 아래 캔버스에 남는다. */
+
+/* 5x7 픽셀 폰트 — 한 획이 1픽셀이라 글자 속이 트여 있고, M/W/N 처럼 획이 많은 글자도 읽힌다 */
+const FONT_W = 5, FONT_H = 7, FONT_GAP = 1;
 const FONT = {
-  '0': ['###', '# #', '# #', '# #', '###'],
-  '1': [' # ', '## ', ' # ', ' # ', '###'],
-  '2': ['###', '  #', '###', '#  ', '###'],
-  '3': ['###', '  #', '###', '  #', '###'],
-  '4': ['# #', '# #', '###', '  #', '  #'],
-  '5': ['###', '#  ', '###', '  #', '###'],
-  '6': ['###', '#  ', '###', '# #', '###'],
-  '7': ['###', '  #', '  #', '  #', '  #'],
-  '8': ['###', '# #', '###', '# #', '###'],
-  '9': ['###', '# #', '###', '  #', '###'],
-  'A': ['###', '# #', '###', '# #', '# #'],
-  'B': ['## ', '# #', '## ', '# #', '## '],
-  'C': ['###', '#  ', '#  ', '#  ', '###'],
-  'D': ['## ', '# #', '# #', '# #', '## '],
-  'E': ['###', '#  ', '###', '#  ', '###'],
-  'F': ['###', '#  ', '###', '#  ', '#  '],
-  'G': ['###', '#  ', '# #', '# #', '###'],
-  'H': ['# #', '# #', '###', '# #', '# #'],
-  'I': ['###', ' # ', ' # ', ' # ', '###'],
-  'J': ['  #', '  #', '  #', '# #', '###'],
-  'K': ['# #', '# #', '## ', '# #', '# #'],
-  'L': ['#  ', '#  ', '#  ', '#  ', '###'],
-  'M': ['# #', '###', '###', '# #', '# #'],
-  'N': ['## ', '# #', '# #', '# #', '# #'],
-  'O': ['###', '# #', '# #', '# #', '###'],
-  'P': ['###', '# #', '###', '#  ', '#  '],
-  'Q': ['###', '# #', '# #', '###', '  #'],
-  'R': ['###', '# #', '###', '## ', '# #'],
-  'S': ['###', '#  ', '###', '  #', '###'],
-  'T': ['###', ' # ', ' # ', ' # ', ' # '],
-  'U': ['# #', '# #', '# #', '# #', '###'],
-  'V': ['# #', '# #', '# #', '# #', ' # '],
-  'W': ['# #', '# #', '###', '###', '# #'],
-  'X': ['# #', '# #', ' # ', '# #', '# #'],
-  'Y': ['# #', '# #', ' # ', ' # ', ' # '],
-  'Z': ['###', '  #', ' # ', '#  ', '###'],
-  '+': ['   ', ' # ', '###', ' # ', '   '],
-  '-': ['   ', '   ', '###', '   ', '   '],
-  '/': ['  #', '  #', ' # ', '#  ', '#  '],
-  '.': ['   ', '   ', '   ', '   ', ' # '],
-  ':': ['   ', ' # ', '   ', ' # ', '   '],
-  '!': [' # ', ' # ', ' # ', '   ', ' # '],
-  '?': ['## ', '  #', ' ##', '   ', ' # '],
-  '>': ['#  ', ' # ', '  #', ' # ', '#  '],   // 상점 커서
-  '%': ['# #', '  #', ' # ', '#  ', '# #'],
-  '*': ['   ', '# #', ' # ', '# #', '   '],   // 전설 고유 효과 앞에 붙는 표
-  '(': ['  #', ' # ', ' # ', ' # ', '  #'],
-  ')': ['#  ', ' # ', ' # ', ' # ', '#  '],
-  ' ': ['   ', '   ', '   ', '   ', '   '],
+  '0': ['.###.', '#...#', '#..##', '#.#.#', '##..#', '#...#', '.###.'],
+  '1': ['..#..', '.##..', '..#..', '..#..', '..#..', '..#..', '.###.'],
+  '2': ['.###.', '#...#', '....#', '...#.', '..#..', '.#...', '#####'],
+  '3': ['#####', '...#.', '..#..', '...#.', '....#', '#...#', '.###.'],
+  '4': ['...#.', '..##.', '.#.#.', '#..#.', '#####', '...#.', '...#.'],
+  '5': ['#####', '#....', '####.', '....#', '....#', '#...#', '.###.'],
+  '6': ['..##.', '.#...', '#....', '####.', '#...#', '#...#', '.###.'],
+  '7': ['#####', '....#', '...#.', '..#..', '.#...', '.#...', '.#...'],
+  '8': ['.###.', '#...#', '#...#', '.###.', '#...#', '#...#', '.###.'],
+  '9': ['.###.', '#...#', '#...#', '.####', '....#', '...#.', '.##..'],
+  'A': ['.###.', '#...#', '#...#', '#####', '#...#', '#...#', '#...#'],
+  'B': ['####.', '#...#', '#...#', '####.', '#...#', '#...#', '####.'],
+  'C': ['.###.', '#...#', '#....', '#....', '#....', '#...#', '.###.'],
+  'D': ['####.', '#...#', '#...#', '#...#', '#...#', '#...#', '####.'],
+  'E': ['#####', '#....', '#....', '####.', '#....', '#....', '#####'],
+  'F': ['#####', '#....', '#....', '####.', '#....', '#....', '#....'],
+  'G': ['.###.', '#...#', '#....', '#.###', '#...#', '#...#', '.####'],
+  'H': ['#...#', '#...#', '#...#', '#####', '#...#', '#...#', '#...#'],
+  'I': ['.###.', '..#..', '..#..', '..#..', '..#..', '..#..', '.###.'],
+  'J': ['..###', '...#.', '...#.', '...#.', '...#.', '#..#.', '.##..'],
+  'K': ['#...#', '#..#.', '#.#..', '##...', '#.#..', '#..#.', '#...#'],
+  'L': ['#....', '#....', '#....', '#....', '#....', '#....', '#####'],
+  'M': ['#...#', '##.##', '#.#.#', '#.#.#', '#...#', '#...#', '#...#'],
+  'N': ['#...#', '##..#', '#.#.#', '#..##', '#...#', '#...#', '#...#'],
+  'O': ['.###.', '#...#', '#...#', '#...#', '#...#', '#...#', '.###.'],
+  'P': ['####.', '#...#', '#...#', '####.', '#....', '#....', '#....'],
+  'Q': ['.###.', '#...#', '#...#', '#...#', '#.#.#', '#..#.', '.##.#'],
+  'R': ['####.', '#...#', '#...#', '####.', '#.#..', '#..#.', '#...#'],
+  'S': ['.####', '#....', '#....', '.###.', '....#', '....#', '####.'],
+  'T': ['#####', '..#..', '..#..', '..#..', '..#..', '..#..', '..#..'],
+  'U': ['#...#', '#...#', '#...#', '#...#', '#...#', '#...#', '.###.'],
+  'V': ['#...#', '#...#', '#...#', '#...#', '#...#', '.#.#.', '..#..'],
+  'W': ['#...#', '#...#', '#...#', '#.#.#', '#.#.#', '##.##', '#...#'],
+  'X': ['#...#', '#...#', '.#.#.', '..#..', '.#.#.', '#...#', '#...#'],
+  'Y': ['#...#', '#...#', '.#.#.', '..#..', '..#..', '..#..', '..#..'],
+  'Z': ['#####', '....#', '...#.', '..#..', '.#...', '#....', '#####'],
+  '+': ['.....', '..#..', '..#..', '#####', '..#..', '..#..', '.....'],
+  '-': ['.....', '.....', '.....', '#####', '.....', '.....', '.....'],
+  '/': ['....#', '....#', '...#.', '..#..', '.#...', '#....', '#....'],
+  '.': ['.....', '.....', '.....', '.....', '.....', '.##..', '.##..'],
+  ':': ['.....', '.##..', '.##..', '.....', '.##..', '.##..', '.....'],
+  '!': ['..#..', '..#..', '..#..', '..#..', '..#..', '.....', '..#..'],
+  '?': ['.###.', '#...#', '....#', '...#.', '..#..', '.....', '..#..'],
+  '>': ['.....', '#....', '.#...', '..#..', '.#...', '#....', '.....'],   // 상점 커서
+  '*': ['.....', '..#..', '#.#.#', '.###.', '#.#.#', '..#..', '.....'],   // 전설 고유 효과 표
+  '%': ['##..#', '##.#.', '...#.', '..#..', '.#...', '.#.##', '#..##'],
+  '(': ['...#.', '..#..', '.#...', '.#...', '.#...', '..#..', '...#.'],
+  ')': ['.#...', '..#..', '...#.', '...#.', '...#.', '..#..', '.#...'],
+  ' ': ['.....', '.....', '.....', '.....', '.....', '.....', '.....'],
 };
 
 const UI = {
-  // 글자당 4px (3px + 1px 간격)
-  textWidth(text) { return text.length * 4 - 1; },
+  /* 고운 레이어 — 게임 1단위가 여기서는 FINE 픽셀이다.
+     글자 기본 배율 2 = 한 글자가 가로 12 / 세로 14 픽셀 = 게임 단위로 4 x 4.7 (예전 폰트와 같은 자리) */
+  FINE: 3,
+  TEXT_SCALE: 2,
+  fx: null,          // 고운 레이어의 ctx — 글자와 창은 전부 여기 그린다
+  layer: null,
 
-  drawText(ctx, text, x, y, color, centered, shadow) {
+  initLayer(canvas) {
+    this.layer = canvas;
+    this.fx = canvas.getContext('2d');
+    this.fx.imageSmoothingEnabled = false;
+    // 좌표는 게임 단위 그대로 쓰고, 변환 행렬이 고운 픽셀로 늘려준다
+    this.fx.setTransform(this.FINE, 0, 0, this.FINE, 0, 0);
+  },
+
+  clearLayer() {
+    if (!this.fx) return;
+    this.fx.save();
+    this.fx.setTransform(1, 0, 0, 1, 0, 0);
+    this.fx.clearRect(0, 0, this.layer.width, this.layer.height);
+    this.fx.restore();
+  },
+
+  // 글자가 차지하는 너비 (게임 단위). scale 은 글자 배율 — 기본값이 예전 폰트와 같은 크기다
+  textWidth(text, scale) {
+    scale = scale || this.TEXT_SCALE;
+    return (String(text).length * (FONT_W + FONT_GAP) - FONT_GAP) * scale / this.FINE;
+  },
+
+  textHeight(scale) {
+    return FONT_H * (scale || this.TEXT_SCALE) / this.FINE;
+  },
+
+  /* ctx 를 받긴 하지만 글자는 늘 고운 레이어에 그린다 (부르는 쪽을 고치지 않으려고 인자는 남겨뒀다). */
+  drawText(ctx, text, x, y, color, centered, shadow, scale) {
+    scale = scale || this.TEXT_SCALE;
     text = String(text).toUpperCase();
-    if (centered) x -= Math.floor(this.textWidth(text) / 2);
-    x = Math.round(x); y = Math.round(y);
-
-    if (shadow !== false) {   // 어떤 배경 위에서도 읽히도록 검은 그림자를 깐다
-      this.blit(ctx, text, x + 1, y + 1, '#000000');
-    }
-    this.blit(ctx, text, x, y, color);
+    if (centered) x -= this.textWidth(text, scale) / 2;
+    const fx = Math.round(x * this.FINE), fy = Math.round(y * this.FINE);
+    // 어떤 배경 위에서도 읽히도록 검은 그림자를 한 겹 깐다
+    if (shadow !== false) this.blitFine(text, fx + scale, fy + scale, '#000000', scale);
+    this.blitFine(text, fx, fy, color, scale);
   },
 
   /* 무지개 글자 — 성장하는 무기 이름표 전용.
      글자마다 색이 다르고 시간이 흐르면 색이 한 칸씩 흘러가서 반짝이는 것처럼 보인다.
      글자 둘레에는 같은 색을 옅게 한 번 더 깔아 오라처럼 번지게 한다. */
-  drawRainbowText(ctx, text, x, y, centered) {
+  drawRainbowText(ctx, text, x, y, centered, scale) {
+    scale = scale || this.TEXT_SCALE;
     text = String(text).toUpperCase();
-    if (centered) x -= Math.floor(this.textWidth(text) / 2);
-    x = Math.round(x); y = Math.round(y);
+    if (centered) x -= this.textWidth(text, scale) / 2;
+    const fx = Math.round(x * this.FINE), fy = Math.round(y * this.FINE);
+    const adv = (FONT_W + FONT_GAP) * scale;
     const pal = CONFIG.weapons.rainbow;
     const shift = Math.floor(World.time * 9);
+    const g = this.fx;
 
-    this.blit(ctx, text, x + 1, y + 1, '#000000');
-    ctx.globalAlpha = 0.28;
+    this.blitFine(text, fx + scale, fy + scale, '#000000', scale);
+    g.globalAlpha = 0.28;
     for (let i = 0; i < text.length; i++) {
       const c = pal[(i + shift) % pal.length];
-      this.blit(ctx, text[i], x + i * 4 - 1, y, c);
-      this.blit(ctx, text[i], x + i * 4 + 1, y, c);
-      this.blit(ctx, text[i], x + i * 4, y - 1, c);
-      this.blit(ctx, text[i], x + i * 4, y + 1, c);
+      this.blitFine(text[i], fx + i * adv - scale, fy, c, scale);
+      this.blitFine(text[i], fx + i * adv + scale, fy, c, scale);
+      this.blitFine(text[i], fx + i * adv, fy - scale, c, scale);
+      this.blitFine(text[i], fx + i * adv, fy + scale, c, scale);
     }
-    ctx.globalAlpha = 1;
+    g.globalAlpha = 1;
     for (let i = 0; i < text.length; i++) {
-      this.blit(ctx, text[i], x + i * 4, y, pal[(i + shift) % pal.length]);
+      this.blitFine(text[i], fx + i * adv, fy, pal[(i + shift) % pal.length], scale);
     }
   },
 
@@ -8983,27 +9034,75 @@ const UI = {
     return pal[(Math.floor(World.time * 9) + (offset || 0)) % pal.length];
   },
 
-  blit(ctx, text, x, y, color) {
-    ctx.fillStyle = color;
+  // 고운 레이어에 실제 픽셀 단위로 글자를 찍는다 (변환 행렬을 잠깐 끈다)
+  blitFine(text, fx, fy, color, scale) {
+    const g = this.fx;
+    if (!g) return;
+    g.save();
+    g.setTransform(1, 0, 0, 1, 0, 0);
+    g.fillStyle = color;
+    const adv = (FONT_W + FONT_GAP) * scale;
     for (let i = 0; i < text.length; i++) {
-      const g = FONT[text[i]] || FONT[' '];
-      const gx = x + i * 4;
-      for (let r = 0; r < 5; r++) {
-        const row = g[r];
-        for (let c = 0; c < 3; c++) {
-          if (row[c] === '#') ctx.fillRect(gx + c, y + r, 1, 1);
+      const glyph = FONT[text[i]] || FONT[' '];
+      const gx = fx + i * adv;
+      for (let r = 0; r < FONT_H; r++) {
+        const row = glyph[r];
+        let c = 0;
+        while (c < FONT_W) {
+          if (row[c] !== '#') { c++; continue; }
+          // 가로로 이어진 칸은 한 번에 칠한다 (fillRect 호출을 줄인다)
+          let run = 1;
+          while (c + run < FONT_W && row[c + run] === '#') run++;
+          g.fillRect(gx + c * scale, fy + r * scale, run * scale, scale);
+          c += run;
         }
       }
     }
+    g.restore();
   },
 
+  /* 창 뼈대 — 그림자 한 겹, 바탕, 바깥 테두리, 안쪽 밝은 선.
+     네 겹이라고 해봐야 fillRect 네 번이지만, 이것만으로 창이 바닥에서 떠 보인다.
+     accent 를 주면 위쪽 머리띠가 그 색으로 켜진다 (창마다 성격을 준다). */
+  panel(ctx, x, y, w, h, accent) {
+    ctx.fillStyle = 'rgba(0,0,0,0.35)';           // 그림자
+    ctx.fillRect(x + 2, y + 3, w, h);
+    ctx.fillStyle = 'rgba(12,15,11,0.94)';        // 바탕
+    ctx.fillRect(x, y, w, h);
+    ctx.fillStyle = '#0a0c09';                    // 바깥 테두리
+    ctx.fillRect(x, y, w, 1); ctx.fillRect(x, y + h - 1, w, 1);
+    ctx.fillRect(x, y, 1, h); ctx.fillRect(x + w - 1, y, 1, h);
+    ctx.fillStyle = '#3a442f';                    // 안쪽 선
+    ctx.fillRect(x + 1, y + 1, w - 2, 1); ctx.fillRect(x + 1, y + h - 2, w - 2, 1);
+    ctx.fillRect(x + 1, y + 1, 1, h - 2); ctx.fillRect(x + w - 2, y + 1, 1, h - 2);
+    if (accent) {                                  // 머리띠
+      ctx.fillStyle = accent;
+      ctx.fillRect(x + 1, y + 1, w - 2, 1);
+    }
+  },
+
+  // 창 안을 가르는 가는 선
+  divider(ctx, x, y, w) {
+    ctx.fillStyle = '#2a3222';
+    ctx.fillRect(x, y, w, 1);
+  },
+
+  /* 게이지 — 고운 레이어에 그리므로 1/3 단위까지 쓸 수 있다.
+     차오르는 길이를 1/3 칸씩 끊어 부드럽게 움직이고, 위쪽에 얇은 밝은 선을 얹어 유리처럼 보이게 한다. */
   bar(ctx, x, y, w, h, ratio, fill, back) {
+    const unit = 1 / UI.FINE;
     ctx.fillStyle = '#17110d';
     ctx.fillRect(x - 1, y - 1, w + 2, h + 2);
     ctx.fillStyle = back;
     ctx.fillRect(x, y, w, h);
+    const fw = Math.round(w * Util.clamp(ratio, 0, 1) * UI.FINE) * unit;
+    if (fw <= 0) return;
     ctx.fillStyle = fill;
-    ctx.fillRect(x, y, Math.round(w * Util.clamp(ratio, 0, 1)), h);
+    ctx.fillRect(x, y, fw, h);
+    ctx.globalAlpha = 0.3;
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(x, y, fw, unit);
+    ctx.globalAlpha = 1;
   },
 
   draw(ctx, player, showInventory) {
@@ -9272,10 +9371,7 @@ const UI = {
     ctx.fillRect(0, 0, CONFIG.VIEW_W, CONFIG.VIEW_H);
     const cx = CONFIG.VIEW_W / 2, cy = CONFIG.VIEW_H / 2;
     // 제목 — 두 배 크기
-    ctx.save();
-    ctx.scale(2, 2);
-    this.drawText(ctx, 'FOREST ADVENTURE', Math.round(cx / 2), Math.round((cy - 30) / 2), '#9be564', true);
-    ctx.restore();
+    this.drawText(ctx, 'FOREST ADVENTURE', cx, cy - 30, '#9be564', true, true, UI.TEXT_SCALE * 2);
     this.drawText(ctx, 'A TINY PIXEL ACTION RPG', cx, cy - 12, '#7fa86a', true);
     // 세상이 멈춰 있으므로 깜빡임은 실제 시계로 돌린다
     if ((Date.now() % 1000) < 650) {
@@ -9289,7 +9385,8 @@ const UI = {
   drawConfirm(ctx) {
     const w = 148, h = 52;
     const x = Math.round((CONFIG.VIEW_W - w) / 2), y = Math.round((CONFIG.VIEW_H - h) / 2);
-    ctx.fillStyle = 'rgba(10,12,10,0.85)';
+    this.panel(ctx, x, y, w, h, '#ffd93d');
+    ctx.fillStyle = 'rgba(0,0,0,0)';
     ctx.fillRect(0, 0, CONFIG.VIEW_W, CONFIG.VIEW_H);
     ctx.fillStyle = 'rgba(16,20,16,0.96)';
     ctx.fillRect(x, y, w, h);
@@ -9326,6 +9423,15 @@ const UI = {
    새 작업을 올릴 때 PATCH_NOTES 맨 앞에 한 항목을 추가하면 된다. */
 
 const PATCH_NOTES = [
+  {
+    date: '2026-10-08',
+    notes: [
+      '글자가 또렷해졌다 — 글자와 창을 세 배 고운 레이어에 따로 그린다 (5x7 폰트, 획이 절반으로 얇다)',
+      '글자가 차지하는 자리는 그대로라 화면 배치는 달라지지 않았다',
+      '창에 그림자·테두리·머리띠 색을 넣어 바닥에서 떠 보이게',
+      '체력·경험치 게이지가 1/3 칸 단위로 부드럽게 차고, 위쪽에 얇은 빛이 얹힌다',
+    ],
+  },
   {
     date: '2026-10-07',
     notes: [
@@ -9537,6 +9643,7 @@ const Game = {
     this.canvas = document.getElementById('game');
     this.ctx = this.canvas.getContext('2d');
     this.ctx.imageSmoothingEnabled = false;
+    UI.initLayer(document.getElementById('ui'));   // 글자·창을 그릴 고운 레이어
 
     buildSprites();
     Input.init(this.canvas);
@@ -10057,6 +10164,7 @@ const Game = {
     const cam = { x: Math.round(this.cam.x + shakeX + FX.kick.x), y: Math.round(this.cam.y + shakeY + FX.kick.y) };
 
     ctx.clearRect(0, 0, CONFIG.VIEW_W, CONFIG.VIEW_H);
+    UI.clearLayer();   // 글자·창 레이어도 매 프레임 새로 그린다
     World.drawGround(ctx, cam);
     Ambient.drawWater(ctx, cam);
     // 보스의 바닥 예고(돌진 경로, 착지 범위, 포자비 표시)는 바닥 바로 위, 캐릭터 아래에
@@ -10111,25 +10219,28 @@ const Game = {
     UI.drawLowHp(ctx, this.player);
     FX.drawFlashes(ctx);
 
+    /* 여기부터는 고운 레이어(ui 캔버스)에 그린다 — 창과 덮개가 글자보다 위에 와야 하고,
+       세상에 떠 있는 글자(이름표·데미지 숫자)도 이미 그 레이어에 있기 때문이다 */
+    const ui = UI.fx;
     // 보스 방은 겉맵 지도에 없는 곳이라 미니맵을 띄우지 않는다
-    if (!this.showMap && !this.inArena) Minimap.drawCorner(ctx, this.player, this.enemies);
-    UI.draw(ctx, this.player, this.showInventory);
-    if (this.showMap) Minimap.drawFull(ctx, this.player, this.enemies);
-    if (this.boss && !this.boss.dead && !this.showMap) UI.drawBossBar(ctx, this.boss);
-    if (this.cavePrompt) UI.drawCavePrompt(ctx, this.cavePrompt, cam, this.bossReadyIn[this.cavePrompt.caveIndex], 'ENTER');
-    if (this.exitPrompt) UI.drawCavePrompt(ctx, World.arenaExit, cam, 0, 'LEAVE');
-    if (this.shopPrompt && !this.showMap) Shop.drawPrompt(ctx, cam);
-    if (this.portalPrompt && !this.showMap) UI.drawPortalPrompt(ctx, World.portal, cam, CONFIG.maps[World.spec.portalTo]);
-    if (Shop.open) Shop.draw(ctx, this.player);
-    if (this.lairBanner > 0) UI.drawBanner(ctx, this.bossSpec(this.arenaCave).lairName, '#ff6b6b', this.lairBanner);
-    if (this.forestBanner > 0 && !this.showMap && !this.showInventory && !Shop.open && !this.title) UI.drawBanner(ctx, World.spec.name, World.spec.color, this.forestBanner);
-    if (this.confirmNewGame) UI.drawConfirm(ctx);
-    if (this.soundFlash > 0) UI.drawSoundState(ctx, Sound.enabled);
+    if (!this.showMap && !this.inArena) Minimap.drawCorner(ui, this.player, this.enemies);
+    UI.draw(ui, this.player, this.showInventory);
+    if (this.showMap) Minimap.drawFull(ui, this.player, this.enemies);
+    if (this.boss && !this.boss.dead && !this.showMap) UI.drawBossBar(ui, this.boss);
+    if (this.cavePrompt) UI.drawCavePrompt(ui, this.cavePrompt, cam, this.bossReadyIn[this.cavePrompt.caveIndex], 'ENTER');
+    if (this.exitPrompt) UI.drawCavePrompt(ui, World.arenaExit, cam, 0, 'LEAVE');
+    if (this.shopPrompt && !this.showMap) Shop.drawPrompt(ui, cam);
+    if (this.portalPrompt && !this.showMap) UI.drawPortalPrompt(ui, World.portal, cam, CONFIG.maps[World.spec.portalTo]);
+    if (Shop.open) Shop.draw(ui, this.player);
+    if (this.lairBanner > 0) UI.drawBanner(ui, this.bossSpec(this.arenaCave).lairName, '#ff6b6b', this.lairBanner);
+    if (this.forestBanner > 0 && !this.showMap && !this.showInventory && !Shop.open && !this.title) UI.drawBanner(ui, World.spec.name, World.spec.color, this.forestBanner);
+    if (this.confirmNewGame) UI.drawConfirm(ui);
+    if (this.soundFlash > 0) UI.drawSoundState(ui, Sound.enabled);
     // 장면 전환은 맨 위를 덮는다
-    if (this.transition) UI.drawFade(ctx, this.fadeAlpha());
-    if (this.title) UI.drawTitle(ctx, this.hasSave);
+    if (this.transition) UI.drawFade(ui, this.fadeAlpha());
+    if (this.title) UI.drawTitle(ui, this.hasSave);
     // 조준점은 무엇보다 위에 — 창이 열려 있어도 마우스 자리는 보여야 한다
-    else UI.drawCrosshair(ctx, this.player, cam, this.enemies);
+    else UI.drawCrosshair(ui, this.player, cam, this.enemies);
   },
 };
 

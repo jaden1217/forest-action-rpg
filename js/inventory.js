@@ -301,12 +301,10 @@ const Inventory = {
 
   draw(ctx, player) {
     const L = this.layout(player);
-    ctx.fillStyle = 'rgba(10,12,10,0.9)';
-    ctx.fillRect(L.x, L.y, L.w, L.h);
-    ctx.strokeStyle = '#3a442f';
-    ctx.strokeRect(L.x + 0.5, L.y + 0.5, L.w - 1, L.h - 1);
+    UI.panel(ctx, L.x, L.y, L.w, L.h, '#9be564');
+    UI.divider(ctx, L.x + 6, L.y + 14, L.w - 12);
 
-    UI.drawText(ctx, 'INVENTORY', L.x + 8, L.y + 6, '#9be564');
+    UI.drawText(ctx, 'INVENTORY', L.x + 8, L.y + 5, '#9be564');
     const bagText = 'BAG ' + this.count(player) + '/' + (player.bag.length - 1);
     UI.drawText(ctx, bagText, L.gridX + L.cols * (L.slot + L.gap) - 2 - UI.textWidth(bagText), L.y + 6, '#7fa86a');
     const g = String(player.gold);
@@ -415,20 +413,20 @@ const Inventory = {
       const n = player.setCounts[key];
       if (n >= 2) onSets.push(CONFIG.sets[key].name + ' ' + n);
     }
-    if (onSets.length) { UI.drawText(ctx, 'SET ' + onSets.join('  '), x, sy, '#9be564'); sy += 8; }
+    if (onSets.length) { UI.drawText(ctx, 'SET ' + onSets.join('  '), x, sy, '#9be564'); sy += 7; }
     const onUniq = Object.keys(player.uniques);
     if (onUniq.length) {
-      UI.drawText(ctx, onUniq.map(id => CONFIG.uniques[id].name).join(' . ').slice(0, 33), x, sy, '#ffb35c');
-      sy += 8;
+      UI.drawText(ctx, onUniq.map(id => CONFIG.uniques[id].name).join(' . ').slice(0, 40), x, sy, '#ffb35c');
+      sy += 7;
     }
 
-    ctx.fillStyle = '#3a442f';
-    ctx.fillRect(x, sy + 1, wide, 1);
+    UI.divider(ctx, x, sy + 1, wide);
 
     const at = this.at(player, this.cursor);
     const s = at.item;
-    let y = sy + 6;
-    const line = (text, color) => { UI.drawText(ctx, text, x, y, color); y += 8; };
+    let y = sy + 5;
+    // 설명은 줄이 아홉까지 갈 수 있어서(옵션 넷 + 세트 + 고유 효과) 7칸 간격으로 촘촘히 적는다
+    const line = (text, color) => { UI.drawText(ctx, text, x, y, color); y += 7; };
 
     if (!s) {
       line(at.zone === 'gear' ? CONFIG.gear.slotNames[at.slot] + ' — EMPTY' : 'EMPTY SLOT', '#5f6b59');
