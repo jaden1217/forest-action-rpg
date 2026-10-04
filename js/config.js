@@ -756,6 +756,50 @@ const CONFIG = {
     ],
   },
 
+  /* ── 장비 — 무기 말고 몸에 걸치는 것 (다음 로드맵 1주차) ──────
+     머리 / 몸 / 장신구 세 칸. 바닥에서 주워 가방에 담고, 인벤토리에서 Space 로 입는다.
+     수치는 아이템 레벨(떨군 몬스터의 레벨)을 따라 [기본값, 레벨당 증가] 로 자란다.
+
+       armor  받는 피해를 줄인다 (비율 = armor / (armor + softness), 최대 cap)
+       maxHp  최대 체력 +
+       power  기본 공격력 + (상점 강화와 같은 자리에 더해진다)
+       speed  이동 속도 +% (음수면 느려진다)
+
+     방어력을 '피해 -N' 이 아니라 비율로 잡은 이유: 몬스터 공격력은 레벨마다 9%씩 오르는데
+     뺄셈으로 막으면 1레벨에서는 거의 무적이고 40레벨에서는 아무 쓸모가 없다.
+     비율이면 어느 구간에서나 같은 일을 한다. */
+  gear: {
+    slots: ['head', 'body', 'trinket'],
+    slotNames: { head: 'HEAD', body: 'BODY', trinket: 'TRINKET' },
+    dropChance: 0.12,       // 몬스터 종류·레벨과 무관하게 모두 같은 확률
+    armorSoftness: 70,      // armor 70 이면 딱 절반을 막는다
+    armorCap: 0.70,         // 아무리 껴입어도 70% 까지만
+
+    items: {
+      // 머리 — 가벼운 가죽이냐, 무겁고 단단한 쇠냐
+      leatherCap: { slot: 'head', name: 'LEATHER CAP', sprite: 'cap',
+        stats: { armor: [4, 0.14], maxHp: [4, 0.6] } },
+      ironHelm: { slot: 'head', name: 'IRON HELM', sprite: 'helm',
+        stats: { armor: [8, 0.26], speed: [-2, 0] } },
+
+      // 몸 — 방어력의 중심. 사슬 갑옷은 느려지는 대신 가장 단단하다
+      leatherArmor: { slot: 'body', name: 'LEATHER VEST', sprite: 'vest',
+        stats: { armor: [7, 0.2], maxHp: [6, 0.9] } },
+      chainMail: { slot: 'body', name: 'CHAIN MAIL', sprite: 'mail',
+        stats: { armor: [13, 0.38], speed: [-6, 0] } },
+      travelCloak: { slot: 'body', name: 'TRAVEL CLOAK', sprite: 'cloak',
+        stats: { armor: [4, 0.12], speed: [7, 0] } },
+
+      // 장신구 — 방어력 대신 성격을 준다
+      swiftRing: { slot: 'trinket', name: 'SWIFT RING', sprite: 'ring',
+        stats: { speed: [9, 0] } },
+      powerAmulet: { slot: 'trinket', name: 'POWER AMULET', sprite: 'amulet',
+        stats: { power: [1, 0.3] } },
+      vitalCharm: { slot: 'trinket', name: 'VITAL CHARM', sprite: 'charm',
+        stats: { maxHp: [14, 1.8] } },
+    },
+  },
+
   /* ── 인벤토리 — 여러 칸짜리 가방 ──────────────────────────
      첫 칸은 늘 포션 주머니(개수는 player.potions, 상한은 maxPotions 그대로)이고,
      나머지 칸에 무기와 전리품이 하나씩 들어간다. 전리품은 같은 종류끼리 한 칸에 쌓인다.

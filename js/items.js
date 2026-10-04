@@ -44,6 +44,8 @@ const Items = {
       this.spawn(enemy.x, enemy.y, amount);
     }
     this.dropWeaponFor(enemy);
+    // 장비 — 종류는 고르게 섞이고, 레벨은 잡은 몬스터를 따른다
+    if (Math.random() < CONFIG.gear.dropChance) this.spawnGear(enemy.x, enemy.y, Gear.randomId(), enemy.level);
     // 전리품 — 몬스터 종류마다 정해져 있고, 양은 색 등급이 정한다
     const loot = CONFIG.loot;
     const lootId = loot.byType[enemy.TYPE];
@@ -104,6 +106,17 @@ const Items = {
     const d = this.makeDrop(x, y, CONFIG.items.lifetime);
     d.kind = 'potion';
     d.amount = amount;
+    this.drops.push(d);
+  },
+
+  // 장비 드랍 (가방에서 버린 것은 opts.dropped)
+  spawnGear(x, y, id, level, opts) {
+    if (!CONFIG.gear.items[id]) return;
+    const d = this.makeDrop(x, y, CONFIG.equipment.weaponLifetime, opts);
+    d.kind = 'gear';
+    d.id = id;
+    d.level = Util.clamp(Math.round(level || 1), 1, CONFIG.weapons.levelMult.length);
+    d.amount = 1;
     this.drops.push(d);
   },
 
@@ -190,6 +203,25 @@ const Items = {
           d.playerNear = true;
           if (dist < bestDist) { bestDist = dist; bestWeapon = i; }
         }
+        continue;
+      }
+
+      /* ── 장비: 끌려와 가방에 들어간다 (입지는 않는다 — 입는 건 인벤토리에서 고른다).
+            가방에 빈 칸이 없으면 끌려오지도 않고 그 자리에 그대로 둔다 */
+      if (d.kind === 'gear') {
+        if (Inventory.firstEmpty(player) < 0) continue;
+        if (dist < CONFIG.loot.magnetRadius && dist > 1) {
+          const pull = 130 * (1 - dist / CONFIG.loot.magnetRadius) + 40;
+          d.x += (player.x - d.x) / dist * pull * dt;
+          d.y += (player.y - d.y) / dist * pull * dt;
+        }
+        if (dist >= cfg.pickupRadius) continue;
+        if (!Inventory.addGear(player, d.id, d.level)) continue;
+        const color = Gear.color(d);
+        FX.burst(d.x, d.y - 4, 10, [color, '#ffffff'], { speed: 45, life: 0.4, gravity: 60 });
+        FX.number(d.x, d.y - 14, '+' + Gear.spec(d.id).name, color);
+        Sound.play('pickup');
+        this.drops.splice(i, 1);
         continue;
       }
 
@@ -312,6 +344,15 @@ const Items = {
         ctx.fillStyle = '#ffffff';
         ctx.fillRect(sx + 4, sy - 10 + bob, 1, 1);
       }
+      return;
+    }
+
+    if (d.kind === 'gear') {
+      const sp = Gear.sprite(d);
+      fillCircle(ctx, sx, sy + 5, 5, 'rgba(0,0,0,0.28)');
+      ctx.drawImage(sp, sx - Math.floor(sp.width / 2), sy - 8 + bob);
+      UI.drawText(ctx, Gear.spec(d.id).name, sx, sy + 8, Gear.color(d), true);
+      if (Math.floor(d.age * 3) % 2 === 0) { ctx.fillStyle = '#ffffff'; ctx.fillRect(sx + 4, sy - 10 + bob, 1, 1); }
       return;
     }
 

@@ -132,10 +132,9 @@ const Shop = {
     }
     const u = item.spec;
     player.upgrades[u.id] = (player.upgrades[u.id] || 0) + 1;
-    player[u.stat] += u.gain;
+    player.recalcStats();   // 랭크가 오르면 파생 능력치를 다시 구한다 (가방 칸도 여기서 늘어난다)
     // 체력 강화는 늘어난 만큼 바로 채워준다 — 사자마자 체감이 있어야 한다
-    if (u.stat === 'maxHp') player.hp += u.gain;
-    if (u.stat === 'bagSlots') Inventory.resize(player);   // 가방 칸이 늘면 바로 빈 칸이 붙는다
+    if (u.stat === 'maxHp') player.hp = Math.min(player.maxHp, player.hp + u.gain);
     this.say(u.name + '  RANK ' + player.upgrades[u.id]);
   },
 

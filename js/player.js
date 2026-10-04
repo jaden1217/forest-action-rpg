@@ -30,8 +30,13 @@ class Player {
     this.gold = 0;
     this.upgrades = {};
 
-    // 여러 칸짜리 가방 — 첫 칸은 포션 주머니, 나머지엔 무기와 전리품 (Inventory 가 다룬다)
+    // 장비 — 머리 / 몸 / 장신구 세 칸. 여기 걸친 것이 recalcStats 를 거쳐 능력치에 더해진다
+    this.gear = { head: null, body: null, trinket: null };
+    this.gearStats = { armor: 0, maxHp: 0, power: 0, speed: 0 };
+
+    // 여러 칸짜리 가방 — 첫 칸은 포션 주머니, 나머지엔 무기·전리품·장비 (Inventory 가 다룬다)
     this.bagSlots = CONFIG.inventory.baseSlots;
+    this.recalcStats();
     Inventory.create(this);
 
     this.poison = null;        // 전갈 독 — { time, tick, dmg, next }. 0.5초마다 조금씩 깎이고 자연 회복이 멈춘다
@@ -98,6 +103,44 @@ class Player {
     const by = CONFIG.skills.byWeapon, out = [];
     for (const w in by) out.push(...by[w]);
     return out;
+  }
+
+  /* ── 파생 능력치 한 자리에서 다시 계산 ─────────────────────
+     최대 체력·공격력·가방 크기는 "레벨 + 상점 강화 랭크 + 장비" 로 **매번 다시 구한다**.
+     예전처럼 += 로 더해 나가면 장비를 벗을 때 되돌릴 수가 없다.
+     레벨업·강화 구매·장비 착용·불러오기 뒤에 이걸 부르면 된다. */
+  recalcStats() {
+    const c = CONFIG.player, lu = CONFIG.levelUp, up = this.upgrades || {};
+
+    const g = { armor: 0, maxHp: 0, power: 0, speed: 0 };
+    for (const slot of CONFIG.gear.slots) {
+      const item = this.gear && this.gear[slot];
+      if (!item) continue;
+      const stats = Gear.statsOf(item);
+      for (const k in stats) g[k] += stats[k];
+    }
+    this.gearStats = g;
+
+    const gain = (id) => { const u = CONFIG.shop.upgrades.find(x => x.id === id); return u ? u.gain : 0; };
+    this.maxHp = c.maxHp + (this.level - 1) * lu.hpGain + (up.hp || 0) * gain('hp') + g.maxHp;
+    this.damage = c.attackDamage + (this.level - 1) * lu.damageGain + (up.atk || 0) * gain('atk') + g.power;
+    this.maxPotions = CONFIG.items.potionMax + (up.bag || 0) * gain('bag');
+    this.bagSlots = CONFIG.inventory.baseSlots + (up.slots || 0) * gain('slots');
+
+    if (typeof this.hp === 'number') this.hp = Math.min(this.hp, this.maxHp);
+    if (typeof this.potions === 'number') this.potions = Math.min(this.potions, this.maxPotions);
+    if (this.bag) Inventory.resize(this);
+  }
+
+  // 방어력 — 비율로 막는다. armor 70 이면 절반, 아무리 껴입어도 cap 까지만
+  damageReduction() {
+    const cfg = CONFIG.gear, a = Math.max(0, this.gearStats.armor);
+    return Math.min(cfg.armorCap, a / (a + cfg.armorSoftness));
+  }
+
+  // 장신구·망토가 더해주는 이동 속도 배수 (speed 는 %)
+  speedMult() {
+    return Math.max(0.3, 1 + (this.gearStats.speed || 0) / 100);
   }
 
   /* 스킬 위력의 기준 — 무기 종류 배수를 뺀 평타 (기본 공격 x 무기 레벨 배수 x 강화).
@@ -390,8 +433,9 @@ class Player {
       const speedScale = this.activeSkill
         ? (this.skillSpec(this.activeSkill).moveScale || 0)
         : (this.attackTimer > 0 ? 0.35 : 1);
-      const vx = ix * c.speed * speedScale + this.kx;
-      const vy = iy * c.speed * speedScale + this.ky;
+      const walk = c.speed * this.speedMult();   // 장비가 걸음을 빠르게/느리게 한다
+      const vx = ix * walk * speedScale + this.kx;
+      const vy = iy * walk * speedScale + this.ky;
       this.moveWithCollision(vx * dt, vy * dt);
     }
 
@@ -528,6 +572,8 @@ class Player {
   takeDamage(amount, fromX, fromY) {
     if (this.invuln > 0 || this.dashIFrames > 0 || this.dead) return;
     const c = CONFIG.player;
+    // 입고 있는 것이 피해를 비율로 깎는다 (최소 1은 들어간다)
+    amount = Math.max(1, Math.round(amount * (1 - this.damageReduction())));
     this.hp -= amount;
     this.invuln = c.invulnTime;
     this.sinceCombat = 0;      // 맞으면 자연 회복은 처음부터 다시 기다린다
@@ -582,8 +628,7 @@ class Player {
     while (this.xp >= this.xpNeed) {
       this.xp -= this.xpNeed;
       this.level++;
-      this.maxHp += CONFIG.levelUp.hpGain;
-      this.damage += CONFIG.levelUp.damageGain;
+      this.recalcStats();
       this.hp = this.maxHp;
       this.xpNeed = CONFIG.levelUp.xpNeed(this.level);
       this.syncWeaponLevel();

@@ -38,6 +38,7 @@ const Save = {
         weapon: p.weapon, weaponLevel: p.weaponLevel, weaponGrowing: p.weaponGrowing,
         gold: p.gold, upgrades: p.upgrades,
         bag: Inventory.serialize(p),
+        gear: { head: p.gear.head, body: p.gear.body, trinket: p.gear.trinket },
       },
       drops: drops.map(d => ({
         kind: d.kind, weapon: d.weapon, level: d.level, amount: d.amount, id: d.id,
@@ -85,20 +86,22 @@ const Save = {
   // 불러온 값을 플레이어와 바닥 드랍에 되돌려 놓는다 (World.init 이후에 호출)
   apply(data, player) {
     const s = data.player;
-    player.maxHp = Math.max(1, s.maxHp || CONFIG.player.maxHp);
-    player.hp = Util.clamp(s.hp, 1, player.maxHp);
-    player.damage = s.damage || CONFIG.player.attackDamage;
     player.level = Math.max(1, s.level || 1);
     player.xp = Math.max(0, s.xp || 0);
     player.xpNeed = s.xpNeed || CONFIG.levelUp.xpNeed(player.level);
-    // 9주차: 골드와 강화 랭크. 가방 크기는 랭크에서 다시 계산한다 (maxHp/damage 는 값 자체가 저장돼 있다)
+    /* 9주차: 골드와 강화 랭크. 최대 체력·공격력·가방 크기는 저장된 값을 믿지 않고
+       "레벨 + 강화 랭크 + 장비" 로 다시 계산한다 (recalcStats) — 그래야 장비를 벗을 때 되돌아간다 */
     player.gold = Math.max(0, s.gold || 0);
     player.upgrades = Object.assign({}, s.upgrades || {});
-    player.maxPotions = CONFIG.items.potionMax + (player.upgrades.bag || 0);
+    player.gear = { head: null, body: null, trinket: null };
+    for (const slot of CONFIG.gear.slots) {
+      const item = Gear.sanitize(s.gear && s.gear[slot]);
+      if (item && Gear.slotOf(item) === slot) player.gear[slot] = item;
+    }
+    player.recalcStats();
+    player.hp = Util.clamp(s.hp, 1, player.maxHp);
     player.potions = Util.clamp(s.potions || 0, 0, player.maxPotions);
-    // 가방 — 칸 수는 강화 랭크에서 다시 계산하고, 들어 있던 것을 되살린다
-    const slotSpec = CONFIG.shop.upgrades.find(u => u.id === 'slots');
-    player.bagSlots = CONFIG.inventory.baseSlots + (player.upgrades.slots || 0) * (slotSpec ? slotSpec.gain : 5);
+    // 가방 — 칸 수는 recalcStats 가 정해뒀다. 들어 있던 것을 되살린다
     Inventory.create(player);
     Inventory.deserialize(player, s.bag);
 
@@ -119,6 +122,7 @@ const Save = {
     Items.reset();
     for (const d of (data.drops || [])) {
       if (d.kind === 'weapon') Items.spawnWeapon(d.x, d.y, d.weapon, d.level, { growing: d.growing });
+      else if (d.kind === 'gear') Items.spawnGear(d.x, d.y, d.id, d.level);
       else if (d.kind === 'loot') Items.spawnLoot(d.x, d.y, d.id, d.amount);
       else Items.spawn(d.x, d.y, d.amount);
       // spawn 은 빈 자리를 찾아 위치를 흔들므로 저장된 자리로 되돌린다

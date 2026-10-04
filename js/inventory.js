@@ -5,7 +5,10 @@
    칸마다 물건 하나가 들어간다.
      0번 칸    포션 주머니 — 개수는 player.potions, 상한은 maxPotions (늘 이 자리에 있다)
      무기      한 칸에 하나. 바닥의 무기를 F 로 집으면 여기로 들어오고, 골라서 Space 로 낀다
+     장비      머리 / 몸 / 장신구. 주우면 가방에 들어오고, 골라서 Space 로 입는다
      전리품    몬스터가 떨구는 수집품. 같은 종류끼리 한 칸에 쌓이고, 상인에게 판다
+
+   오른쪽 '장착' 줄의 장비 세 칸도 커서로 고를 수 있다 (가방 칸 다음 번호) — 거기서 Space 는 벗기다.
 
    조작
      WASD / 방향키   칸 고르기 (마우스를 올려도 골라진다)
@@ -48,6 +51,23 @@ const Inventory = {
     if (i < 0) return false;
     player.bag[i] = { kind: 'weapon', weapon: weapon, level: level, growing: !!growing };
     return true;
+  },
+
+  // 장비 한 점 — 역시 빈 칸이 있어야 한다 (입는 건 나중에 내가 고른다)
+  addGear(player, id, level) {
+    const i = this.firstEmpty(player);
+    if (i < 0) return false;
+    player.bag[i] = { kind: 'gear', id: id, level: level };
+    return true;
+  },
+
+  /* 커서가 가리키는 것 — 가방 칸이거나, 그 뒤에 이어 붙은 장비 세 칸 */
+  slotCount(player) { return player.bag.length + CONFIG.gear.slots.length; },
+
+  at(player, index) {
+    if (index < player.bag.length) return { zone: 'bag', index: index, item: player.bag[index] };
+    const slot = CONFIG.gear.slots[index - player.bag.length];
+    return { zone: 'gear', slot: slot, item: player.gear[slot] };
   },
 
   // 전리품이 이만큼 더 들어갈 자리가 있는가 (같은 종류 칸의 남은 자리 + 빈 칸)
@@ -122,6 +142,9 @@ const Inventory = {
       if (!s) continue;
       if (s.kind === 'weapon' && CONFIG.weapons[s.weapon]) {
         player.bag[i + 1] = { kind: 'weapon', weapon: s.weapon, level: Math.max(1, s.level | 0), growing: !!s.growing };
+      } else if (s.kind === 'gear') {
+        const g = Gear.sanitize(s);
+        if (g) player.bag[i + 1] = g;
       } else if (s.kind === 'loot' && this.spec(s.id)) {
         player.bag[i + 1] = { kind: 'loot', id: s.id, amount: Util.clamp(s.amount | 0, 1, this.stackMax(s.id)) };
       }
@@ -136,6 +159,7 @@ const Inventory = {
       if (s.growing) return CONFIG.weapons.growNames[s.weapon] || CONFIG.weapons[s.weapon].name;
       return CONFIG.weapons[s.weapon].name + ' L' + s.level;
     }
+    if (s.kind === 'gear') return Gear.name(s);
     return this.spec(s.id).name;
   },
 
@@ -145,8 +169,32 @@ const Inventory = {
   },
 
   use(player, index) {
-    const s = player.bag[index];
+    const at = this.at(player, index);
+    // 장비 칸에서 Space = 벗어서 가방으로
+    if (at.zone === 'gear') {
+      if (!at.item) { this.say('NOTHING TO TAKE OFF'); return; }
+      const free = this.firstEmpty(player);
+      if (free < 0) { this.say('BAG IS FULL'); Sound.play('error'); return; }
+      player.bag[free] = at.item;
+      player.gear[at.slot] = null;
+      player.recalcStats();
+      Sound.play('blip');
+      this.say('TOOK OFF ' + Gear.spec(at.item.id).name);
+      return;
+    }
+    const s = at.item;
     if (!s) return;
+    if (s.kind === 'gear') {
+      // 입는다 — 그 자리에 입고 있던 것이 들어온다 (맞바꾸기)
+      const slot = Gear.slotOf(s);
+      const old = player.gear[slot];
+      player.gear[slot] = s;
+      player.bag[index] = old || null;
+      player.recalcStats();
+      Sound.play('pickup');
+      this.say('WEARING ' + Gear.spec(s.id).name);
+      return;
+    }
     if (s.kind === 'potion') {
       if (player.potions <= 0) { this.say('NO POTIONS'); Sound.play('error'); return; }
       if (player.hp >= player.maxHp) { this.say('HP IS FULL'); Sound.play('error'); return; }
@@ -168,15 +216,19 @@ const Inventory = {
   },
 
   drop(player, index) {
-    const s = player.bag[index];
+    const at = this.at(player, index);
+    const s = at.item;
     if (!s) return;
     if (s.kind === 'potion') { this.say('DRINK IT WITH E'); return; }
     if (s.kind === 'weapon') {
       Items.spawnWeapon(player.x, player.y, s.weapon, this.weaponLevel(player, s), { growing: s.growing, pickupDelay: 0.6 });
+    } else if (s.kind === 'gear') {
+      Items.spawnGear(player.x, player.y, s.id, s.level, { dropped: true });
     } else {
       Items.spawnLoot(player.x, player.y, s.id, s.amount, { dropped: true });
     }
-    player.bag[index] = null;
+    if (at.zone === 'gear') { player.gear[at.slot] = null; player.recalcStats(); }
+    else player.bag[index] = null;
     Sound.play('blip');
     this.say('DROPPED ' + this.itemName(player, s));
   },
@@ -192,7 +244,7 @@ const Inventory = {
     this.messageTimer = Math.max(0, this.messageTimer - 1 / 60);
     if (this.messageTimer <= 0) this.message = '';
 
-    const n = player.bag.length, cols = CONFIG.inventory.cols;
+    const n = this.slotCount(player), cols = CONFIG.inventory.cols;
     const P = Input.pressed;
     if (P.KeyA || P.ArrowLeft) this.cursor = (this.cursor + n - 1) % n;
     if (P.KeyD || P.ArrowRight) this.cursor = (this.cursor + 1) % n;
@@ -225,10 +277,11 @@ const Inventory = {
   layout(player) {
     const cols = CONFIG.inventory.cols, slot = 18, gap = 2;
     const rows = Math.ceil(player.bag.length / cols);
-    const w = 258, h = 24 + Math.max(rows, 4) * (slot + gap) + 34;   // 아래쪽에 안내 두 줄이 들어갈 자리
+    const w = 258, h = 24 + Math.max(rows, 5) * (slot + gap) + 34;   // 오른쪽 장비 줄과 아래쪽 안내 두 줄이 들어갈 자리
     const x = Math.round((CONFIG.VIEW_W - w) / 2), y = Math.round((CONFIG.VIEW_H - h) / 2);
+    const panelX = x + 8 + cols * (slot + gap) + 6;
     return { x: x, y: y, w: w, h: h, gridX: x + 8, gridY: y + 18, cols: cols, rows: rows, slot: slot, gap: gap,
-             panelX: x + 8 + cols * (slot + gap) + 6 };
+             panelX: panelX, box: 16, bgap: 4, boxX: panelX, boxY: y + 26 };
   },
 
   slotAt(player, mx, my) {
@@ -236,6 +289,11 @@ const Inventory = {
     for (let i = 0; i < player.bag.length; i++) {
       const sx = L.gridX + (i % L.cols) * (L.slot + L.gap), sy = L.gridY + Math.floor(i / L.cols) * (L.slot + L.gap);
       if (mx >= sx && mx < sx + L.slot && my >= sy && my < sy + L.slot) return i;
+    }
+    // 오른쪽 장착 줄 — 첫 칸은 무기(고를 수 없다), 그 뒤 셋이 장비 칸이다
+    for (let k = 0; k < CONFIG.gear.slots.length; k++) {
+      const bx = L.boxX + (k + 1) * (L.box + L.bgap);
+      if (mx >= bx && mx < bx + L.box && my >= L.boxY && my < L.boxY + L.box) return player.bag.length + k;
     }
     return -1;
   },
@@ -286,7 +344,8 @@ const Inventory = {
     else if (s.kind === 'weapon') {
       const set = SPRITES.weapons[s.weapon];
       sp = set && set[levelTier(this.weaponLevel(player, s))];
-    } else { sp = SPRITES.loot[s.id]; amount = s.amount; }
+    } else if (s.kind === 'gear') { sp = Gear.sprite(s); }
+    else { sp = SPRITES.loot[s.id]; amount = s.amount; }
     if (!sp) return;
     if (dim) ctx.globalAlpha = 0.35;
     ctx.drawImage(sp, sx + Math.floor((slot - sp.width) / 2), sy + Math.floor((slot - sp.height) / 2));
@@ -299,27 +358,52 @@ const Inventory = {
     }
   },
 
-  /* 오른쪽 — 끼고 있는 무기와, 고른 칸의 설명.
-     무기는 DPS 를 같이 띄운다: 세 종류의 초당 위력이 같다는 걸 바로 비교할 수 있다 */
+  /* 오른쪽 — 지금 입고 든 것, 그리고 고른 칸의 설명.
+     장착 줄은 [무기][머리][몸][장신구] 네 칸이다. 무기는 보여주기만 하고(바꾸는 건 가방에서),
+     장비 세 칸은 커서로 고를 수 있다 — 거기서 Space 는 '벗다'. */
   drawDetails(ctx, player, L) {
     const x = L.panelX, top = L.gridY;
-    const spec = player.weaponSpec();
-    const set = SPRITES.weapons[player.weapon];
-    const icon = set && set[levelTier(player.weaponLevel)];
     UI.drawText(ctx, 'EQUIPPED', x, top, '#7fa86a');
-    if (icon) ctx.drawImage(icon, x, top + 8);
-    if (player.weaponGrowing) UI.drawRainbowText(ctx, player.weaponLabel(), x + 16, top + 10);
-    else UI.drawText(ctx, player.weaponLabel(), x + 16, top + 10, player.weaponColor());
-    const dps = Math.round(player.attackDamage() / spec.cooldown);
-    UI.drawText(ctx, 'DMG ' + player.attackDamage() + ' RNG ' + spec.reach, x + 16, top + 18, '#f0d9b5');
-    UI.drawText(ctx, 'SPD ' + UI.speedWord(spec.cooldown) + ' DPS ' + dps, x, top + 28, '#7fa86a');
+
+    const slots = CONFIG.gear.slots;
+    for (let i = 0; i <= slots.length; i++) {
+      const bx = L.boxX + i * (L.box + L.bgap), by = L.boxY;
+      const item = i === 0 ? null : player.gear[slots[i - 1]];
+      ctx.fillStyle = (i > 0 && !item) ? '#1b201a' : '#252c22';
+      ctx.fillRect(bx, by, L.box, L.box);
+
+      let sp = null;
+      if (i === 0) { const set = SPRITES.weapons[player.weapon]; sp = set && set[levelTier(player.weaponLevel)]; }
+      else if (item) sp = Gear.sprite(item);
+      if (sp) ctx.drawImage(sp, bx + Math.floor((L.box - sp.width) / 2), by + Math.floor((L.box - sp.height) / 2));
+
+      if (i > 0 && this.cursor === player.bag.length + (i - 1)) {
+        ctx.strokeStyle = '#ffe066';
+        ctx.strokeRect(bx + 0.5, by + 0.5, L.box - 1, L.box - 1);
+      }
+    }
+
+    // 지금 든 무기 한 줄
+    const spec = player.weaponSpec(), dmg = player.attackDamage();
+    if (player.weaponGrowing) UI.drawRainbowText(ctx, player.weaponLabel(), x, top + 26);
+    else UI.drawText(ctx, player.weaponLabel(), x, top + 26, player.weaponColor());
+    UI.drawText(ctx, 'DMG ' + dmg + '  DPS ' + Math.round(dmg / spec.cooldown), x, top + 35, '#f0d9b5');
+
+    // 장비가 더해주는 것 (아무것도 안 입었으면 0 으로 보인다 — 비어 있다는 걸 알려주려고 늘 띄운다)
+    const g = player.gearStats;
+    UI.drawText(ctx, 'ARM ' + g.armor + ' (-' + Math.round(player.damageReduction() * 100) + '%)', x, top + 44, '#7ec8ff');
+    UI.drawText(ctx, 'HP +' + g.maxHp + '  ATK +' + g.power + '  SPD ' + (g.speed >= 0 ? '+' : '') + g.speed + '%', x, top + 52, '#7ec8ff');
 
     ctx.fillStyle = '#3a442f';
-    ctx.fillRect(x, top + 38, L.x + L.w - 8 - x, 1);
+    ctx.fillRect(x, top + 61, L.x + L.w - 8 - x, 1);
 
-    const s = player.bag[this.cursor];
-    const y = top + 44;
-    if (!s) { UI.drawText(ctx, 'EMPTY SLOT', x, y, '#5f6b59'); return; }
+    const at = this.at(player, this.cursor);
+    const s = at.item;
+    const y = top + 67;
+    if (!s) {
+      UI.drawText(ctx, at.zone === 'gear' ? CONFIG.gear.slotNames[at.slot] + ' — EMPTY' : 'EMPTY SLOT', x, y, '#5f6b59');
+      return;
+    }
 
     if (s.kind === 'potion') {
       UI.drawText(ctx, 'POTION X' + player.potions + '/' + player.maxPotions, x, y, '#ffd93d');
@@ -327,20 +411,47 @@ const Inventory = {
       UI.drawText(ctx, 'SPACE DRINK (OR E)', x, y + 22, '#9be564');
       return;
     }
+
+    if (s.kind === 'gear') {
+      const slot = Gear.slotOf(s);
+      UI.drawText(ctx, Gear.name(s), x, y, Gear.color(s));
+      UI.drawText(ctx, CONFIG.gear.slotNames[slot], x, y + 9, '#7fa86a');
+      const mine = Gear.statsOf(s);
+      UI.drawText(ctx, Gear.statLine(mine).join('  '), x, y + 18, '#f0d9b5');
+      if (at.zone === 'gear') {
+        UI.drawText(ctx, 'SPACE TAKE OFF  X DROP', x, y + 31, '#9be564');
+        return;
+      }
+      // 입으면 얼마나 달라지는지 — 그 자리에 입고 있는 것과 견준다
+      const worn = player.gear[slot] ? Gear.statsOf(player.gear[slot]) : {};
+      const diff = {};
+      for (const k of ['armor', 'maxHp', 'power', 'speed']) {
+        const d = (mine[k] || 0) - (worn[k] || 0);
+        if (d) diff[k] = d;
+      }
+      const better = (diff.armor || 0) * 1.5 + (diff.maxHp || 0) * 0.3 + (diff.power || 0) * 3 + (diff.speed || 0);
+      const vs = !player.gear[slot] ? 'NOTHING WORN YET'
+        : (Object.keys(diff).length ? Gear.statLine(diff).join('  ') + ' VS WORN' : 'SAME AS WORN');
+      UI.drawText(ctx, vs, x, y + 27, better > 0 ? '#9be564' : (better < 0 ? '#c05a5a' : '#7fa86a'));
+      UI.drawText(ctx, 'SPACE WEAR  X DROP', x, y + 40, '#9be564');
+      return;
+    }
+
     if (s.kind === 'weapon') {
       const lv = this.weaponLevel(player, s);
       const w = CONFIG.weapons[s.weapon];
       if (s.growing) UI.drawRainbowText(ctx, this.itemName(player, s), x, y);
       else UI.drawText(ctx, this.itemName(player, s), x, y, CONFIG.weapons.levelColor[levelTier(lv)]);
       // 끼면 위력이 얼마나 달라지는지 — 지금 든 무기와 바로 비교
-      const dmg = player.damageWith(s.weapon, lv, s.growing);
-      const diff = dmg - player.attackDamage();
-      UI.drawText(ctx, 'DMG ' + dmg + ' RNG ' + w.reach, x, y + 9, '#f0d9b5');
-      UI.drawText(ctx, (diff >= 0 ? '+' : '') + diff + ' VS EQUIPPED', x, y + 18, diff > 0 ? '#9be564' : (diff < 0 ? '#c05a5a' : '#7fa86a'));
-      UI.drawText(ctx, 'SPD ' + UI.speedWord(w.cooldown) + ' DPS ' + Math.round(dmg / w.cooldown), x, y + 27, '#7fa86a');
+      const wd = player.damageWith(s.weapon, lv, s.growing);
+      const d = wd - dmg;
+      UI.drawText(ctx, 'DMG ' + wd + ' RNG ' + w.reach, x, y + 9, '#f0d9b5');
+      UI.drawText(ctx, (d >= 0 ? '+' : '') + d + ' VS EQUIPPED', x, y + 18, d > 0 ? '#9be564' : (d < 0 ? '#c05a5a' : '#7fa86a'));
+      UI.drawText(ctx, 'SPD ' + UI.speedWord(w.cooldown) + ' DPS ' + Math.round(wd / w.cooldown), x, y + 27, '#7fa86a');
       UI.drawText(ctx, 'SPACE EQUIP  X DROP', x, y + 40, '#9be564');
       return;
     }
+
     const ls = this.spec(s.id);
     UI.drawText(ctx, ls.name, x, y, ls.color);
     UI.drawText(ctx, 'X' + s.amount + '  WORTH ' + (ls.value * s.amount) + ' G', x, y + 9, '#f0d9b5');

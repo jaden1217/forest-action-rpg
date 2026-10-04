@@ -1289,6 +1289,107 @@ const OBELISK = [
   '..oooooooooooooo..',
 ];
 
+/* ── 장비 도트 — 인벤토리 칸(18x18)과 바닥에 같은 그림을 쓴다.
+   o = 외곽선, D = 어두운면, M = 본체, L = 밝은면 (아이템마다 색만 갈아끼운다) */
+const GEAR_CAP = [
+  '...oooo...',
+  '..oLLLLo..',
+  '.oLMMMMLo.',
+  '.oMMMMMMo.',
+  'oMMMMMMMMo',
+  'oDDDDDDDDo',
+  '.oooooooo.',
+];
+const GEAR_HELM = [
+  '...oooo...',
+  '..oLLLLo..',
+  '.oLMMMMLo.',
+  'oLMMMMMMLo',
+  'oMMMMMMMMo',
+  'oMMoooMMMo',
+  'oMMo..oMMo',
+  'oMMo..oMMo',
+  '.oMo..oMo.',
+  '..oo..oo..',
+];
+const GEAR_VEST = [
+  '..oo....oo..',
+  '.oLLo..oLLo.',
+  'oLMMLooLMMLo',
+  'oMMMMMMMMMMo',
+  'oMMMMMMMMMMo',
+  'oMMDDDDDDMMo',
+  'oMMMMMMMMMMo',
+  'oMMMMMMMMMMo',
+  '.oMMMMMMMMo.',
+  '.oMMMMMMMMo.',
+  '.oDDDDDDDDo.',
+  '..oooooooo..',
+];
+const GEAR_MAIL = [
+  '..oo....oo..',
+  '.oLLo..oLLo.',
+  'oLMMLooLMMLo',
+  'oMLMLMLMLMMo',
+  'oLMLMLMLMLMo',
+  'oMLMLMLMLMMo',
+  'oLMLMLMLMLMo',
+  'oMLMLMLMLMMo',
+  '.oLMLMLMLMo.',
+  '.oMLMLMLMLo.',
+  '.oDDDDDDDDo.',
+  '..oooooooo..',
+];
+const GEAR_CLOAK = [
+  '....oooo....',
+  '...oLLLLo...',
+  '..oLMMMMLo..',
+  '.oMMMMMMMMo.',
+  'oMMMMMMMMMMo',
+  'oMMMoooMMMMo',
+  'oMMo...oMMMo',
+  'oMMo...oMMMo',
+  '.oMo...oMMo.',
+  '.oMMo.oMMMo.',
+  '.oDDDDDDDDo.',
+  '..oooooooo..',
+];
+const GEAR_RING = [
+  '..ooooo..',
+  '.oLGGLo..',
+  'oLMoooMLo',
+  'oLo...oLo',
+  'oMo...oMo',
+  'oLo...oLo',
+  'oLMoooMLo',
+  '.oMMMMMo.',
+  '..ooooo..',
+];
+const GEAR_AMULET = [
+  'oo.....oo',
+  'oLo...oLo',
+  '.oLo.oLo.',
+  '..oLoLo..',
+  '...ooo...',
+  '..oGGGo..',
+  '.oGGLGGo.',
+  '.oGGGGGo.',
+  '..oGGGo..',
+  '...ooo...',
+];
+const GEAR_CHARM = [
+  'oo.....oo',
+  'oLo...oLo',
+  '.oLo.oLo.',
+  '..oLoLo..',
+  '...ooo...',
+  '..oGoGo..',
+  '.oGGGGGo.',
+  '.oGGLGGo.',
+  '..oGGGo..',
+  '...oGo...',
+];
+
 /* 9주차: 상인 (16x16) — 두건을 쓴 보라 로브. 시작 지점 옆 가판대에 서 있다.
    두 번째 그림은 눈을 감은 것(깜빡임)이라 살아 있는 느낌이 난다. */
 const MERCHANT = [
@@ -1398,6 +1499,21 @@ function buildSprites() {
   SPRITES.wormFlash = makeSilhouette(SPRITES.worm, '#ffffff');
 
   // 텔레포트 비석 — 룬이 밝은 것 / 어두운 것
+  /* 장비 — 가죽은 갈색, 쇠는 은빛, 망토는 초록, 장신구는 금빛에 보석 하나 */
+  const LEATHER = { o: '#2a1b10', D: '#5e3f22', M: '#8a5f33', L: '#b98a52' };
+  const IRON = { o: '#2e3640', D: '#6b7682', M: '#9aa6b4', L: '#dfe6ee' };
+  const GOLD = { o: '#4a3410', D: '#8a6a20', M: '#c9a33a', L: '#ffe9a0' };
+  SPRITES.gear = {
+    cap: makeSprite('gear_cap', GEAR_CAP, LEATHER),
+    helm: makeSprite('gear_helm', GEAR_HELM, IRON),
+    vest: makeSprite('gear_vest', GEAR_VEST, LEATHER),
+    mail: makeSprite('gear_mail', GEAR_MAIL, IRON),
+    cloak: makeSprite('gear_cloak', GEAR_CLOAK, { o: '#13301a', D: '#1f5a2a', M: '#2f7a3c', L: '#5aad5e' }),
+    ring: makeSprite('gear_ring', GEAR_RING, Object.assign({ G: '#7ec8ff' }, GOLD)),
+    amulet: makeSprite('gear_amulet', GEAR_AMULET, Object.assign({ G: '#c93f3f' }, GOLD)),
+    charm: makeSprite('gear_charm', GEAR_CHARM, Object.assign({ G: '#4fae5a' }, GOLD)),
+  };
+
   SPRITES.obelisk = [
     makeSprite('obelisk_on', OBELISK, { G: '#7d8493', g: '#5e6572', C: '#5ff0ff', B: '#4a4f5a' }),
     makeSprite('obelisk_off', OBELISK, { G: '#7d8493', g: '#5e6572', C: '#2a8fa0', B: '#4a4f5a' }),
