@@ -153,7 +153,7 @@ html, body {
 }
 
 </style>
-<!-- built 2026-10-05 10:32 by tools/build.js -->
+<!-- built 2026-10-05 11:11 by tools/build.js -->
 </head>
 <body>
   <div id="stage">
@@ -170,7 +170,7 @@ html, body {
     <span><b>R</b> 무기 스킬 2 <span style="opacity:.6">Lv20</span></span>
     <span><b>E</b> 포션</span>
     <span><b>I</b> 인벤토리 <span style="opacity:.6">Space 사용 · X 버리기</span></span>
-    <span><b>F</b> 무기 줍기 / 동굴 / 상점 / 의뢰 / 보물 상자 / 비석</span>
+    <span><b>F</b> 무기 줍기 / 동굴 / 상점 / 의뢰 / 대장간 / 보물 / 비석</span>
     <span><b>M</b> 지도</span>
     <span><b>V</b> 소리</span>
     <span><b>N</b> 새 게임</span>
@@ -641,6 +641,38 @@ const CONFIG = {
     },
   },
 
+  /* ── 대장간 — 무기 속성 부여 (로드맵 8주차) ───────────────
+     전리품이 '팔 것'에서 **재료**가 되는 자리. 무기 한 자루에 속성 하나를 박는다.
+
+     속성은 때릴 때 상태이상을 걸고(chance), 추가 피해를 준다.
+     추가 피해는 **몬스터마다 다르다**(affinity) — 1.6 약점 / 1.0 보통 / 0.4 강함.
+     그래서 "숲에서는 불, 사막에서는 서리"가 생기고, 갈 곳에 맞춰 무기를 바꿔 끼게 된다.
+
+     재료는 그 속성을 쓰고 싶은 곳에서 구할 수 있는 것으로 골랐다 —
+     숲에서 불·뇌전·서리를 미리 만들어 두고 사막으로 간다. */
+  forge: {
+    interactRange: 26,
+    goldBase: 60,
+    goldPerLevel: 8,
+    bonus: 0.25,            // 추가 피해 = 그 일격 x 이 값 x 약점 배수
+    elements: {
+      flame: { name: 'FLAME', status: 'burn',   color: '#ff8a3c', chance: 1.0, loot: 'cap',     cost: 8 },
+      frost: { name: 'FROST', status: 'freeze', color: '#9fe8ff', chance: 0.4, loot: 'gel',     cost: 10 },
+      shock: { name: 'SHOCK', status: 'shock',  color: '#ffe066', chance: 0.6, loot: 'fang',    cost: 8 },
+      venom: { name: 'VENOM', status: 'poison', color: '#7dff8a', chance: 1.0, loot: 'stinger', cost: 6 },
+    },
+    /* 약점과 강함 — 적혀 있지 않은 것은 1.0.
+       숲은 대체로 불, 사막은 대체로 서리. 늑대와 모래벌레만 뇌전이라 외우기만 해서는 안 된다 */
+    affinity: {
+      slime:    { flame: 2.0, venom: 0.2 },
+      mushroom: { flame: 2.0, venom: 0.2 },
+      wolf:     { shock: 2.0, flame: 1.5, frost: 0.2 },
+      scorpion: { frost: 2.0, venom: 0.2 },
+      cactus:   { frost: 2.0, flame: 0.2 },
+      sandworm: { shock: 2.0, frost: 1.5, flame: 0.2 },
+    },
+  },
+
   /* ── 상태이상 (로드맵 7주차) ────────────────────────────
      몬스터와 플레이어 **양쪽에 같은 규칙으로** 걸린다 (js/status.js 하나가 둘 다 다룬다).
 
@@ -674,7 +706,8 @@ const CONFIG = {
         puffColors: ['#ffe066', '#ffffff'],
       },
     },
-    bossResist: 0.5,        // 보스는 지속 시간을 절반만 받는다 (지속 피해로 녹지 않게)
+    /* 상태이상은 **막을 수 없다.** 저항 수치를 두면 "저항 올리면 그만"이 되어
+       불·얼음·독을 설계한 보람이 사라진다 — 걸리면 걸리는 것이고, 대신 길이를 짧게 잡았다. */
     monsterPoison: 0.7,     // 몬스터가 거는 중독의 세기 배수 (몬스터 공격력 기준)
   },
 
@@ -1166,13 +1199,12 @@ const CONFIG = {
       frosty:      { word: 'FROSTY',   label: 'FREEZE',range: [6, 12], perLevel: 0.15, pct: true, status: 'freeze' },
       shocking:    { word: 'SHOCKING', label: 'SHOCK', range: [6, 12], perLevel: 0.15, pct: true, status: 'shock' },
       venomous:    { word: 'VENOMOUS', label: 'VENOM', range: [6, 12], perLevel: 0.15, pct: true, status: 'poison' },
-      ward:        { word: 'WARDED',   label: 'WARD',  range: [5, 12], perLevel: 0.3,  pct: true },
     },
     // 여러 점을 겹쳐 입었을 때의 총합 상한 (없는 것은 안 묶는다)
     caps: {
       attackSpeed: 40, crit: 25, critMult: 120, speed: 40,
       lifesteal: 20, potion: 100, cooldown: 45, knockRes: 80, gold: 150,
-      fiery: 45, frosty: 45, shocking: 45, venomous: 45, ward: 70,
+      fiery: 45, frosty: 45, shocking: 45, venomous: 45,
     },
   },
 
@@ -2253,6 +2285,28 @@ function makeDigMound(seed) {
   return cv;
 }
 
+/* 모루 (20x16) — 나무 받침 위에 쇳덩이. 윗면에 벼리던 쇠가 벌겋게 남아 있다.
+   대장간이 여기라는 걸 멀리서도 알아보게 받침을 두껍게 뒀다. */
+function makeAnvil(seed) {
+  const cv = makeCanvas(20, 16), ctx = cv.getContext('2d');
+  const rng = Util.makeRng(seed);
+  const OUT = '#1a1d22', DARK = '#3d434c', MID = '#5d646e', LIT = '#868e99';
+  // 나무 받침
+  ctx.fillStyle = '#2a1b10'; ctx.fillRect(4, 11, 12, 5);
+  ctx.fillStyle = '#5e3f22'; ctx.fillRect(5, 12, 10, 3);
+  ctx.fillStyle = '#8a5f33'; ctx.fillRect(5, 12, 10, 1);
+  // 쇳덩이 — 위는 넓고 허리는 잘록하다
+  ctx.fillStyle = OUT; ctx.fillRect(1, 2, 18, 4); ctx.fillRect(7, 6, 6, 3); ctx.fillRect(4, 9, 12, 3);
+  ctx.fillStyle = MID; ctx.fillRect(2, 3, 16, 2); ctx.fillRect(8, 6, 4, 3); ctx.fillRect(5, 9, 10, 2);
+  ctx.fillStyle = LIT; ctx.fillRect(2, 3, 16, 1); ctx.fillRect(5, 9, 10, 1);
+  ctx.fillStyle = DARK; ctx.fillRect(2, 5, 16, 1);
+  // 벼리던 쇠
+  ctx.fillStyle = '#ff8a3c'; ctx.fillRect(12, 2, 4, 1);
+  ctx.fillStyle = '#ffe066'; ctx.fillRect(13, 2, 2, 1);
+  for (let i = 0; i < 6; i++) { ctx.fillStyle = DARK; ctx.fillRect(2 + Math.floor(rng() * 16), 3 + Math.floor(rng() * 8), 1, 1); }
+  return cv;
+}
+
 /* 의뢰 게시판 (24x28) — 기둥 둘에 널빤지를 얹고 종이 세 장을 압정으로 박았다.
    상인 옆에 서서, 멀리서도 "뭔가 읽을 것이 있다"로 보이게 종이를 밝게 둔다. */
 function makeQuestBoard(seed) {
@@ -2888,6 +2942,13 @@ function buildSprites() {
   SPRITES.merchant = [makeSprite('merchant', MERCHANT), makeSprite('merchant_blink', MERCHANT_BLINK)];
   SPRITES.stall = makeStall(1201);
   SPRITES.questBoard = makeQuestBoard(1303);
+  SPRITES.anvil = makeAnvil(1307);
+  /* 대장장이 — 상인과 같은 몸에 가죽 앞치마와 희끗한 머리. 두 번째 그림은 망치질하듯 숙인 것 */
+  const SMITH_PAL = { u: '#6a4a2a', U: '#8a6238', v: '#9aa0a8', y: '#ff8a3c' };
+  SPRITES.smith = [
+    makeSprite('smith', MERCHANT, SMITH_PAL),
+    makeSprite('smith_work', MERCHANT.map((row, i) => (i < 2 ? '................' : MERCHANT[i - 1])), SMITH_PAL),
+  ];
   // 랜드마크 — 보물 상자(닫힘/열림)와 그 둘레에 놓는 소품들
   SPRITES.chest = [makeChest(false), makeChest(true)];
   SPRITES.ruinPillar = [0, 1, 2].map(i => makeRuinPillar(1401 + i * 131));
@@ -3773,6 +3834,7 @@ const World = {
     this.board = null;  // 의뢰 게시판 (Quests.place 가 채운다)
     Shop.place();       // 9주차: 시작 지점 옆 가판대와 상인
     Quests.place();     // 의뢰 게시판 — 상인 반대편
+    Forge.place();      // 대장간 — 무기에 속성을 박는 모루
     this.placePortal(); // 텔레포트 비석 — 시작 지점 반대편
     this.buildGrid();   // 바위·그루터기·가판대까지 포함해 다시 만든다
   },
@@ -3788,7 +3850,7 @@ const World = {
   STATE_KEYS: [
     'cols', 'rows', 'w', 'h', 'ground', 'props', 'solids', 'grid',
     'tiles', 'tileBlocked', 'shade', 'colorRow', 'dangerNoise',
-    'startX', 'startY', 'wetNoise', 'openNoise', 'caves', 'arenaExit', 'merchant', 'board', 'chests',
+    'startX', 'startY', 'wetNoise', 'openNoise', 'caves', 'arenaExit', 'merchant', 'board', 'smith', 'chests',
     'time', 'isArena', 'mapId', 'spec', 'portal',
   ],
 
@@ -3820,6 +3882,7 @@ const World = {
     this.chests = [];
     this.merchant = null;
     this.board = null;
+    this.smith = null;
     this.portal = null;
     this.isArena = true;
     this.arenaCave = caveIndex || 0;
@@ -4642,7 +4705,8 @@ const Minimap = {
     for (const p of World.props) {
       if (!p.landmark) continue;
       ctx.fillStyle = p.landmark === 'shop' ? '#ffe066'
-        : (p.landmark === 'portal' ? '#5ff0ff' : (p.landmark === 'board' ? '#e8dcc0' : '#e08a4f'));
+        : (p.landmark === 'portal' ? '#5ff0ff'
+        : (p.landmark === 'board' ? '#e8dcc0' : (p.landmark === 'forge' ? '#ff8a3c' : '#e08a4f')));
       ctx.fillRect(Math.floor(p.x / CONFIG.TILE) - 1, Math.floor(p.y / CONFIG.TILE) - 1, 3, 3);
       ctx.fillStyle = '#1d1a17';
       ctx.fillRect(Math.floor(p.x / CONFIG.TILE), Math.floor(p.y / CONFIG.TILE), 1, 1);
@@ -4794,7 +4858,7 @@ const Save = {
         hp: Math.round(p.hp), maxHp: p.maxHp, damage: p.damage,
         level: p.level, xp: p.xp, xpNeed: p.xpNeed,
         potions: p.potions,
-        weapon: p.weapon, weaponLevel: p.weaponLevel, weaponGrowing: p.weaponGrowing,
+        weapon: p.weapon, weaponLevel: p.weaponLevel, weaponGrowing: p.weaponGrowing, weaponElement: p.weaponElement,
         gold: p.gold, upgrades: p.upgrades,
         bag: Inventory.serialize(p),
         gear: { head: p.gear.head, body: p.gear.body, trinket: p.gear.trinket },
@@ -4805,7 +4869,7 @@ const Save = {
       bossSlain: game.bossSlain,
       drops: drops.map(d => ({
         kind: d.kind, weapon: d.weapon, level: d.level, amount: d.amount, id: d.id,
-        item: d.item, growing: !!d.growing,
+        item: d.item, growing: !!d.growing, element: d.element || null,
         x: Math.round(d.x), y: Math.round(d.y), life: Math.round(d.life),
       })),
     };
@@ -4872,6 +4936,7 @@ const Save = {
       player.weapon = s.weapon;
       player.weaponGrowing = !!s.weaponGrowing;
       player.weaponLevel = Util.clamp(s.weaponLevel || 1, 1, CONFIG.weapons.levelMult.length);
+      player.weaponElement = CONFIG.forge.elements[s.weaponElement] ? s.weaponElement : null;
       player.syncWeaponLevel();   // 성장하는 무기는 레벨을 다시 맞춰둔다
       player.recalcStats();       // 성장 무기의 고유 효과까지 반영한다
     }
@@ -4885,7 +4950,7 @@ const Save = {
 
     Items.reset();
     for (const d of (data.drops || [])) {
-      if (d.kind === 'weapon') Items.spawnWeapon(d.x, d.y, d.weapon, d.level, { growing: d.growing });
+      if (d.kind === 'weapon') Items.spawnWeapon(d.x, d.y, d.weapon, d.level, { growing: d.growing, element: d.element });
       else if (d.kind === 'gear') Items.spawnGear(d.x, d.y, d.id, d.level, { item: Gear.sanitize(d.item) });
       else if (d.kind === 'loot') Items.spawnLoot(d.x, d.y, d.id, d.amount);
       else Items.spawn(d.x, d.y, d.amount);
@@ -4939,6 +5004,8 @@ class Player {
     this.weaponLevel = CONFIG.equipment.startWeaponLevel;
     // 보스가 떨구는 '성장하는 무기' — 레벨이 내 레벨을 따라 같이 오른다
     this.weaponGrowing = false;
+    // 대장간에서 박은 속성 (flame / frost / shock / venom) — 무기 한 자루에 하나
+    this.weaponElement = null;
 
     // 9주차: 골드와 상점 강화 랭크 (hp / atk / bag / slots). 강화로 오른 수치는 maxHp 등에 바로 더해져 있다
     this.gold = 0;
@@ -5543,6 +5610,19 @@ class Player {
       if (this.has('executioner') && s.maxHp && s.hp / s.maxHp <= this.uniq('executioner').ratio) {
         dmg = Math.round(dmg * this.uniq('executioner').mult);
       }
+      /* 무기에 박힌 속성 — 추가 피해를 주고 그 속성의 상태이상을 건다.
+         추가 피해는 몬스터마다 다르다 (버섯은 불에 약하고, 선인장은 불에 강하다) */
+      const elId = this.weaponElement, el = elId && CONFIG.forge.elements[elId];
+      if (el) {
+        const aff = Forge.affinity(s.TYPE, elId);
+        const bonus = Math.max(1, Math.round(dmg * CONFIG.forge.bonus * aff));
+        dmg += bonus;
+        if (Math.random() < el.chance) Status.apply(s, el.status, dmg, this);
+        FX.burst(s.x, s.y - 4, aff >= 1.5 ? 6 : 3, [el.color, '#ffffff'], { speed: 34, life: 0.3, gravity: 10, size: 1 });
+        // 약점이면 한 번씩 알려준다 — "얘한테는 불" 이 눈에 보이게
+        if (aff >= 1.5 && Math.random() < 0.34) FX.number(s.x, s.y - 22 - s.radius, 'WEAK', el.color);
+      }
+
       dmg = Math.max(1, dmg);
       // 사방 공격은 바깥쪽으로, 베는 공격은 휘두른 방향으로 날린다
       s.takeHit(dmg, omni ? toEnemy : base, crit, this, knockMult);
@@ -5708,9 +5788,6 @@ class Player {
     FX.number(this.x, this.y - 30, 'SECOND WIND', '#ffb35c');
   }
 
-  // 장비의 WARD 옵션만큼 상태이상이 짧게 걸린다
-  statusResist(type) { return this.stat('ward') / 100; }
-
   // 포션 한 개가 채우는 양 — 최대 체력의 30%, 최소 30
   potionHeal() {
     const cfg = CONFIG.items;
@@ -5748,17 +5825,19 @@ class Player {
   }
 
   // 무기 교체. 종류와 레벨이 모두 같으면 'same', 죽어있으면 false, 교체되면 true
-  equipWeapon(id, level, growing) {
+  equipWeapon(id, level, growing, element) {
     if (this.dead) return false;
     if (!CONFIG.weapons[id]) return false;
     growing = !!growing;
     // 성장하는 무기는 주운 순간부터 내 레벨을 그대로 따라간다
     level = growing ? this.level : level;
     level = Util.clamp(Math.round(level || 1), 1, CONFIG.weapons.levelMult.length);   // 사막 무기는 23을 넘는다
-    if (this.weapon === id && this.weaponLevel === level && this.weaponGrowing === growing) return 'same';
+    element = CONFIG.forge.elements[element] ? element : null;
+    if (this.weapon === id && this.weaponLevel === level && this.weaponGrowing === growing && this.weaponElement === element) return 'same';
     this.weapon = id;
     this.weaponLevel = level;
     this.weaponGrowing = growing;
+    this.weaponElement = element;
     this.recalcStats();   // 성장 무기는 고유 효과를 들고 온다
     const color = this.weaponColor();
     FX.number(this.x, this.y - 22, this.weaponLabel() + '!', color);
@@ -6155,9 +6234,6 @@ class Enemy {
       }
     }
   }
-
-  // 보스는 지속 시간을 절반만 받는다 (지속 피해로 녹아버리지 않게)
-  statusResist(type) { return this.isBoss ? CONFIG.status.bossResist : 0; }
 
   update(dt, player) {
     if (this.dead) return;
@@ -8106,10 +8182,10 @@ const Inventory = {
   },
 
   // 무기 한 자루 — 빈 칸이 있어야 들어간다
-  addWeapon(player, weapon, level, growing) {
+  addWeapon(player, weapon, level, growing, element) {
     const i = this.firstEmpty(player);
     if (i < 0) return false;
-    player.bag[i] = { kind: 'weapon', weapon: weapon, level: level, growing: !!growing };
+    player.bag[i] = { kind: 'weapon', weapon: weapon, level: level, growing: !!growing, element: element || null };
     return true;
   },
 
@@ -8202,7 +8278,8 @@ const Inventory = {
       const s = list[i];
       if (!s) continue;
       if (s.kind === 'weapon' && CONFIG.weapons[s.weapon]) {
-        player.bag[i + 1] = { kind: 'weapon', weapon: s.weapon, level: Math.max(1, s.level | 0), growing: !!s.growing };
+        player.bag[i + 1] = { kind: 'weapon', weapon: s.weapon, level: Math.max(1, s.level | 0), growing: !!s.growing,
+          element: CONFIG.forge.elements[s.element] ? s.element : null };
       } else if (s.kind === 'gear') {
         const g = Gear.sanitize(s);
         if (g) player.bag[i + 1] = g;
@@ -8266,8 +8343,8 @@ const Inventory = {
     }
     if (s.kind === 'weapon') {
       // 들고 있던 무기가 이 칸으로 들어가고, 이 칸의 무기를 낀다
-      const old = { kind: 'weapon', weapon: player.weapon, level: player.weaponLevel, growing: player.weaponGrowing };
-      const r = player.equipWeapon(s.weapon, this.weaponLevel(player, s), s.growing);
+      const old = { kind: 'weapon', weapon: player.weapon, level: player.weaponLevel, growing: player.weaponGrowing, element: player.weaponElement };
+      const r = player.equipWeapon(s.weapon, this.weaponLevel(player, s), s.growing, s.element);
       if (!r) return;
       player.bag[index] = old;
       this.say('EQUIPPED ' + this.itemName(player, s));
@@ -8282,7 +8359,7 @@ const Inventory = {
     if (!s) return;
     if (s.kind === 'potion') { this.say('DRINK IT WITH E'); return; }
     if (s.kind === 'weapon') {
-      Items.spawnWeapon(player.x, player.y, s.weapon, this.weaponLevel(player, s), { growing: s.growing, pickupDelay: 0.6 });
+      Items.spawnWeapon(player.x, player.y, s.weapon, this.weaponLevel(player, s), { growing: s.growing, element: s.element, pickupDelay: 0.6 });
     } else if (s.kind === 'gear') {
       Items.spawnGear(player.x, player.y, s.id, s.level, { dropped: true });
     } else {
@@ -8455,7 +8532,9 @@ const Inventory = {
     const spec = player.weaponSpec(), dmg = player.attackDamage();
     if (player.weaponGrowing) UI.drawRainbowText(ctx, player.weaponLabel(), x, top + 26);
     else UI.drawText(ctx, player.weaponLabel(), x, top + 26, player.weaponColor());
+    const eq = player.weaponElement && CONFIG.forge.elements[player.weaponElement];
     UI.drawText(ctx, 'DMG ' + dmg + '  DPS ' + Math.round(dmg / spec.cooldown), x, top + 34, '#f0d9b5');
+    if (eq) UI.drawText(ctx, eq.name, x + 92, top + 26, eq.color);
 
     /* 입은 것이 더해주는 것 — 앞줄은 늘 있는 네 가지, 뒷줄은 굴려 붙은 옵션들.
        아무것도 안 입었어도 0 으로 띄운다 (비어 있다는 걸 알려주려고) */
@@ -8563,6 +8642,8 @@ const Inventory = {
       line('DMG ' + wd + ' RNG ' + w.reach, '#f0d9b5');
       line((d >= 0 ? '+' : '') + d + ' VS EQUIPPED', d > 0 ? '#9be564' : (d < 0 ? '#c05a5a' : '#7fa86a'));
       line('SPD ' + UI.speedWord(w.cooldown) + ' DPS ' + Math.round(wd / w.cooldown), '#7fa86a');
+      const be = s.element && CONFIG.forge.elements[s.element];
+      if (be) line('* ' + be.name, be.color);
       y += 5;
       line('SPACE EQUIP  X DROP', '#9be564');
       return;
@@ -8726,6 +8807,7 @@ const Items = {
     const d = this.makeDrop(x, y, CONFIG.equipment.weaponLifetime, opts);
     d.kind = 'weapon';
     d.weapon = weaponId;
+    d.element = (opts && opts.element) || null;   // 박아 넣은 속성은 바닥에 둬도 남는다
     d.growing = !!(opts && opts.growing);
     if (d.growing) d.life = 1e9;   // 성장 무기는 사라지지 않는다 (보스 보상이 증발하면 안 된다)
     // 떨군 몬스터의 레벨을 그대로 따른다 (사막 몬스터는 23을 넘는다). 표 끝(60)이 상한
@@ -8882,7 +8964,7 @@ const Items = {
      가방이 꽉 찼으면 예전처럼 손에 든 무기와 맞바꾼다 — 든 무기는 그 자리에 남는다 */
   pickupWeapon(index, d, player) {
     if (player.dead) return;
-    if (Inventory.addWeapon(player, d.weapon, d.level, d.growing)) {
+    if (Inventory.addWeapon(player, d.weapon, d.level, d.growing, d.element)) {
       const color = d.growing ? CONFIG.weapons.growColor : (CONFIG.weapons.levelColor[levelTier(d.level)] || '#ffffff');
       const name = d.growing ? CONFIG.weapons.growNames[d.weapon] : CONFIG.weapons[d.weapon].name + ' L' + d.level;
       FX.burst(d.x, d.y - 4, 8, [color, '#ffffff'], { speed: 40, life: 0.35, gravity: 60 });
@@ -8896,10 +8978,11 @@ const Items = {
       FX.number(player.x, player.y - 20, 'BAG FULL', '#8f9aa8');
       return;
     }
-    if (!player.equipWeapon(d.weapon, d.level, d.growing)) return;
+    const oldEl = player.weaponElement;
+    if (!player.equipWeapon(d.weapon, d.level, d.growing, d.element)) return;
     this.drops.splice(index, 1);
     // 바꾸기 전 무기는 버려두고 간다 — 마음이 바뀌면 다시 F로 집을 수 있다
-    this.spawnWeapon(d.x, d.y, oldId, oldLevel, { pickupDelay: 0.35, growing: oldGrow });
+    this.spawnWeapon(d.x, d.y, oldId, oldLevel, { pickupDelay: 0.35, growing: oldGrow, element: oldEl });
   },
 
   /* 성장하는 무기의 무지개 오라 — 바닥에 옅은 색 원판이 숨쉬듯 커졌다 작아지고,
@@ -9880,7 +9963,8 @@ const Fog = {
      - 플레이어 → 장비 옵션 (FIERY / FROSTY / SHOCKING / VENOMOUS 가 붙으면 확률로 건다)
      - 몬스터 → 전갈 찌르기(중독), 버섯·늙은 버섯의 포자(중독)
 
-   저항(resist)은 **지속 시간을 줄인다**. 플레이어는 WARD 옵션, 보스는 타고난 저항이 있다. */
+   **막는 수단은 없다.** 저항 수치를 두면 "저항만 올리면 그만"이 되어 불·얼음·독을 만든 보람이 사라진다 —
+   걸리면 걸리는 것이고, 대신 지속 시간을 짧게 잡았다. */
 
 const Status = {
   spec(type) { return CONFIG.status.list[type]; },
@@ -9890,9 +9974,7 @@ const Status = {
   apply(target, type, power, source) {
     const spec = this.spec(type);
     if (!target || target.dead || !spec) return;
-    const resist = Util.clamp(target.statusResist ? target.statusResist(type) : 0, 0, 0.9);
-    const time = spec.time * (1 - resist);
-    if (time <= 0.1) return;
+    const time = spec.time;
 
     if (!target.status) target.status = {};
     const dmg = spec.ratio ? Math.max(1, Math.round(power * spec.ratio)) : 0;
@@ -10011,6 +10093,218 @@ const Status = {
       UI.drawText(ctx, spec.short, x + 9, y, spec.color);
       x += 9 + UI.textWidth(spec.short) + 4;
     }
+  },
+};
+
+</script>
+  <script>
+// ── js/forge.js
+'use strict';
+
+/* 대장간 — 무기에 속성을 박아 넣는다 (로드맵 8주차).
+
+   전리품은 지금까지 '팔 것'이기만 했다. 여기서 **재료**가 된다 —
+   상인 옆 모루 앞에서 F 를 누르면 대장장이가 무기에 속성 하나를 입혀준다.
+
+     FLAME 불꽃  때릴 때마다 화상
+     FROST 서리  확률로 빙결
+     SHOCK 뇌전  확률로 감전
+     VENOM 맹독  때릴 때마다 중독
+
+   속성이 붙은 무기는 **추가 피해**도 준다. 그 피해는 **몬스터마다 다르다** —
+   버섯은 불에 약하고, 선인장은 불에 강하고 서리에 약하다.
+   그래서 "숲에서는 불, 사막에서는 서리"처럼 **갈 곳에 맞춰 무기를 바꿔 끼게** 된다.
+
+   속성은 무기 한 자루에 하나다. 새로 박으면 먼저 것이 지워진다. 빼는 것은 공짜. */
+
+const Forge = {
+  open: false,
+  cursor: 0,
+  message: '',
+  messageTimer: 0,
+  npc: null,
+
+  reset() {
+    this.open = false;
+    this.cursor = 0;
+    this.message = '';
+    this.messageTimer = 0;
+  },
+
+  spec(id) { return CONFIG.forge.elements[id]; },
+
+  // 그 몬스터가 이 속성에 약한가 (1.6 약점 / 1.0 보통 / 0.4 강함)
+  affinity(type, element) {
+    const row = CONFIG.forge.affinity[type];
+    return (row && row[element]) || 1;
+  },
+
+  /* ── 대장간 세우기 — 상인 반대편, 게시판과 나란히 ── */
+  place() {
+    const x = World.startX + 70, y = World.startY + 20;
+    World.addProp(SPRITES.anvil, x, y, { solid: [9, 3, 5], footHeight: 3 }).anvil = true;
+    const npc = World.addProp(SPRITES.smith[0], x - 16, y - 2, { footHeight: 2 });
+    npc.smith = true;
+    npc.landmark = 'forge';
+    npc.draw = (ctx, cam) => this.drawNpc(ctx, cam, npc);
+    this.npc = npc;
+    World.smith = npc;
+  },
+
+  drawNpc(ctx, cam, npc) {
+    const sx = Math.round(npc.x - cam.x), sy = Math.round(npc.y - cam.y);
+    fillCircle(ctx, sx, sy + 1, 5, 'rgba(0,0,0,0.28)');
+    // 4초마다 잠깐 망치질하듯 몸이 숙여진다
+    const t = World.time % 2.4;
+    const sp = (t > 2.1 && t < 2.3) ? SPRITES.smith[1] : SPRITES.smith[0];
+    ctx.drawImage(sp, sx - 8, sy - 14);
+    // 모루 쪽에서 가끔 불똥이 튄다
+    if (Math.random() < 0.02) {
+      FX.burst(npc.x + 16, npc.y - 4, 2, ['#ff8a3c', '#ffe066'], { speed: 22, life: 0.4, gravity: 40, size: 1 });
+    }
+  },
+
+  drawPrompt(ctx, cam) {
+    const n = World.smith;
+    if (!n) return;
+    const sx = Math.round(n.x - cam.x), sy = Math.round(n.y - cam.y);
+    if (Math.floor(World.time * 3) % 2 === 0) return;
+    UI.drawText(ctx, 'F  FORGE', sx + 8, sy - 24, '#ff8a3c', true);
+  },
+
+  /* ── 값과 재료 ──────────────────────────────────────── */
+  goldCost(player) {
+    const cfg = CONFIG.forge;
+    return Math.round(cfg.goldBase + player.level * cfg.goldPerLevel);
+  },
+
+  lootHeld(player, id) {
+    let n = 0;
+    for (let i = 1; i < player.bag.length; i++) {
+      const s = player.bag[i];
+      if (s && s.kind === 'loot' && s.id === id) n += s.amount;
+    }
+    return n;
+  },
+
+  takeLoot(player, id, count) {
+    let left = count;
+    for (let i = 1; i < player.bag.length && left > 0; i++) {
+      const s = player.bag[i];
+      if (!s || s.kind !== 'loot' || s.id !== id) continue;
+      const take = Math.min(s.amount, left);
+      s.amount -= take; left -= take;
+      if (s.amount <= 0) player.bag[i] = null;
+    }
+  },
+
+  entries(player) {
+    const list = [];
+    for (const id in CONFIG.forge.elements) {
+      const e = this.spec(id);
+      const held = this.lootHeld(player, e.loot);
+      list.push({
+        id: id, name: e.name, color: e.color,
+        loot: CONFIG.loot.items[e.loot].name, need: e.cost, held: held,
+        gold: this.goldCost(player),
+        worn: player.weaponElement === id,
+        ok: held >= e.cost && player.gold >= this.goldCost(player),
+      });
+    }
+    list.push({ id: null, name: 'REMOVE', color: '#8f9aa8', remove: true, ok: !!player.weaponElement });
+    return list;
+  },
+
+  apply(item, player) {
+    if (item.remove) {
+      if (!player.weaponElement) { this.say('NOTHING TO REMOVE'); Sound.play('error'); return; }
+      player.weaponElement = null;
+      Sound.play('blip');
+      this.say('ELEMENT REMOVED');
+      return;
+    }
+    if (item.worn) { this.say('ALREADY FORGED'); Sound.play('error'); return; }
+    if (item.held < item.need) { this.say('NEED MORE ' + item.loot); Sound.play('error'); return; }
+    if (player.gold < item.gold) { this.say('NOT ENOUGH GOLD'); Sound.play('error'); return; }
+
+    const e = this.spec(item.id);
+    this.takeLoot(player, e.loot, e.cost);
+    player.gold -= item.gold;
+    player.weaponElement = item.id;
+
+    Sound.play('levelup');
+    FX.burst(player.x, player.y - 4, 24, [e.color, '#ffffff'], { speed: 70, life: 0.7, gravity: 20 });
+    FX.number(player.x, player.y - 30, e.name + ' ' + player.weaponSpec().name, e.color);
+    this.say('FORGED ' + e.name);
+  },
+
+  say(text) { this.message = text; this.messageTimer = 1.8; },
+
+  openForge() {
+    this.open = true;
+    this.cursor = 0;
+    this.message = '';
+    Sound.play('shopOpen');
+  },
+
+  close() {
+    this.open = false;
+    Sound.play('shopClose');
+  },
+
+  handleInput(player) {
+    this.messageTimer = Math.max(0, this.messageTimer - 1 / 60);
+    if (this.messageTimer <= 0) this.message = '';
+    const list = this.entries(player), P = Input.pressed;
+    if (P.KeyW || P.ArrowUp) this.cursor = (this.cursor + list.length - 1) % list.length;
+    if (P.KeyS || P.ArrowDown) this.cursor = (this.cursor + 1) % list.length;
+    if (P.Space || P.Enter) {
+      this.apply(list[this.cursor], player);
+      delete P.Space; delete P.Enter;
+    }
+    if (P.KeyF || P.Escape) { this.close(); delete P.KeyF; }
+  },
+
+  /* ── 창 ──────────────────────────────────────────────── */
+  draw(ctx, player) {
+    const w = 206, h = 122;
+    const x = Math.round((CONFIG.VIEW_W - w) / 2), y = Math.round((CONFIG.VIEW_H - h) / 2);
+    UI.panel(ctx, x, y, w, h, '#ff8a3c');
+    UI.divider(ctx, x + 6, y + 15, w - 12);
+    UI.drawText(ctx, 'FORGE', x + w / 2, y + 6, '#ff8a3c', true);
+
+    // 지금 든 무기와 박혀 있는 속성
+    const el = player.weaponElement ? this.spec(player.weaponElement) : null;
+    UI.drawText(ctx, player.weaponLabel(), x + 8, y + 19, player.weaponColor());
+    const cur = el ? el.name : 'NO ELEMENT';
+    UI.drawText(ctx, cur, x + w - 10 - UI.textWidth(cur), y + 19, el ? el.color : '#5f6b59');
+
+    const list = this.entries(player);
+    const rowY = y + 32, rowH = 13;
+    for (let i = 0; i < list.length; i++) {
+      const it = list[i], ry = rowY + i * rowH;
+      if (i === this.cursor) {
+        ctx.fillStyle = 'rgba(255,138,60,0.12)';
+        ctx.fillRect(x + 6, ry - 3, w - 12, rowH - 1);
+        UI.drawText(ctx, '>', x + 9, ry, '#ff8a3c');
+      }
+      UI.drawText(ctx, it.name, x + 18, ry, it.worn ? '#9be564' : it.color);
+      if (it.remove) {
+        UI.drawText(ctx, 'FREE', x + w - 12 - UI.textWidth('FREE'), ry, it.ok ? '#f0d9b5' : '#6f7a68');
+        continue;
+      }
+      // 재료와 값 — 모자라면 붉게
+      const mat = it.loot + ' ' + it.held + '/' + it.need;
+      UI.drawText(ctx, mat, x + 56, ry, it.held >= it.need ? '#7fa86a' : '#c05a5a');
+      const price = it.worn ? 'ON' : it.gold + ' G';
+      UI.drawText(ctx, price, x + w - 12 - UI.textWidth(price), ry,
+        it.worn ? '#9be564' : (player.gold >= it.gold ? CONFIG.gold.color : '#c05a5a'));
+    }
+
+    const footY = y + h - 19;
+    if (this.message) UI.drawText(ctx, this.message, x + w / 2, footY, '#9be564', true);
+    else UI.drawText(ctx, 'W S SELECT   SPACE FORGE', x + w / 2, footY, '#7fa86a', true);
+    UI.drawText(ctx, 'PAUSED - F TO CLOSE', x + w / 2, footY + 8, '#5f6b59', true);
   },
 };
 
@@ -10314,6 +10608,12 @@ const UI = {
       if (icon) ctx.drawImage(icon, 8, 58);
       if (player.weaponGrowing) this.drawRainbowText(ctx, player.weaponLabel(), 23, 62);
       else this.drawText(ctx, player.weaponLabel(), 23, 62, player.weaponColor());
+      // 박아 넣은 속성은 이름 뒤에 색 점 하나로 (자리가 좁다)
+      const el = player.weaponElement && CONFIG.forge.elements[player.weaponElement];
+      if (el) {
+        ctx.fillStyle = el.color;
+        ctx.fillRect(23 + this.textWidth(player.weaponLabel()) + 3, 62, 3, 3);
+      }
     }
 
     // 체력이 낮고 포션이 있으면 깜빡이며 마시라고 알린다
@@ -10564,6 +10864,16 @@ const UI = {
    새 작업을 올릴 때 PATCH_NOTES 맨 앞에 한 항목을 추가하면 된다. */
 
 const PATCH_NOTES = [
+  {
+    date: '2026-10-13',
+    notes: [
+      '대장간이 생겼다 — 상인 옆 모루 앞에서 F. 전리품과 골드로 무기에 속성을 박는다',
+      'FLAME(화상) / FROST(빙결) / SHOCK(감전) / VENOM(중독) 넷 중 하나. 빼는 것은 공짜',
+      '속성은 추가 피해도 준다 — 몬스터마다 상성이 달라서 약점은 +50%, 강한 상대는 +5%',
+      '숲은 대체로 불꽃, 사막은 대체로 서리 (늑대와 모래벌레는 뇌전)',
+      '상태이상 저항을 없앴다 — 이제 아무도 막을 수 없다 (WARD 옵션과 보스 저항 삭제)',
+    ],
+  },
   {
     date: '2026-10-12',
     notes: [
@@ -10858,6 +11168,7 @@ const Game = {
     Ambient.reset();
     Shop.reset();
     Quests.reset();
+    Forge.reset();
     this.showInventory = false;
     this.showMap = false;
     this.confirmNewGame = false;
@@ -10949,15 +11260,29 @@ const Game = {
     this.shopPrompt = false;
     this.portalPrompt = false;
     this.boardPrompt = false;
+    this.forgePrompt = false;
     this.chestPrompt = null;
     if (this.inArena) this.updateArenaGate(dt);
     else {
       this.updateCaveGate();
       this.updateShopGate();
       this.updateBoardGate();
+      this.updateForgeGate();
       this.updateChestGate();
       this.updatePortalGate();
     }
+  },
+
+  // 대장장이 앞에서 F — 무기에 속성을 박는다
+  updateForgeGate() {
+    const n = World.smith;
+    if (!n || this.player.dead || this.cavePrompt || this.shopPrompt || this.boardPrompt || Items.nearWeapon) return;
+    if (Util.dist(this.player.x, this.player.y, n.x, n.y) > CONFIG.forge.interactRange) return;
+
+    this.forgePrompt = true;
+    if (!Items.pickupRequested) return;
+    Items.pickupRequested = false;
+    Forge.openForge();
   },
 
   // 보물 상자 앞에서 F — 아직 안 연 상자만 받는다
@@ -11252,7 +11577,7 @@ const Game = {
   },
 
   paused() {
-    return this.showInventory || this.showMap || this.confirmNewGame || Shop.open || Quests.open || PatchNotes.open;
+    return this.showInventory || this.showMap || this.confirmNewGame || Shop.open || Quests.open || Forge.open || PatchNotes.open;
   },
 
   // 이름표 시간과 배경음 — 시작점에서 멀어질수록 곡이 무거워진다 (맵마다 spec.bgm 에 곡과 경계가 있다)
@@ -11289,6 +11614,7 @@ const Game = {
     // 상점이나 인벤토리가 열려 있으면 그쪽이 키를 다 가져간다
     if (Shop.open) { Shop.handleInput(this.player); return; }
     if (Quests.open) { Quests.handleInput(this.player); return; }
+    if (Forge.open) { Forge.handleInput(this.player); return; }
     if (this.showInventory) { Inventory.handleInput(this.player); return; }
     if (Input.pressed.KeyV) { Sound.toggle(); Sound.play('toggle'); this.soundFlash = 1.4; }
     if (Input.inventoryPressed()) { this.showInventory = true; Inventory.message = ''; }
@@ -11474,6 +11800,7 @@ const Game = {
     if (this.exitPrompt) UI.drawCavePrompt(ui, World.arenaExit, cam, 0, 'LEAVE');
     if (this.shopPrompt && !this.showMap) Shop.drawPrompt(ui, cam);
     if (this.boardPrompt && !this.showMap) Quests.drawPrompt(ui, cam);
+    if (this.forgePrompt && !this.showMap) Forge.drawPrompt(ui, cam);
     if (this.chestPrompt && !this.showMap) Landmarks.drawPrompt(ui, cam, this.chestPrompt);
     if (this.portalPrompt && !this.showMap) {
       UI.drawPortalPrompt(ui, World.portal, cam, CONFIG.maps[World.spec.portalTo],
@@ -11482,6 +11809,7 @@ const Game = {
     if (!this.showMap && !this.showInventory && !Shop.open && !Quests.open && !this.title) Quests.drawTracker(ui, this.player);
     if (Shop.open) Shop.draw(ui, this.player);
     if (Quests.open) Quests.draw(ui, this.player);
+    if (Forge.open) Forge.draw(ui, this.player);
     if (this.lairBanner > 0) UI.drawBanner(ui, this.bossSpec(this.arenaCave).lairName, '#ff6b6b', this.lairBanner);
     if (this.forestBanner > 0 && !this.showMap && !this.showInventory && !Shop.open && !this.title) UI.drawBanner(ui, World.spec.name, World.spec.color, this.forestBanner);
     if (this.gateBanner > 0 && !this.showMap) UI.drawBanner(ui, 'THE OBELISK AWAKENS', '#5ff0ff', this.gateBanner);

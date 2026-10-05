@@ -25,6 +25,8 @@ class Player {
     this.weaponLevel = CONFIG.equipment.startWeaponLevel;
     // 보스가 떨구는 '성장하는 무기' — 레벨이 내 레벨을 따라 같이 오른다
     this.weaponGrowing = false;
+    // 대장간에서 박은 속성 (flame / frost / shock / venom) — 무기 한 자루에 하나
+    this.weaponElement = null;
 
     // 9주차: 골드와 상점 강화 랭크 (hp / atk / bag / slots). 강화로 오른 수치는 maxHp 등에 바로 더해져 있다
     this.gold = 0;
@@ -629,6 +631,19 @@ class Player {
       if (this.has('executioner') && s.maxHp && s.hp / s.maxHp <= this.uniq('executioner').ratio) {
         dmg = Math.round(dmg * this.uniq('executioner').mult);
       }
+      /* 무기에 박힌 속성 — 추가 피해를 주고 그 속성의 상태이상을 건다.
+         추가 피해는 몬스터마다 다르다 (버섯은 불에 약하고, 선인장은 불에 강하다) */
+      const elId = this.weaponElement, el = elId && CONFIG.forge.elements[elId];
+      if (el) {
+        const aff = Forge.affinity(s.TYPE, elId);
+        const bonus = Math.max(1, Math.round(dmg * CONFIG.forge.bonus * aff));
+        dmg += bonus;
+        if (Math.random() < el.chance) Status.apply(s, el.status, dmg, this);
+        FX.burst(s.x, s.y - 4, aff >= 1.5 ? 6 : 3, [el.color, '#ffffff'], { speed: 34, life: 0.3, gravity: 10, size: 1 });
+        // 약점이면 한 번씩 알려준다 — "얘한테는 불" 이 눈에 보이게
+        if (aff >= 1.5 && Math.random() < 0.34) FX.number(s.x, s.y - 22 - s.radius, 'WEAK', el.color);
+      }
+
       dmg = Math.max(1, dmg);
       // 사방 공격은 바깥쪽으로, 베는 공격은 휘두른 방향으로 날린다
       s.takeHit(dmg, omni ? toEnemy : base, crit, this, knockMult);
@@ -794,9 +809,6 @@ class Player {
     FX.number(this.x, this.y - 30, 'SECOND WIND', '#ffb35c');
   }
 
-  // 장비의 WARD 옵션만큼 상태이상이 짧게 걸린다
-  statusResist(type) { return this.stat('ward') / 100; }
-
   // 포션 한 개가 채우는 양 — 최대 체력의 30%, 최소 30
   potionHeal() {
     const cfg = CONFIG.items;
@@ -834,17 +846,19 @@ class Player {
   }
 
   // 무기 교체. 종류와 레벨이 모두 같으면 'same', 죽어있으면 false, 교체되면 true
-  equipWeapon(id, level, growing) {
+  equipWeapon(id, level, growing, element) {
     if (this.dead) return false;
     if (!CONFIG.weapons[id]) return false;
     growing = !!growing;
     // 성장하는 무기는 주운 순간부터 내 레벨을 그대로 따라간다
     level = growing ? this.level : level;
     level = Util.clamp(Math.round(level || 1), 1, CONFIG.weapons.levelMult.length);   // 사막 무기는 23을 넘는다
-    if (this.weapon === id && this.weaponLevel === level && this.weaponGrowing === growing) return 'same';
+    element = CONFIG.forge.elements[element] ? element : null;
+    if (this.weapon === id && this.weaponLevel === level && this.weaponGrowing === growing && this.weaponElement === element) return 'same';
     this.weapon = id;
     this.weaponLevel = level;
     this.weaponGrowing = growing;
+    this.weaponElement = element;
     this.recalcStats();   // 성장 무기는 고유 효과를 들고 온다
     const color = this.weaponColor();
     FX.number(this.x, this.y - 22, this.weaponLabel() + '!', color);

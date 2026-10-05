@@ -460,6 +460,38 @@ const CONFIG = {
     },
   },
 
+  /* ── 대장간 — 무기 속성 부여 (로드맵 8주차) ───────────────
+     전리품이 '팔 것'에서 **재료**가 되는 자리. 무기 한 자루에 속성 하나를 박는다.
+
+     속성은 때릴 때 상태이상을 걸고(chance), 추가 피해를 준다.
+     추가 피해는 **몬스터마다 다르다**(affinity) — 1.6 약점 / 1.0 보통 / 0.4 강함.
+     그래서 "숲에서는 불, 사막에서는 서리"가 생기고, 갈 곳에 맞춰 무기를 바꿔 끼게 된다.
+
+     재료는 그 속성을 쓰고 싶은 곳에서 구할 수 있는 것으로 골랐다 —
+     숲에서 불·뇌전·서리를 미리 만들어 두고 사막으로 간다. */
+  forge: {
+    interactRange: 26,
+    goldBase: 60,
+    goldPerLevel: 8,
+    bonus: 0.25,            // 추가 피해 = 그 일격 x 이 값 x 약점 배수
+    elements: {
+      flame: { name: 'FLAME', status: 'burn',   color: '#ff8a3c', chance: 1.0, loot: 'cap',     cost: 8 },
+      frost: { name: 'FROST', status: 'freeze', color: '#9fe8ff', chance: 0.4, loot: 'gel',     cost: 10 },
+      shock: { name: 'SHOCK', status: 'shock',  color: '#ffe066', chance: 0.6, loot: 'fang',    cost: 8 },
+      venom: { name: 'VENOM', status: 'poison', color: '#7dff8a', chance: 1.0, loot: 'stinger', cost: 6 },
+    },
+    /* 약점과 강함 — 적혀 있지 않은 것은 1.0.
+       숲은 대체로 불, 사막은 대체로 서리. 늑대와 모래벌레만 뇌전이라 외우기만 해서는 안 된다 */
+    affinity: {
+      slime:    { flame: 2.0, venom: 0.2 },
+      mushroom: { flame: 2.0, venom: 0.2 },
+      wolf:     { shock: 2.0, flame: 1.5, frost: 0.2 },
+      scorpion: { frost: 2.0, venom: 0.2 },
+      cactus:   { frost: 2.0, flame: 0.2 },
+      sandworm: { shock: 2.0, frost: 1.5, flame: 0.2 },
+    },
+  },
+
   /* ── 상태이상 (로드맵 7주차) ────────────────────────────
      몬스터와 플레이어 **양쪽에 같은 규칙으로** 걸린다 (js/status.js 하나가 둘 다 다룬다).
 
@@ -493,7 +525,8 @@ const CONFIG = {
         puffColors: ['#ffe066', '#ffffff'],
       },
     },
-    bossResist: 0.5,        // 보스는 지속 시간을 절반만 받는다 (지속 피해로 녹지 않게)
+    /* 상태이상은 **막을 수 없다.** 저항 수치를 두면 "저항 올리면 그만"이 되어
+       불·얼음·독을 설계한 보람이 사라진다 — 걸리면 걸리는 것이고, 대신 길이를 짧게 잡았다. */
     monsterPoison: 0.7,     // 몬스터가 거는 중독의 세기 배수 (몬스터 공격력 기준)
   },
 
@@ -985,13 +1018,12 @@ const CONFIG = {
       frosty:      { word: 'FROSTY',   label: 'FREEZE',range: [6, 12], perLevel: 0.15, pct: true, status: 'freeze' },
       shocking:    { word: 'SHOCKING', label: 'SHOCK', range: [6, 12], perLevel: 0.15, pct: true, status: 'shock' },
       venomous:    { word: 'VENOMOUS', label: 'VENOM', range: [6, 12], perLevel: 0.15, pct: true, status: 'poison' },
-      ward:        { word: 'WARDED',   label: 'WARD',  range: [5, 12], perLevel: 0.3,  pct: true },
     },
     // 여러 점을 겹쳐 입었을 때의 총합 상한 (없는 것은 안 묶는다)
     caps: {
       attackSpeed: 40, crit: 25, critMult: 120, speed: 40,
       lifesteal: 20, potion: 100, cooldown: 45, knockRes: 80, gold: 150,
-      fiery: 45, frosty: 45, shocking: 45, venomous: 45, ward: 70,
+      fiery: 45, frosty: 45, shocking: 45, venomous: 45,
     },
   },
 

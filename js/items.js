@@ -143,6 +143,7 @@ const Items = {
     const d = this.makeDrop(x, y, CONFIG.equipment.weaponLifetime, opts);
     d.kind = 'weapon';
     d.weapon = weaponId;
+    d.element = (opts && opts.element) || null;   // 박아 넣은 속성은 바닥에 둬도 남는다
     d.growing = !!(opts && opts.growing);
     if (d.growing) d.life = 1e9;   // 성장 무기는 사라지지 않는다 (보스 보상이 증발하면 안 된다)
     // 떨군 몬스터의 레벨을 그대로 따른다 (사막 몬스터는 23을 넘는다). 표 끝(60)이 상한
@@ -299,7 +300,7 @@ const Items = {
      가방이 꽉 찼으면 예전처럼 손에 든 무기와 맞바꾼다 — 든 무기는 그 자리에 남는다 */
   pickupWeapon(index, d, player) {
     if (player.dead) return;
-    if (Inventory.addWeapon(player, d.weapon, d.level, d.growing)) {
+    if (Inventory.addWeapon(player, d.weapon, d.level, d.growing, d.element)) {
       const color = d.growing ? CONFIG.weapons.growColor : (CONFIG.weapons.levelColor[levelTier(d.level)] || '#ffffff');
       const name = d.growing ? CONFIG.weapons.growNames[d.weapon] : CONFIG.weapons[d.weapon].name + ' L' + d.level;
       FX.burst(d.x, d.y - 4, 8, [color, '#ffffff'], { speed: 40, life: 0.35, gravity: 60 });
@@ -313,10 +314,11 @@ const Items = {
       FX.number(player.x, player.y - 20, 'BAG FULL', '#8f9aa8');
       return;
     }
-    if (!player.equipWeapon(d.weapon, d.level, d.growing)) return;
+    const oldEl = player.weaponElement;
+    if (!player.equipWeapon(d.weapon, d.level, d.growing, d.element)) return;
     this.drops.splice(index, 1);
     // 바꾸기 전 무기는 버려두고 간다 — 마음이 바뀌면 다시 F로 집을 수 있다
-    this.spawnWeapon(d.x, d.y, oldId, oldLevel, { pickupDelay: 0.35, growing: oldGrow });
+    this.spawnWeapon(d.x, d.y, oldId, oldLevel, { pickupDelay: 0.35, growing: oldGrow, element: oldEl });
   },
 
   /* 성장하는 무기의 무지개 오라 — 바닥에 옅은 색 원판이 숨쉬듯 커졌다 작아지고,

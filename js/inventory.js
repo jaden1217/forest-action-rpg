@@ -46,10 +46,10 @@ const Inventory = {
   },
 
   // 무기 한 자루 — 빈 칸이 있어야 들어간다
-  addWeapon(player, weapon, level, growing) {
+  addWeapon(player, weapon, level, growing, element) {
     const i = this.firstEmpty(player);
     if (i < 0) return false;
-    player.bag[i] = { kind: 'weapon', weapon: weapon, level: level, growing: !!growing };
+    player.bag[i] = { kind: 'weapon', weapon: weapon, level: level, growing: !!growing, element: element || null };
     return true;
   },
 
@@ -142,7 +142,8 @@ const Inventory = {
       const s = list[i];
       if (!s) continue;
       if (s.kind === 'weapon' && CONFIG.weapons[s.weapon]) {
-        player.bag[i + 1] = { kind: 'weapon', weapon: s.weapon, level: Math.max(1, s.level | 0), growing: !!s.growing };
+        player.bag[i + 1] = { kind: 'weapon', weapon: s.weapon, level: Math.max(1, s.level | 0), growing: !!s.growing,
+          element: CONFIG.forge.elements[s.element] ? s.element : null };
       } else if (s.kind === 'gear') {
         const g = Gear.sanitize(s);
         if (g) player.bag[i + 1] = g;
@@ -206,8 +207,8 @@ const Inventory = {
     }
     if (s.kind === 'weapon') {
       // 들고 있던 무기가 이 칸으로 들어가고, 이 칸의 무기를 낀다
-      const old = { kind: 'weapon', weapon: player.weapon, level: player.weaponLevel, growing: player.weaponGrowing };
-      const r = player.equipWeapon(s.weapon, this.weaponLevel(player, s), s.growing);
+      const old = { kind: 'weapon', weapon: player.weapon, level: player.weaponLevel, growing: player.weaponGrowing, element: player.weaponElement };
+      const r = player.equipWeapon(s.weapon, this.weaponLevel(player, s), s.growing, s.element);
       if (!r) return;
       player.bag[index] = old;
       this.say('EQUIPPED ' + this.itemName(player, s));
@@ -222,7 +223,7 @@ const Inventory = {
     if (!s) return;
     if (s.kind === 'potion') { this.say('DRINK IT WITH E'); return; }
     if (s.kind === 'weapon') {
-      Items.spawnWeapon(player.x, player.y, s.weapon, this.weaponLevel(player, s), { growing: s.growing, pickupDelay: 0.6 });
+      Items.spawnWeapon(player.x, player.y, s.weapon, this.weaponLevel(player, s), { growing: s.growing, element: s.element, pickupDelay: 0.6 });
     } else if (s.kind === 'gear') {
       Items.spawnGear(player.x, player.y, s.id, s.level, { dropped: true });
     } else {
@@ -395,7 +396,9 @@ const Inventory = {
     const spec = player.weaponSpec(), dmg = player.attackDamage();
     if (player.weaponGrowing) UI.drawRainbowText(ctx, player.weaponLabel(), x, top + 26);
     else UI.drawText(ctx, player.weaponLabel(), x, top + 26, player.weaponColor());
+    const eq = player.weaponElement && CONFIG.forge.elements[player.weaponElement];
     UI.drawText(ctx, 'DMG ' + dmg + '  DPS ' + Math.round(dmg / spec.cooldown), x, top + 34, '#f0d9b5');
+    if (eq) UI.drawText(ctx, eq.name, x + 92, top + 26, eq.color);
 
     /* 입은 것이 더해주는 것 — 앞줄은 늘 있는 네 가지, 뒷줄은 굴려 붙은 옵션들.
        아무것도 안 입었어도 0 으로 띄운다 (비어 있다는 걸 알려주려고) */
@@ -503,6 +506,8 @@ const Inventory = {
       line('DMG ' + wd + ' RNG ' + w.reach, '#f0d9b5');
       line((d >= 0 ? '+' : '') + d + ' VS EQUIPPED', d > 0 ? '#9be564' : (d < 0 ? '#c05a5a' : '#7fa86a'));
       line('SPD ' + UI.speedWord(w.cooldown) + ' DPS ' + Math.round(wd / w.cooldown), '#7fa86a');
+      const be = s.element && CONFIG.forge.elements[s.element];
+      if (be) line('* ' + be.name, be.color);
       y += 5;
       line('SPACE EQUIP  X DROP', '#9be564');
       return;

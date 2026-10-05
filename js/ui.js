@@ -295,6 +295,12 @@ const UI = {
       if (icon) ctx.drawImage(icon, 8, 58);
       if (player.weaponGrowing) this.drawRainbowText(ctx, player.weaponLabel(), 23, 62);
       else this.drawText(ctx, player.weaponLabel(), 23, 62, player.weaponColor());
+      // 박아 넣은 속성은 이름 뒤에 색 점 하나로 (자리가 좁다)
+      const el = player.weaponElement && CONFIG.forge.elements[player.weaponElement];
+      if (el) {
+        ctx.fillStyle = el.color;
+        ctx.fillRect(23 + this.textWidth(player.weaponLabel()) + 3, 62, 3, 3);
+      }
     }
 
     // 체력이 낮고 포션이 있으면 깜빡이며 마시라고 알린다

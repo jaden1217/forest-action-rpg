@@ -35,7 +35,7 @@ const Save = {
         hp: Math.round(p.hp), maxHp: p.maxHp, damage: p.damage,
         level: p.level, xp: p.xp, xpNeed: p.xpNeed,
         potions: p.potions,
-        weapon: p.weapon, weaponLevel: p.weaponLevel, weaponGrowing: p.weaponGrowing,
+        weapon: p.weapon, weaponLevel: p.weaponLevel, weaponGrowing: p.weaponGrowing, weaponElement: p.weaponElement,
         gold: p.gold, upgrades: p.upgrades,
         bag: Inventory.serialize(p),
         gear: { head: p.gear.head, body: p.gear.body, trinket: p.gear.trinket },
@@ -46,7 +46,7 @@ const Save = {
       bossSlain: game.bossSlain,
       drops: drops.map(d => ({
         kind: d.kind, weapon: d.weapon, level: d.level, amount: d.amount, id: d.id,
-        item: d.item, growing: !!d.growing,
+        item: d.item, growing: !!d.growing, element: d.element || null,
         x: Math.round(d.x), y: Math.round(d.y), life: Math.round(d.life),
       })),
     };
@@ -113,6 +113,7 @@ const Save = {
       player.weapon = s.weapon;
       player.weaponGrowing = !!s.weaponGrowing;
       player.weaponLevel = Util.clamp(s.weaponLevel || 1, 1, CONFIG.weapons.levelMult.length);
+      player.weaponElement = CONFIG.forge.elements[s.weaponElement] ? s.weaponElement : null;
       player.syncWeaponLevel();   // 성장하는 무기는 레벨을 다시 맞춰둔다
       player.recalcStats();       // 성장 무기의 고유 효과까지 반영한다
     }
@@ -126,7 +127,7 @@ const Save = {
 
     Items.reset();
     for (const d of (data.drops || [])) {
-      if (d.kind === 'weapon') Items.spawnWeapon(d.x, d.y, d.weapon, d.level, { growing: d.growing });
+      if (d.kind === 'weapon') Items.spawnWeapon(d.x, d.y, d.weapon, d.level, { growing: d.growing, element: d.element });
       else if (d.kind === 'gear') Items.spawnGear(d.x, d.y, d.id, d.level, { item: Gear.sanitize(d.item) });
       else if (d.kind === 'loot') Items.spawnLoot(d.x, d.y, d.id, d.amount);
       else Items.spawn(d.x, d.y, d.amount);

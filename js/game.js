@@ -72,6 +72,7 @@ const Game = {
     Ambient.reset();
     Shop.reset();
     Quests.reset();
+    Forge.reset();
     this.showInventory = false;
     this.showMap = false;
     this.confirmNewGame = false;
@@ -163,15 +164,29 @@ const Game = {
     this.shopPrompt = false;
     this.portalPrompt = false;
     this.boardPrompt = false;
+    this.forgePrompt = false;
     this.chestPrompt = null;
     if (this.inArena) this.updateArenaGate(dt);
     else {
       this.updateCaveGate();
       this.updateShopGate();
       this.updateBoardGate();
+      this.updateForgeGate();
       this.updateChestGate();
       this.updatePortalGate();
     }
+  },
+
+  // 대장장이 앞에서 F — 무기에 속성을 박는다
+  updateForgeGate() {
+    const n = World.smith;
+    if (!n || this.player.dead || this.cavePrompt || this.shopPrompt || this.boardPrompt || Items.nearWeapon) return;
+    if (Util.dist(this.player.x, this.player.y, n.x, n.y) > CONFIG.forge.interactRange) return;
+
+    this.forgePrompt = true;
+    if (!Items.pickupRequested) return;
+    Items.pickupRequested = false;
+    Forge.openForge();
   },
 
   // 보물 상자 앞에서 F — 아직 안 연 상자만 받는다
@@ -466,7 +481,7 @@ const Game = {
   },
 
   paused() {
-    return this.showInventory || this.showMap || this.confirmNewGame || Shop.open || Quests.open || PatchNotes.open;
+    return this.showInventory || this.showMap || this.confirmNewGame || Shop.open || Quests.open || Forge.open || PatchNotes.open;
   },
 
   // 이름표 시간과 배경음 — 시작점에서 멀어질수록 곡이 무거워진다 (맵마다 spec.bgm 에 곡과 경계가 있다)
@@ -503,6 +518,7 @@ const Game = {
     // 상점이나 인벤토리가 열려 있으면 그쪽이 키를 다 가져간다
     if (Shop.open) { Shop.handleInput(this.player); return; }
     if (Quests.open) { Quests.handleInput(this.player); return; }
+    if (Forge.open) { Forge.handleInput(this.player); return; }
     if (this.showInventory) { Inventory.handleInput(this.player); return; }
     if (Input.pressed.KeyV) { Sound.toggle(); Sound.play('toggle'); this.soundFlash = 1.4; }
     if (Input.inventoryPressed()) { this.showInventory = true; Inventory.message = ''; }
@@ -688,6 +704,7 @@ const Game = {
     if (this.exitPrompt) UI.drawCavePrompt(ui, World.arenaExit, cam, 0, 'LEAVE');
     if (this.shopPrompt && !this.showMap) Shop.drawPrompt(ui, cam);
     if (this.boardPrompt && !this.showMap) Quests.drawPrompt(ui, cam);
+    if (this.forgePrompt && !this.showMap) Forge.drawPrompt(ui, cam);
     if (this.chestPrompt && !this.showMap) Landmarks.drawPrompt(ui, cam, this.chestPrompt);
     if (this.portalPrompt && !this.showMap) {
       UI.drawPortalPrompt(ui, World.portal, cam, CONFIG.maps[World.spec.portalTo],
@@ -696,6 +713,7 @@ const Game = {
     if (!this.showMap && !this.showInventory && !Shop.open && !Quests.open && !this.title) Quests.drawTracker(ui, this.player);
     if (Shop.open) Shop.draw(ui, this.player);
     if (Quests.open) Quests.draw(ui, this.player);
+    if (Forge.open) Forge.draw(ui, this.player);
     if (this.lairBanner > 0) UI.drawBanner(ui, this.bossSpec(this.arenaCave).lairName, '#ff6b6b', this.lairBanner);
     if (this.forestBanner > 0 && !this.showMap && !this.showInventory && !Shop.open && !this.title) UI.drawBanner(ui, World.spec.name, World.spec.color, this.forestBanner);
     if (this.gateBanner > 0 && !this.showMap) UI.drawBanner(ui, 'THE OBELISK AWAKENS', '#5ff0ff', this.gateBanner);

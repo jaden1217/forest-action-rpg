@@ -17,7 +17,8 @@
      - 플레이어 → 장비 옵션 (FIERY / FROSTY / SHOCKING / VENOMOUS 가 붙으면 확률로 건다)
      - 몬스터 → 전갈 찌르기(중독), 버섯·늙은 버섯의 포자(중독)
 
-   저항(resist)은 **지속 시간을 줄인다**. 플레이어는 WARD 옵션, 보스는 타고난 저항이 있다. */
+   **막는 수단은 없다.** 저항 수치를 두면 "저항만 올리면 그만"이 되어 불·얼음·독을 만든 보람이 사라진다 —
+   걸리면 걸리는 것이고, 대신 지속 시간을 짧게 잡았다. */
 
 const Status = {
   spec(type) { return CONFIG.status.list[type]; },
@@ -27,9 +28,7 @@ const Status = {
   apply(target, type, power, source) {
     const spec = this.spec(type);
     if (!target || target.dead || !spec) return;
-    const resist = Util.clamp(target.statusResist ? target.statusResist(type) : 0, 0, 0.9);
-    const time = spec.time * (1 - resist);
-    if (time <= 0.1) return;
+    const time = spec.time;
 
     if (!target.status) target.status = {};
     const dmg = spec.ratio ? Math.max(1, Math.round(power * spec.ratio)) : 0;

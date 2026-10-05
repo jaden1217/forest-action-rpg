@@ -983,6 +983,28 @@ function makeDigMound(seed) {
   return cv;
 }
 
+/* 모루 (20x16) — 나무 받침 위에 쇳덩이. 윗면에 벼리던 쇠가 벌겋게 남아 있다.
+   대장간이 여기라는 걸 멀리서도 알아보게 받침을 두껍게 뒀다. */
+function makeAnvil(seed) {
+  const cv = makeCanvas(20, 16), ctx = cv.getContext('2d');
+  const rng = Util.makeRng(seed);
+  const OUT = '#1a1d22', DARK = '#3d434c', MID = '#5d646e', LIT = '#868e99';
+  // 나무 받침
+  ctx.fillStyle = '#2a1b10'; ctx.fillRect(4, 11, 12, 5);
+  ctx.fillStyle = '#5e3f22'; ctx.fillRect(5, 12, 10, 3);
+  ctx.fillStyle = '#8a5f33'; ctx.fillRect(5, 12, 10, 1);
+  // 쇳덩이 — 위는 넓고 허리는 잘록하다
+  ctx.fillStyle = OUT; ctx.fillRect(1, 2, 18, 4); ctx.fillRect(7, 6, 6, 3); ctx.fillRect(4, 9, 12, 3);
+  ctx.fillStyle = MID; ctx.fillRect(2, 3, 16, 2); ctx.fillRect(8, 6, 4, 3); ctx.fillRect(5, 9, 10, 2);
+  ctx.fillStyle = LIT; ctx.fillRect(2, 3, 16, 1); ctx.fillRect(5, 9, 10, 1);
+  ctx.fillStyle = DARK; ctx.fillRect(2, 5, 16, 1);
+  // 벼리던 쇠
+  ctx.fillStyle = '#ff8a3c'; ctx.fillRect(12, 2, 4, 1);
+  ctx.fillStyle = '#ffe066'; ctx.fillRect(13, 2, 2, 1);
+  for (let i = 0; i < 6; i++) { ctx.fillStyle = DARK; ctx.fillRect(2 + Math.floor(rng() * 16), 3 + Math.floor(rng() * 8), 1, 1); }
+  return cv;
+}
+
 /* 의뢰 게시판 (24x28) — 기둥 둘에 널빤지를 얹고 종이 세 장을 압정으로 박았다.
    상인 옆에 서서, 멀리서도 "뭔가 읽을 것이 있다"로 보이게 종이를 밝게 둔다. */
 function makeQuestBoard(seed) {
@@ -1618,6 +1640,13 @@ function buildSprites() {
   SPRITES.merchant = [makeSprite('merchant', MERCHANT), makeSprite('merchant_blink', MERCHANT_BLINK)];
   SPRITES.stall = makeStall(1201);
   SPRITES.questBoard = makeQuestBoard(1303);
+  SPRITES.anvil = makeAnvil(1307);
+  /* 대장장이 — 상인과 같은 몸에 가죽 앞치마와 희끗한 머리. 두 번째 그림은 망치질하듯 숙인 것 */
+  const SMITH_PAL = { u: '#6a4a2a', U: '#8a6238', v: '#9aa0a8', y: '#ff8a3c' };
+  SPRITES.smith = [
+    makeSprite('smith', MERCHANT, SMITH_PAL),
+    makeSprite('smith_work', MERCHANT.map((row, i) => (i < 2 ? '................' : MERCHANT[i - 1])), SMITH_PAL),
+  ];
   // 랜드마크 — 보물 상자(닫힘/열림)와 그 둘레에 놓는 소품들
   SPRITES.chest = [makeChest(false), makeChest(true)];
   SPRITES.ruinPillar = [0, 1, 2].map(i => makeRuinPillar(1401 + i * 131));

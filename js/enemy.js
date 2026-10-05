@@ -74,9 +74,6 @@ class Enemy {
     }
   }
 
-  // 보스는 지속 시간을 절반만 받는다 (지속 피해로 녹아버리지 않게)
-  statusResist(type) { return this.isBoss ? CONFIG.status.bossResist : 0; }
-
   update(dt, player) {
     if (this.dead) return;
     Status.update(this, dt, false);
