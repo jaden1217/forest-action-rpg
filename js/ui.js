@@ -403,10 +403,16 @@ const UI = {
     this.drawText(ctx, 'F  ' + verb, sx, sy - 40, '#ff6b6b', true);
   },
 
-  // 텔레포트 비석 안내 — 어디로 가는지와 그곳 몬스터 레벨대를 같이 띄운다
-  drawPortalPrompt(ctx, portal, cam, dest) {
+  /* 텔레포트 비석 안내 — 어디로 가는지와 그곳 몬스터 레벨대.
+     아직 잠겨 있으면 무엇을 해야 열리는지 붉게 알려준다 (그게 관문의 전부다). */
+  drawPortalPrompt(ctx, portal, cam, dest, locked) {
     if (!portal || !dest) return;
     const sx = Math.round(portal.x - cam.x), sy = Math.round(portal.y - cam.y);
+    if (locked) {
+      this.drawText(ctx, CONFIG.gate.lockedText, sx, sy - 44, '#ff6b6b', true);
+      this.drawText(ctx, 'SEALED', sx, sy - 52, '#8f9aa8', true);
+      return;
+    }
     this.drawText(ctx, 'LV ' + dest.levelRange[0] + '-' + dest.levelRange[1], sx, sy - 44, '#8f9aa8', true);
     if (Math.floor(World.time * 3) % 2 === 0) return;
     this.drawText(ctx, 'F  TO ' + dest.name, sx, sy - 52, '#5ff0ff', true);

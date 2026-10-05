@@ -103,9 +103,8 @@ const Landmarks = {
 
     const t = World.dangerAt(chest.x, chest.y);
     const weights = cfg.rarityNear.map((near, i) => Util.lerp(near, cfg.rarityFar[i], t));
-    /* 장비 레벨은 그 자리의 몬스터 레벨을 따르되, 내 레벨보다 너무 처지면 쓸모가 없으므로
-       '내 레벨 -5' 아래로는 안 내려가게 한다 (가까운 상자를 늦게 열어도 완전한 쓰레기는 아니게) */
-    const level = Math.max(World.levelAt(chest.x, chest.y), player.level - 5);
+    // 장비 레벨은 **그 자리의 몬스터 레벨 그대로**다 — 가까운 상자는 가까운 만큼의 물건이 나온다
+    const level = World.levelAt(chest.x, chest.y);
     const item = Gear.roll(Gear.randomId(), level, Util.weightedIndex(weights));
 
     const gold = Math.round(cfg.gold.base + cfg.gold.perDanger * t);

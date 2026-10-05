@@ -687,7 +687,9 @@ const World = {
     p.draw = (ctx, cam) => {
       const sx = Math.round(p.x - cam.x), sy = Math.round(p.y - cam.y);
       fillCircle(ctx, sx, sy + 1, 7, 'rgba(0,0,0,0.28)');
-      const sp = (Math.floor(World.time * 2) % 2 === 0) ? SPRITES.obelisk[0] : SPRITES.obelisk[1];
+      // 아직 잠긴 비석은 룬이 꺼진 채다 — 멀리서도 '아직 안 열렸다'가 보인다
+      const sealed = this.mapId === 'forest' && typeof Game !== 'undefined' && Game.portalUnlocked && !Game.portalUnlocked();
+      const sp = (!sealed && Math.floor(World.time * 2) % 2 === 0) ? SPRITES.obelisk[0] : SPRITES.obelisk[1];
       ctx.drawImage(sp, sx + p.ox, sy + p.oy);
     };
     this.portal = p;

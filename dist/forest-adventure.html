@@ -153,7 +153,7 @@ html, body {
 }
 
 </style>
-<!-- built 2026-10-05 09:43 by tools/build.js -->
+<!-- built 2026-10-05 10:11 by tools/build.js -->
 </head>
 <body>
   <div id="stage">
@@ -639,6 +639,26 @@ const CONFIG = {
       },
       portalTo: 'forest',
     },
+  },
+
+  /* ── 발견 안개 (로드맵 6주차) ───────────────────────────
+     지도가 처음부터 다 보이면 '내가 만든 기록'이 아니라 그냥 설명서다.
+     가본 곳만 밝아지게 하고, 처음 들어간 구역마다 경험치 한 덩이를 준다. */
+  fog: {
+    radius: 7,              // 걸으면 둘레 이만큼(타일)이 걷힌다 — 화면보다 조금 좁게
+    color: 'rgba(9,11,8,0.93)',
+    regionCols: 8,          // 맵을 이만큼으로 나눠 '처음 간 구역'을 센다 (8x6 = 48칸)
+    regionRows: 6,
+    xpNear: 0.04,           // 가까운 구역은 다음 레벨까지의 4%, 가장자리는 12%
+    xpFar: 0.12,
+  },
+
+  /* ── 관문 (로드맵 6주차) ─────────────────────────────────
+     보스가 '있어도 그만'이 아니라 **다음 무대를 여는 열쇠**가 되게 한다.
+     숲 보스 셋 중 하나라도 잡아야 사막으로 가는 비석이 깨어난다. */
+  gate: {
+    desertNeedsBoss: true,
+    lockedText: 'SLAY A FOREST BOSS',
   },
 
   /* ── 랜드마크와 보물 (로드맵 5주차) ──────────────────────
@@ -4333,7 +4353,9 @@ const World = {
     p.draw = (ctx, cam) => {
       const sx = Math.round(p.x - cam.x), sy = Math.round(p.y - cam.y);
       fillCircle(ctx, sx, sy + 1, 7, 'rgba(0,0,0,0.28)');
-      const sp = (Math.floor(World.time * 2) % 2 === 0) ? SPRITES.obelisk[0] : SPRITES.obelisk[1];
+      // 아직 잠긴 비석은 룬이 꺼진 채다 — 멀리서도 '아직 안 열렸다'가 보인다
+      const sealed = this.mapId === 'forest' && typeof Game !== 'undefined' && Game.portalUnlocked && !Game.portalUnlocked();
+      const sp = (!sealed && Math.floor(World.time * 2) % 2 === 0) ? SPRITES.obelisk[0] : SPRITES.obelisk[1];
       ctx.drawImage(sp, sx + p.ox, sy + p.oy);
     };
     this.portal = p;
@@ -4599,6 +4621,7 @@ const Minimap = {
     ctx.globalAlpha = 0.82;
     ctx.drawImage(this.canvas, sx, sy, bw, bh, x, y, bw, bh);
     ctx.globalAlpha = 1;
+    Fog.draw(ctx, World.mapId, x, y, sx, sy, bw, bh, 1);   // 안 가본 곳은 덮인다
 
     this.drawDots(ctx, x, y, sx, sy, bw, bh, 1, player, enemies);
 
@@ -4625,10 +4648,13 @@ const Minimap = {
     ctx.fillStyle = '#17110d';
     ctx.fillRect(x - 2, y - 2, w + 4, h + 4);
     ctx.drawImage(this.canvas, 0, 0, this.W, this.H, x, y, w, h);
+    Fog.draw(ctx, World.mapId, x, y, 0, 0, this.W, this.H, scale);
 
     this.drawDots(ctx, x, y, 0, 0, this.W, this.H, scale, player, enemies);
 
-    UI.drawText(ctx, 'MAP', CONFIG.VIEW_W / 2, y - 11, '#9be564', true);
+    // 얼마나 밝혔는지 — 지도가 '내가 만든 기록'이 되는 숫자
+    const pct = Math.round(Fog.percent(World.mapId) * 100);
+    UI.drawText(ctx, 'MAP  ' + pct + '%', CONFIG.VIEW_W / 2, y - 11, '#9be564', true);
     UI.drawText(ctx, 'M TO CLOSE', CONFIG.VIEW_W / 2, y + h + 5, '#7fa86a', true);
   },
 
@@ -4648,6 +4674,7 @@ const Minimap = {
        "저기는 이미 다녀왔다"가 보인다 */
     if (World.chests) {
       for (const c of World.chests) {
+        if (!Fog.seenAt(World.mapId, c.x, c.y)) continue;   // 안 가본 곳의 상자는 안 보인다
         const open = Landmarks.isOpened(c.mapId, c.index);
         if (open) { put(c.x, c.y, '#6f6a5c', 1); continue; }
         if (Math.floor(World.time * 3) % 2 === 0) continue;
@@ -4655,11 +4682,15 @@ const Minimap = {
       }
     }
 
+    /* 바닥 물건과 몬스터도 **가본 곳에서만** 찍는다 —
+       안 그러면 안개로 덮어놓고 그 위에 점을 뿌려서 가리는 의미가 없다 */
     for (const d of Items.drops) {
+      if (!Fog.seenAt(World.mapId, d.x, d.y)) continue;
       put(d.x, d.y, d.kind === 'weapon' ? '#ffffff' : '#ffd93d', 1);
     }
     for (const s of enemies) {
       if (s.dead) continue;
+      if (!Fog.seenAt(World.mapId, s.x, s.y)) continue;
       // 점 색도 이름표와 같은 규칙 — 지도만 봐도 어느 쪽이 버거운지 보인다
       put(s.x, s.y, difficultyColor(s.level, player.level), 1);
     }
@@ -4726,6 +4757,8 @@ const Save = {
       },
       quests: Quests.serialize(),
       landmarks: Landmarks.serialize(),
+      fog: Fog.serialize(),
+      bossSlain: game.bossSlain,
       drops: drops.map(d => ({
         kind: d.kind, weapon: d.weapon, level: d.level, amount: d.amount, id: d.id,
         item: d.item, growing: !!d.growing,
@@ -9548,9 +9581,8 @@ const Landmarks = {
 
     const t = World.dangerAt(chest.x, chest.y);
     const weights = cfg.rarityNear.map((near, i) => Util.lerp(near, cfg.rarityFar[i], t));
-    /* 장비 레벨은 그 자리의 몬스터 레벨을 따르되, 내 레벨보다 너무 처지면 쓸모가 없으므로
-       '내 레벨 -5' 아래로는 안 내려가게 한다 (가까운 상자를 늦게 열어도 완전한 쓰레기는 아니게) */
-    const level = Math.max(World.levelAt(chest.x, chest.y), player.level - 5);
+    // 장비 레벨은 **그 자리의 몬스터 레벨 그대로**다 — 가까운 상자는 가까운 만큼의 물건이 나온다
+    const level = World.levelAt(chest.x, chest.y);
     const item = Gear.roll(Gear.randomId(), level, Util.weightedIndex(weights));
 
     const gold = Math.round(cfg.gold.base + cfg.gold.perDanger * t);
@@ -9628,6 +9660,156 @@ const Landmarks = {
     for (const map in data) {
       if (!Array.isArray(data[map])) continue;
       for (const i of data[map]) this.markOpened(map, i | 0);
+    }
+  },
+};
+
+</script>
+  <script>
+// ── js/fog.js
+'use strict';
+
+/* 발견 안개 — 가본 곳만 지도가 밝아진다 (로드맵 6주차).
+
+   지금까지 지도는 처음부터 전부 보였다. 2560x1920 짜리 맵을 펼쳐 놓고
+   "어디를 가봤는지"를 기록하지 않으니, 지도가 **내가 만든 기록이 아니라 그냥 설명서**였다.
+
+   이제 타일 하나하나에 '가봤는가'를 적어 두고, 미니맵·전체 지도에서 안 가본 곳을 덮는다.
+   맵을 스무 칸짜리 구역으로 나눠서, **처음 들어간 구역마다 경험치 한 덩이**를 준다 —
+   멀리 나가는 것 자체가 보상이 되게.
+
+   저장은 타일 하나당 1비트로 눌러 담아 base64 로 적는다 (맵 하나에 2.4KB → 3.2KB 글자).
+   맵 모양은 시드에서 다시 나오므로 '가봤는가'만 남기면 된다. */
+
+const Fog = {
+  maps: {},          // { forest: {...}, desert: {...} }
+  lastTile: { x: -1, y: -1 },
+
+  reset() {
+    this.maps = {};
+    this.lastTile = { x: -1, y: -1 };
+  },
+
+  ensure(mapId) {
+    let m = this.maps[mapId];
+    if (m) return m;
+    const W = CONFIG.MAP_W, H = CONFIG.MAP_H, cfg = CONFIG.fog;
+    m = {
+      w: W, h: H,
+      bits: new Uint8Array(W * H),
+      regions: new Uint8Array(cfg.regionCols * cfg.regionRows),
+      seen: 0,
+      canvas: makeCanvas(W, H),
+    };
+    const ctx = m.canvas.getContext('2d');
+    ctx.fillStyle = cfg.color;
+    ctx.fillRect(0, 0, W, H);
+    this.maps[mapId] = m;
+    return m;
+  },
+
+  isSeen(mapId, tx, ty) {
+    const m = this.maps[mapId];
+    if (!m) return false;
+    if (tx < 0 || ty < 0 || tx >= m.w || ty >= m.h) return false;
+    return !!m.bits[ty * m.w + tx];
+  },
+
+  seenAt(mapId, x, y) {
+    return this.isSeen(mapId, Math.floor(x / CONFIG.TILE), Math.floor(y / CONFIG.TILE));
+  },
+
+  percent(mapId) {
+    const m = this.maps[mapId];
+    if (!m) return 0;
+    return m.seen / (m.w * m.h);
+  },
+
+  /* ── 걷는 대로 걷힌다 ──────────────────────────────────
+     타일을 하나 넘어갈 때만 둘레를 훑는다 (매 프레임 150칸을 보는 건 아깝다). */
+  update(dt, player) {
+    if (World.isArena) return;     // 보스 방은 지도에 없는 곳이다
+    const T = CONFIG.TILE, cfg = CONFIG.fog;
+    const tx = Math.floor(player.x / T), ty = Math.floor(player.y / T);
+    if (tx === this.lastTile.x && ty === this.lastTile.y) return;
+    this.lastTile.x = tx; this.lastTile.y = ty;
+
+    const m = this.ensure(World.mapId);
+    const ctx = m.canvas.getContext('2d');
+    const r = cfg.radius, r2 = r * r;
+    for (let dy = -r; dy <= r; dy++) {
+      for (let dx = -r; dx <= r; dx++) {
+        if (dx * dx + dy * dy > r2) continue;
+        const x = tx + dx, y = ty + dy;
+        if (x < 0 || y < 0 || x >= m.w || y >= m.h) continue;
+        const i = y * m.w + x;
+        if (m.bits[i]) continue;
+        m.bits[i] = 1;
+        m.seen++;
+        ctx.clearRect(x, y, 1, 1);
+      }
+    }
+
+    this.checkRegion(m, tx, ty, player);
+  },
+
+  // 처음 들어간 구역이면 경험치 한 덩이 — 멀수록 크게 준다
+  checkRegion(m, tx, ty, player) {
+    const cfg = CONFIG.fog;
+    const rx = Math.min(cfg.regionCols - 1, Math.floor(tx / (m.w / cfg.regionCols)));
+    const ry = Math.min(cfg.regionRows - 1, Math.floor(ty / (m.h / cfg.regionRows)));
+    const i = ry * cfg.regionCols + rx;
+    if (m.regions[i]) return;
+    m.regions[i] = 1;
+
+    const t = World.dangerAt(player.x, player.y);
+    const xp = Math.max(1, Math.round(CONFIG.levelUp.xpNeed(player.level) * (cfg.xpNear + (cfg.xpFar - cfg.xpNear) * t)));
+    player.gainXp(xp);
+    FX.number(player.x, player.y - 34, 'NEW AREA +' + xp + 'XP', '#5ff0ff');
+    Sound.play('banner');
+  },
+
+  // 미니맵·전체 지도 위에 덮는다 (잘라낸 자리와 배율을 그대로 받는다)
+  draw(ctx, mapId, dx, dy, sx, sy, bw, bh, scale) {
+    const m = this.maps[mapId];
+    if (!m) return;
+    ctx.drawImage(m.canvas, sx, sy, bw, bh, dx, dy, bw * scale, bh * scale);
+  },
+
+  /* ── 저장 ── 타일 하나당 1비트로 눌러 담는다 */
+  serialize() {
+    const out = {};
+    for (const id in this.maps) {
+      const m = this.maps[id];
+      const bytes = new Uint8Array(Math.ceil(m.bits.length / 8));
+      for (let i = 0; i < m.bits.length; i++) if (m.bits[i]) bytes[i >> 3] |= 1 << (i & 7);
+      let s = '';
+      for (let i = 0; i < bytes.length; i++) s += String.fromCharCode(bytes[i]);
+      out[id] = { b: btoa(s), r: Array.from(m.regions).join('') };
+    }
+    return out;
+  },
+
+  deserialize(data) {
+    this.reset();
+    if (!data) return;
+    for (const id in data) {
+      const d = data[id];
+      if (!d || typeof d.b !== 'string') continue;
+      const m = this.ensure(id);
+      let s;
+      try { s = atob(d.b); } catch (err) { continue; }
+      const ctx = m.canvas.getContext('2d');
+      for (let i = 0; i < m.bits.length; i++) {
+        const byte = s.charCodeAt(i >> 3) || 0;
+        if (!(byte & (1 << (i & 7)))) continue;
+        m.bits[i] = 1;
+        m.seen++;
+        ctx.clearRect(i % m.w, Math.floor(i / m.w), 1, 1);
+      }
+      if (typeof d.r === 'string') {
+        for (let i = 0; i < m.regions.length && i < d.r.length; i++) m.regions[i] = d.r[i] === '1' ? 1 : 0;
+      }
     }
   },
 };
@@ -10040,10 +10222,16 @@ const UI = {
     this.drawText(ctx, 'F  ' + verb, sx, sy - 40, '#ff6b6b', true);
   },
 
-  // 텔레포트 비석 안내 — 어디로 가는지와 그곳 몬스터 레벨대를 같이 띄운다
-  drawPortalPrompt(ctx, portal, cam, dest) {
+  /* 텔레포트 비석 안내 — 어디로 가는지와 그곳 몬스터 레벨대.
+     아직 잠겨 있으면 무엇을 해야 열리는지 붉게 알려준다 (그게 관문의 전부다). */
+  drawPortalPrompt(ctx, portal, cam, dest, locked) {
     if (!portal || !dest) return;
     const sx = Math.round(portal.x - cam.x), sy = Math.round(portal.y - cam.y);
+    if (locked) {
+      this.drawText(ctx, CONFIG.gate.lockedText, sx, sy - 44, '#ff6b6b', true);
+      this.drawText(ctx, 'SEALED', sx, sy - 52, '#8f9aa8', true);
+      return;
+    }
     this.drawText(ctx, 'LV ' + dest.levelRange[0] + '-' + dest.levelRange[1], sx, sy - 44, '#8f9aa8', true);
     if (Math.floor(World.time * 3) % 2 === 0) return;
     this.drawText(ctx, 'F  TO ' + dest.name, sx, sy - 52, '#5ff0ff', true);
@@ -10173,6 +10361,16 @@ const UI = {
    새 작업을 올릴 때 PATCH_NOTES 맨 앞에 한 항목을 추가하면 된다. */
 
 const PATCH_NOTES = [
+  {
+    date: '2026-10-11',
+    notes: [
+      '발견 안개 — 가본 곳만 지도가 밝아진다. 안 가본 곳의 몬스터·상자도 보이지 않는다',
+      '전체 지도에 밝힌 비율이 뜬다 (MAP 15%)',
+      '처음 들어간 구역마다 경험치 한 덩이 — 멀수록 크다 (맵마다 48구역)',
+      '사막 비석이 잠겼다 — 숲 보스 셋 중 하나라도 잡아야 깨어난다 (잠긴 비석은 룬이 꺼져 있다)',
+      '보물 상자의 장비 레벨 하한을 없앴다 — 그 자리 몬스터 레벨 그대로 나온다',
+    ],
+  },
   {
     date: '2026-10-10',
     notes: [
@@ -10390,6 +10588,8 @@ const Game = {
   showMap: false,
   confirmNewGame: false,
   forestBanner: 0,   // 맵 이름표(태초의 숲 / 작열하는 사막)가 남는 시간 — 시작·텔레포트·동굴에서 나올 때 뜬다
+  gateBanner: 0,     // 첫 보스를 잡아 비석이 깨어났음을 알리는 표시
+  bossSlain: {},     // 한 번이라도 잡은 보스 (관문을 여는 열쇠)
   mapStates: {},     // 다른 맵에 있는 동안 접어둔 맵들 (맵·몬스터·드랍) — 텔레포트로 돌아오면 그대로 펼친다
   portalPrompt: false,   // 텔레포트 비석 앞에 서 있는가
   boss: null,        // 살아있는 보스
@@ -10435,6 +10635,8 @@ const Game = {
     this.seed = (saved && saved.seed) || Math.floor(Math.random() * 100000);
     this.mapStates = {};
     Landmarks.deserialize(saved && saved.landmarks);   // 이미 연 상자는 열린 채로 다시 선다
+    Fog.deserialize(saved && saved.fog);                // 밝혀둔 지도도 그대로
+    this.bossSlain = Object.assign({}, (saved && saved.bossSlain) || {});
     World.init(this.seed, (saved && CONFIG.maps[saved.map]) ? saved.map : 'forest');
     Minimap.build();
     FX.reset();
@@ -10573,6 +10775,13 @@ const Game = {
     Quests.openBoard();
   },
 
+  /* 비석이 깨어났는가 — 숲 보스 셋 중 하나라도 잡았으면.
+     보스를 '있어도 그만'이 아니라 다음 무대를 여는 열쇠로 만드는 장치다. */
+  portalUnlocked() {
+    if (!CONFIG.gate.desertNeedsBoss) return true;
+    return CONFIG.maps.forest.caves.some(c => this.bossSlain[c.boss]);
+  },
+
   // 텔레포트 비석 앞에서 F — 다른 맵의 비석 앞으로 옮겨간다
   updatePortalGate() {
     const p = World.portal;
@@ -10582,6 +10791,12 @@ const Game = {
     this.portalPrompt = true;
     if (!Items.pickupRequested) return;
     Items.pickupRequested = false;
+    // 숲에서 사막으로 나가는 길만 잠겨 있다 (돌아오는 길은 늘 열려 있다)
+    if (World.mapId === 'forest' && !this.portalUnlocked()) {
+      FX.number(p.x, p.y - 30, 'SEALED', '#ff6b6b');
+      Sound.play('error');
+      return;
+    }
     const target = World.spec.portalTo;
     this.beginTransition(() => this.travel(target));
   },
@@ -10802,6 +11017,12 @@ const Game = {
         // 보스는 일반 몬스터 정원과 무관하다. 한참 뒤에 다시 도전할 수 있다
         this.boss = null;
         this.bossReadyIn[this.arenaCave] = CONFIG.arena.respawnDelay;
+        // 처음 잡은 보스라면 — 이게 다음 무대를 여는 열쇠다
+        const type = this.bossSpec(this.arenaCave).type;
+        if (!this.bossSlain[type]) {
+          this.bossSlain[type] = true;
+          if (this.portalUnlocked()) this.gateBanner = 3.2;
+        }
       } else if (!this.inArena) {
         this.respawnQueue.push(Util.rand(CONFIG.spawn.respawnMin, CONFIG.spawn.respawnMax));
       }
@@ -10825,6 +11046,7 @@ const Game = {
   updateBanners(dt) {
     this.lairBanner = Math.max(0, this.lairBanner - dt);
     this.forestBanner = Math.max(0, this.forestBanner - dt);
+    this.gateBanner = Math.max(0, this.gateBanner - dt);
     if (this.inArena) { Sound.setTrack('boss'); return; }
     const t = World.dangerAt(this.player.x, this.player.y), bgm = World.spec.bgm;
     Sound.setTrack(t < bgm.edges[0] ? bgm.tracks[0] : (t < bgm.edges[1] ? bgm.tracks[1] : bgm.tracks[2]));
@@ -10922,6 +11144,7 @@ const Game = {
           this.updateHeartbeat(dt);
           Quests.update(dt, this.player);
           Landmarks.update(dt, this.player);
+          Fog.update(dt, this.player);
         }
         FX.update(dt);
       }
@@ -11039,12 +11262,16 @@ const Game = {
     if (this.shopPrompt && !this.showMap) Shop.drawPrompt(ui, cam);
     if (this.boardPrompt && !this.showMap) Quests.drawPrompt(ui, cam);
     if (this.chestPrompt && !this.showMap) Landmarks.drawPrompt(ui, cam, this.chestPrompt);
-    if (this.portalPrompt && !this.showMap) UI.drawPortalPrompt(ui, World.portal, cam, CONFIG.maps[World.spec.portalTo]);
+    if (this.portalPrompt && !this.showMap) {
+      UI.drawPortalPrompt(ui, World.portal, cam, CONFIG.maps[World.spec.portalTo],
+        World.mapId === 'forest' && !this.portalUnlocked());
+    }
     if (!this.showMap && !this.showInventory && !Shop.open && !Quests.open && !this.title) Quests.drawTracker(ui, this.player);
     if (Shop.open) Shop.draw(ui, this.player);
     if (Quests.open) Quests.draw(ui, this.player);
     if (this.lairBanner > 0) UI.drawBanner(ui, this.bossSpec(this.arenaCave).lairName, '#ff6b6b', this.lairBanner);
     if (this.forestBanner > 0 && !this.showMap && !this.showInventory && !Shop.open && !this.title) UI.drawBanner(ui, World.spec.name, World.spec.color, this.forestBanner);
+    if (this.gateBanner > 0 && !this.showMap) UI.drawBanner(ui, 'THE OBELISK AWAKENS', '#5ff0ff', this.gateBanner);
     if (this.confirmNewGame) UI.drawConfirm(ui);
     if (this.soundFlash > 0) UI.drawSoundState(ui, Sound.enabled);
     // 장면 전환은 맨 위를 덮는다

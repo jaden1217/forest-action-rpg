@@ -72,6 +72,7 @@ const Minimap = {
     ctx.globalAlpha = 0.82;
     ctx.drawImage(this.canvas, sx, sy, bw, bh, x, y, bw, bh);
     ctx.globalAlpha = 1;
+    Fog.draw(ctx, World.mapId, x, y, sx, sy, bw, bh, 1);   // 안 가본 곳은 덮인다
 
     this.drawDots(ctx, x, y, sx, sy, bw, bh, 1, player, enemies);
 
@@ -98,10 +99,13 @@ const Minimap = {
     ctx.fillStyle = '#17110d';
     ctx.fillRect(x - 2, y - 2, w + 4, h + 4);
     ctx.drawImage(this.canvas, 0, 0, this.W, this.H, x, y, w, h);
+    Fog.draw(ctx, World.mapId, x, y, 0, 0, this.W, this.H, scale);
 
     this.drawDots(ctx, x, y, 0, 0, this.W, this.H, scale, player, enemies);
 
-    UI.drawText(ctx, 'MAP', CONFIG.VIEW_W / 2, y - 11, '#9be564', true);
+    // 얼마나 밝혔는지 — 지도가 '내가 만든 기록'이 되는 숫자
+    const pct = Math.round(Fog.percent(World.mapId) * 100);
+    UI.drawText(ctx, 'MAP  ' + pct + '%', CONFIG.VIEW_W / 2, y - 11, '#9be564', true);
     UI.drawText(ctx, 'M TO CLOSE', CONFIG.VIEW_W / 2, y + h + 5, '#7fa86a', true);
   },
 
@@ -121,6 +125,7 @@ const Minimap = {
        "저기는 이미 다녀왔다"가 보인다 */
     if (World.chests) {
       for (const c of World.chests) {
+        if (!Fog.seenAt(World.mapId, c.x, c.y)) continue;   // 안 가본 곳의 상자는 안 보인다
         const open = Landmarks.isOpened(c.mapId, c.index);
         if (open) { put(c.x, c.y, '#6f6a5c', 1); continue; }
         if (Math.floor(World.time * 3) % 2 === 0) continue;
@@ -128,11 +133,15 @@ const Minimap = {
       }
     }
 
+    /* 바닥 물건과 몬스터도 **가본 곳에서만** 찍는다 —
+       안 그러면 안개로 덮어놓고 그 위에 점을 뿌려서 가리는 의미가 없다 */
     for (const d of Items.drops) {
+      if (!Fog.seenAt(World.mapId, d.x, d.y)) continue;
       put(d.x, d.y, d.kind === 'weapon' ? '#ffffff' : '#ffd93d', 1);
     }
     for (const s of enemies) {
       if (s.dead) continue;
+      if (!Fog.seenAt(World.mapId, s.x, s.y)) continue;
       // 점 색도 이름표와 같은 규칙 — 지도만 봐도 어느 쪽이 버거운지 보인다
       put(s.x, s.y, difficultyColor(s.level, player.level), 1);
     }

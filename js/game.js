@@ -15,6 +15,8 @@ const Game = {
   showMap: false,
   confirmNewGame: false,
   forestBanner: 0,   // 맵 이름표(태초의 숲 / 작열하는 사막)가 남는 시간 — 시작·텔레포트·동굴에서 나올 때 뜬다
+  gateBanner: 0,     // 첫 보스를 잡아 비석이 깨어났음을 알리는 표시
+  bossSlain: {},     // 한 번이라도 잡은 보스 (관문을 여는 열쇠)
   mapStates: {},     // 다른 맵에 있는 동안 접어둔 맵들 (맵·몬스터·드랍) — 텔레포트로 돌아오면 그대로 펼친다
   portalPrompt: false,   // 텔레포트 비석 앞에 서 있는가
   boss: null,        // 살아있는 보스
@@ -60,6 +62,8 @@ const Game = {
     this.seed = (saved && saved.seed) || Math.floor(Math.random() * 100000);
     this.mapStates = {};
     Landmarks.deserialize(saved && saved.landmarks);   // 이미 연 상자는 열린 채로 다시 선다
+    Fog.deserialize(saved && saved.fog);                // 밝혀둔 지도도 그대로
+    this.bossSlain = Object.assign({}, (saved && saved.bossSlain) || {});
     World.init(this.seed, (saved && CONFIG.maps[saved.map]) ? saved.map : 'forest');
     Minimap.build();
     FX.reset();
@@ -198,6 +202,13 @@ const Game = {
     Quests.openBoard();
   },
 
+  /* 비석이 깨어났는가 — 숲 보스 셋 중 하나라도 잡았으면.
+     보스를 '있어도 그만'이 아니라 다음 무대를 여는 열쇠로 만드는 장치다. */
+  portalUnlocked() {
+    if (!CONFIG.gate.desertNeedsBoss) return true;
+    return CONFIG.maps.forest.caves.some(c => this.bossSlain[c.boss]);
+  },
+
   // 텔레포트 비석 앞에서 F — 다른 맵의 비석 앞으로 옮겨간다
   updatePortalGate() {
     const p = World.portal;
@@ -207,6 +218,12 @@ const Game = {
     this.portalPrompt = true;
     if (!Items.pickupRequested) return;
     Items.pickupRequested = false;
+    // 숲에서 사막으로 나가는 길만 잠겨 있다 (돌아오는 길은 늘 열려 있다)
+    if (World.mapId === 'forest' && !this.portalUnlocked()) {
+      FX.number(p.x, p.y - 30, 'SEALED', '#ff6b6b');
+      Sound.play('error');
+      return;
+    }
     const target = World.spec.portalTo;
     this.beginTransition(() => this.travel(target));
   },
@@ -427,6 +444,12 @@ const Game = {
         // 보스는 일반 몬스터 정원과 무관하다. 한참 뒤에 다시 도전할 수 있다
         this.boss = null;
         this.bossReadyIn[this.arenaCave] = CONFIG.arena.respawnDelay;
+        // 처음 잡은 보스라면 — 이게 다음 무대를 여는 열쇠다
+        const type = this.bossSpec(this.arenaCave).type;
+        if (!this.bossSlain[type]) {
+          this.bossSlain[type] = true;
+          if (this.portalUnlocked()) this.gateBanner = 3.2;
+        }
       } else if (!this.inArena) {
         this.respawnQueue.push(Util.rand(CONFIG.spawn.respawnMin, CONFIG.spawn.respawnMax));
       }
@@ -450,6 +473,7 @@ const Game = {
   updateBanners(dt) {
     this.lairBanner = Math.max(0, this.lairBanner - dt);
     this.forestBanner = Math.max(0, this.forestBanner - dt);
+    this.gateBanner = Math.max(0, this.gateBanner - dt);
     if (this.inArena) { Sound.setTrack('boss'); return; }
     const t = World.dangerAt(this.player.x, this.player.y), bgm = World.spec.bgm;
     Sound.setTrack(t < bgm.edges[0] ? bgm.tracks[0] : (t < bgm.edges[1] ? bgm.tracks[1] : bgm.tracks[2]));
@@ -547,6 +571,7 @@ const Game = {
           this.updateHeartbeat(dt);
           Quests.update(dt, this.player);
           Landmarks.update(dt, this.player);
+          Fog.update(dt, this.player);
         }
         FX.update(dt);
       }
@@ -664,12 +689,16 @@ const Game = {
     if (this.shopPrompt && !this.showMap) Shop.drawPrompt(ui, cam);
     if (this.boardPrompt && !this.showMap) Quests.drawPrompt(ui, cam);
     if (this.chestPrompt && !this.showMap) Landmarks.drawPrompt(ui, cam, this.chestPrompt);
-    if (this.portalPrompt && !this.showMap) UI.drawPortalPrompt(ui, World.portal, cam, CONFIG.maps[World.spec.portalTo]);
+    if (this.portalPrompt && !this.showMap) {
+      UI.drawPortalPrompt(ui, World.portal, cam, CONFIG.maps[World.spec.portalTo],
+        World.mapId === 'forest' && !this.portalUnlocked());
+    }
     if (!this.showMap && !this.showInventory && !Shop.open && !Quests.open && !this.title) Quests.drawTracker(ui, this.player);
     if (Shop.open) Shop.draw(ui, this.player);
     if (Quests.open) Quests.draw(ui, this.player);
     if (this.lairBanner > 0) UI.drawBanner(ui, this.bossSpec(this.arenaCave).lairName, '#ff6b6b', this.lairBanner);
     if (this.forestBanner > 0 && !this.showMap && !this.showInventory && !Shop.open && !this.title) UI.drawBanner(ui, World.spec.name, World.spec.color, this.forestBanner);
+    if (this.gateBanner > 0 && !this.showMap) UI.drawBanner(ui, 'THE OBELISK AWAKENS', '#5ff0ff', this.gateBanner);
     if (this.confirmNewGame) UI.drawConfirm(ui);
     if (this.soundFlash > 0) UI.drawSoundState(ui, Sound.enabled);
     // 장면 전환은 맨 위를 덮는다
