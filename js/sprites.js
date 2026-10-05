@@ -853,6 +853,136 @@ function makeGrassTuft(seed, lean, pal) {
 
 /* 동굴 입구 — 포자 골짜기의 이정표. 미니맵에도 표시된다.
    지금은 들어갈 수 없는 장식이지만, 나중에 보스방 입구로 쓸 자리다. */
+/* ── 랜드마크 소품 (로드맵 5주차) ────────────────────────────
+   멀리서 "저기 뭔가 있다"로 읽혀야 하므로, 주변 자연물과 **모양이 다른 것**들로 짰다.
+   숲·사막 어디에 놓아도 어색하지 않게 색은 돌과 나무로만 쓴다. */
+
+// 보물 상자 (16x14) — 닫힌 것과 연 것. 한 번 열면 다시 닫히지 않는다
+function makeChest(open) {
+  const cv = makeCanvas(16, 14), ctx = cv.getContext('2d');
+  const OUT = '#241709', DARK = '#5e3f22', MID = '#8a5f33', LIT = '#b98a52';
+  const IRON = '#9aa0a8', IRON_D = '#565b63';
+  if (open) {
+    ctx.fillStyle = OUT; ctx.fillRect(0, 0, 16, 5);          // 젖혀진 뚜껑
+    ctx.fillStyle = DARK; ctx.fillRect(1, 1, 14, 3);
+    ctx.fillStyle = MID; ctx.fillRect(1, 1, 14, 1);
+    ctx.fillStyle = OUT; ctx.fillRect(1, 5, 14, 9);
+    ctx.fillStyle = '#17120c'; ctx.fillRect(2, 6, 12, 5);     // 텅 빈 속
+    ctx.fillStyle = DARK; ctx.fillRect(2, 11, 12, 2);
+    ctx.fillStyle = MID; ctx.fillRect(2, 11, 12, 1);
+    ctx.fillStyle = IRON_D; ctx.fillRect(4, 5, 2, 8); ctx.fillRect(10, 5, 2, 8);
+  } else {
+    ctx.fillStyle = OUT; ctx.fillRect(1, 1, 14, 12);
+    ctx.fillStyle = MID; ctx.fillRect(2, 2, 12, 4);           // 뚜껑
+    ctx.fillStyle = LIT; ctx.fillRect(2, 2, 12, 1);
+    ctx.fillStyle = DARK; ctx.fillRect(2, 6, 12, 1);
+    ctx.fillStyle = MID; ctx.fillRect(2, 7, 12, 5);           // 몸통
+    ctx.fillStyle = DARK; ctx.fillRect(2, 11, 12, 1);
+    ctx.fillStyle = IRON_D; ctx.fillRect(4, 1, 2, 12); ctx.fillRect(10, 1, 2, 12);
+    ctx.fillStyle = IRON; ctx.fillRect(4, 1, 1, 12); ctx.fillRect(10, 1, 1, 12);
+    ctx.fillStyle = OUT; ctx.fillRect(7, 5, 3, 4);            // 자물쇠
+    ctx.fillStyle = '#ffe066'; ctx.fillRect(7, 6, 2, 2);
+  }
+  return cv;
+}
+
+// 부러진 돌기둥 (12x26) — 위가 깨져 비스듬하다
+function makeRuinPillar(seed) {
+  const cv = makeCanvas(12, 26), ctx = cv.getContext('2d');
+  const rng = Util.makeRng(seed);
+  const OUT = '#2e2a24', DARK = '#6b665c', MID = '#938d80', LIT = '#bdb6a6';
+  const top = 3 + Math.floor(rng() * 6);
+  for (let y = top; y < 26; y++) {
+    const w = 8 + (y > 23 ? 2 : 0);
+    const x = 6 - Math.floor(w / 2);
+    ctx.fillStyle = OUT; ctx.fillRect(x - 1, y, w + 2, 1);
+    ctx.fillStyle = (y - top) < 2 ? LIT : DARK; ctx.fillRect(x, y, w, 1);
+    ctx.fillStyle = MID; ctx.fillRect(x + 1, y, Math.max(1, w - 4), 1);
+  }
+  for (let i = 0; i < 10; i++) {   // 금이 간 자국
+    ctx.fillStyle = rng() < 0.5 ? OUT : LIT;
+    ctx.fillRect(2 + Math.floor(rng() * 8), top + 1 + Math.floor(rng() * (24 - top)), 1, 1);
+  }
+  return cv;
+}
+
+// 무너진 돌덩이 (14x9)
+function makeRuinBlock(seed) {
+  const cv = makeCanvas(14, 9), ctx = cv.getContext('2d');
+  const rng = Util.makeRng(seed);
+  ctx.fillStyle = '#2e2a24'; ctx.fillRect(0, 1, 14, 8);
+  ctx.fillStyle = '#6b665c'; ctx.fillRect(1, 2, 12, 6);
+  ctx.fillStyle = '#938d80'; ctx.fillRect(1, 2, 12, 2);
+  ctx.fillStyle = '#bdb6a6'; ctx.fillRect(2, 2, 6, 1);
+  for (let i = 0; i < 6; i++) { ctx.fillStyle = '#4a463e'; ctx.fillRect(1 + Math.floor(rng() * 11), 3 + Math.floor(rng() * 5), 1, 1); }
+  return cv;
+}
+
+// 버려진 천막 (24x18) — 한쪽이 주저앉았다
+function makeTent(seed) {
+  const cv = makeCanvas(24, 18), ctx = cv.getContext('2d');
+  const rng = Util.makeRng(seed);
+  const OUT = '#2a2418', CANVAS_D = '#7a6a45', CANVAS_M = '#9e8c5e', CANVAS_L = '#c0ae7c';
+  for (let y = 0; y < 15; y++) {
+    const half = Math.round((y / 14) * 10) + 1;
+    ctx.fillStyle = OUT; ctx.fillRect(11 - half - 1, y + 2, half * 2 + 3, 1);
+    ctx.fillStyle = y < 4 ? CANVAS_L : (y < 10 ? CANVAS_M : CANVAS_D);
+    ctx.fillRect(11 - half, y + 2, half * 2 + 1, 1);
+  }
+  ctx.fillStyle = OUT; ctx.fillRect(8, 9, 6, 8);          // 들어가는 구멍
+  ctx.fillStyle = '#17120c'; ctx.fillRect(9, 10, 4, 7);
+  ctx.fillStyle = '#5e3f22'; ctx.fillRect(10, 0, 2, 4);   // 기둥
+  for (let i = 0; i < 8; i++) { ctx.fillStyle = CANVAS_D; ctx.fillRect(2 + Math.floor(rng() * 20), 6 + Math.floor(rng() * 10), 1, 1); }
+  return cv;
+}
+
+// 꺼진 모닥불 (14x10) — 돌을 둘러놓고 숯이 남았다
+function makeCampfire() {
+  const cv = makeCanvas(14, 10), ctx = cv.getContext('2d');
+  const stones = [[1, 4], [4, 2], [9, 2], [12, 4], [4, 7], [9, 7]];
+  ctx.fillStyle = '#2e2a24';
+  for (const s of stones) ctx.fillRect(s[0] - 1, s[1] - 1, 4, 4);
+  ctx.fillStyle = '#7a756a';
+  for (const s of stones) ctx.fillRect(s[0], s[1], 3, 3);
+  ctx.fillStyle = '#9b968a';
+  for (const s of stones) ctx.fillRect(s[0], s[1], 2, 1);
+  ctx.fillStyle = '#3a3027'; ctx.fillRect(4, 4, 6, 3);     // 재
+  ctx.fillStyle = '#241c15'; ctx.fillRect(4, 4, 5, 1); ctx.fillRect(6, 6, 4, 1);
+  ctx.fillStyle = '#5e3f22'; ctx.fillRect(3, 5, 8, 1); ctx.fillRect(5, 3, 1, 5);  // 타다 만 장작
+  return cv;
+}
+
+// 작은 사당 (14x24) — 받침 위에 선 돌판에 무늬가 하나 새겨져 있다
+function makeShrine(seed) {
+  const cv = makeCanvas(14, 24), ctx = cv.getContext('2d');
+  const rng = Util.makeRng(seed);
+  const OUT = '#2a2820', DARK = '#6f6a5c', MID = '#978f7c', LIT = '#c2b9a2';
+  ctx.fillStyle = OUT; ctx.fillRect(0, 19, 14, 5);         // 받침
+  ctx.fillStyle = DARK; ctx.fillRect(1, 20, 12, 3);
+  ctx.fillStyle = MID; ctx.fillRect(1, 20, 12, 1);
+  ctx.fillStyle = OUT; ctx.fillRect(2, 2, 10, 18);         // 돌판
+  ctx.fillStyle = DARK; ctx.fillRect(3, 3, 8, 16);
+  ctx.fillStyle = MID; ctx.fillRect(3, 3, 3, 16);
+  ctx.fillStyle = LIT; ctx.fillRect(3, 3, 8, 1);
+  ctx.fillStyle = '#5ff0ff'; ctx.fillRect(6, 8, 2, 2); ctx.fillRect(5, 10, 4, 1); ctx.fillRect(6, 11, 2, 2);
+  for (let i = 0; i < 8; i++) { ctx.fillStyle = OUT; ctx.fillRect(3 + Math.floor(rng() * 8), 4 + Math.floor(rng() * 14), 1, 1); }
+  return cv;
+}
+
+// 파헤친 흙더미 (18x9) — 묻힌 상자 둘레에 쌓는다
+function makeDigMound(seed) {
+  const cv = makeCanvas(18, 9), ctx = cv.getContext('2d');
+  const rng = Util.makeRng(seed);
+  const OUT = '#3a2a16', DARK = '#5e4322', MID = '#7d5f3c';
+  for (let y = 0; y < 7; y++) {
+    const half = 8 - y;
+    ctx.fillStyle = OUT; ctx.fillRect(9 - half - 1, y + 2, half * 2 + 3, 1);
+    ctx.fillStyle = y < 2 ? MID : DARK; ctx.fillRect(9 - half, y + 2, half * 2 + 1, 1);
+  }
+  for (let i = 0; i < 10; i++) { ctx.fillStyle = rng() < 0.5 ? MID : OUT; ctx.fillRect(2 + Math.floor(rng() * 14), 3 + Math.floor(rng() * 5), 1, 1); }
+  return cv;
+}
+
 /* 의뢰 게시판 (24x28) — 기둥 둘에 널빤지를 얹고 종이 세 장을 압정으로 박았다.
    상인 옆에 서서, 멀리서도 "뭔가 읽을 것이 있다"로 보이게 종이를 밝게 둔다. */
 function makeQuestBoard(seed) {
@@ -1488,6 +1618,14 @@ function buildSprites() {
   SPRITES.merchant = [makeSprite('merchant', MERCHANT), makeSprite('merchant_blink', MERCHANT_BLINK)];
   SPRITES.stall = makeStall(1201);
   SPRITES.questBoard = makeQuestBoard(1303);
+  // 랜드마크 — 보물 상자(닫힘/열림)와 그 둘레에 놓는 소품들
+  SPRITES.chest = [makeChest(false), makeChest(true)];
+  SPRITES.ruinPillar = [0, 1, 2].map(i => makeRuinPillar(1401 + i * 131));
+  SPRITES.ruinBlock = [0, 1].map(i => makeRuinBlock(1501 + i * 97));
+  SPRITES.tent = [0, 1].map(i => makeTent(1601 + i * 113));
+  SPRITES.campfire = makeCampfire();
+  SPRITES.shrine = [0, 1].map(i => makeShrine(1701 + i * 149));
+  SPRITES.digMound = [0, 1].map(i => makeDigMound(1801 + i * 167));
 
   /* 몬스터 — 종류마다 색이 하나다. 레벨은 머리 위 이름표 색이 알려준다.
      (예전에는 레벨 등급 8종을 전부 찍어 두고 골라 썼다) */

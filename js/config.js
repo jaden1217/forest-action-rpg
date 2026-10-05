@@ -460,6 +460,28 @@ const CONFIG = {
     },
   },
 
+  /* ── 랜드마크와 보물 (로드맵 5주차) ──────────────────────
+     맵에 눈에 띄는 지점을 흩뿌리고 그 한가운데에 보물 상자를 둔다.
+     멀리 나갈 이유가 "레벨 높은 몬스터" 하나뿐이라 넓은 지형에 볼 것이 없었다.
+
+     상자 보상의 등급은 **그 자리의 위험도**가 정한다 (가까우면 rarityNear, 멀면 rarityFar 쪽으로).
+     한 번 열면 끝이고, 연 상자만 저장에 남는다 — 자리와 내용물은 시드에서 다시 나온다. */
+  landmarks: {
+    count: 7,               // 맵 하나당
+    ringFrom: 0.18,         // 위험도를 이 구간에 고르게 나눠 놓는다
+    ringTo: 0.95,
+    minGap: 220,            // 랜드마크끼리 최소 거리 (px)
+    interactRange: 24,
+    kinds: {
+      forest: ['ruin', 'camp', 'buried', 'ruin', 'camp'],
+      desert: ['ruin', 'camp', 'buried', 'shrine', 'shrine'],
+    },
+    gold: { base: 30, perDanger: 190 },   // 가까운 상자 30G, 가장자리 220G
+    potionChance: 0.5,
+    rarityNear: [35, 42, 20, 3],    // COMMON / FINE / RARE / LEGEND
+    rarityFar: [5, 28, 45, 22],
+  },
+
   /* ── 의뢰 (로드맵 4주차) ────────────────────────────────
      늘 세 개가 걸려 있고, 그 셋이 화면 오른쪽에 항상 적혀 있다.
      이 게임에 가장 크게 비어 있던 것이 "다음에 뭘 하지?" 였다.

@@ -59,6 +59,7 @@ const Game = {
   startGame(saved) {
     this.seed = (saved && saved.seed) || Math.floor(Math.random() * 100000);
     this.mapStates = {};
+    Landmarks.deserialize(saved && saved.landmarks);   // 이미 연 상자는 열린 채로 다시 선다
     World.init(this.seed, (saved && CONFIG.maps[saved.map]) ? saved.map : 'forest');
     Minimap.build();
     FX.reset();
@@ -158,12 +159,30 @@ const Game = {
     this.shopPrompt = false;
     this.portalPrompt = false;
     this.boardPrompt = false;
+    this.chestPrompt = null;
     if (this.inArena) this.updateArenaGate(dt);
     else {
       this.updateCaveGate();
       this.updateShopGate();
       this.updateBoardGate();
+      this.updateChestGate();
       this.updatePortalGate();
+    }
+  },
+
+  // 보물 상자 앞에서 F — 아직 안 연 상자만 받는다
+  updateChestGate() {
+    if (this.player.dead || this.cavePrompt || this.shopPrompt || this.boardPrompt || Items.nearWeapon) return;
+    if (!World.chests) return;
+    for (const c of World.chests) {
+      if (Landmarks.isOpened(c.mapId, c.index)) continue;
+      if (Util.dist(this.player.x, this.player.y, c.x, c.y) > CONFIG.landmarks.interactRange) continue;
+      this.chestPrompt = c;
+      if (!Items.pickupRequested) return;
+      Items.pickupRequested = false;
+      Landmarks.open(c, this.player);
+      this.chestPrompt = null;
+      return;
     }
   },
 
@@ -527,6 +546,7 @@ const Game = {
           this.updateBanners(dt);
           this.updateHeartbeat(dt);
           Quests.update(dt, this.player);
+          Landmarks.update(dt, this.player);
         }
         FX.update(dt);
       }
@@ -643,6 +663,7 @@ const Game = {
     if (this.exitPrompt) UI.drawCavePrompt(ui, World.arenaExit, cam, 0, 'LEAVE');
     if (this.shopPrompt && !this.showMap) Shop.drawPrompt(ui, cam);
     if (this.boardPrompt && !this.showMap) Quests.drawPrompt(ui, cam);
+    if (this.chestPrompt && !this.showMap) Landmarks.drawPrompt(ui, cam, this.chestPrompt);
     if (this.portalPrompt && !this.showMap) UI.drawPortalPrompt(ui, World.portal, cam, CONFIG.maps[World.spec.portalTo]);
     if (!this.showMap && !this.showInventory && !Shop.open && !Quests.open && !this.title) Quests.drawTracker(ui, this.player);
     if (Shop.open) Shop.draw(ui, this.player);

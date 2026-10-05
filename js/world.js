@@ -59,6 +59,7 @@ const World = {
     this.placeTrees(Util.makeRng(seed + 17));
     this.buildGrid();   // 나무 충돌을 먼저 등록해야 장식이 나무를 피해서 놓인다
     this.placeDecor(Util.makeRng(seed + 41));
+    Landmarks.place(Util.makeRng(seed + 97));   // 폐허·야영지·묻힌 상자 — 그 한가운데에 보물 상자
     this.board = null;  // 의뢰 게시판 (Quests.place 가 채운다)
     Shop.place();       // 9주차: 시작 지점 옆 가판대와 상인
     Quests.place();     // 의뢰 게시판 — 상인 반대편
@@ -77,7 +78,7 @@ const World = {
   STATE_KEYS: [
     'cols', 'rows', 'w', 'h', 'ground', 'props', 'solids', 'grid',
     'tiles', 'tileBlocked', 'shade', 'colorRow', 'dangerNoise',
-    'startX', 'startY', 'wetNoise', 'openNoise', 'caves', 'arenaExit', 'merchant', 'board',
+    'startX', 'startY', 'wetNoise', 'openNoise', 'caves', 'arenaExit', 'merchant', 'board', 'chests',
     'time', 'isArena', 'mapId', 'spec', 'portal',
   ],
 
@@ -106,6 +107,7 @@ const World = {
     this.solids = [];
     this.time = 0;
     this.caves = [];
+    this.chests = [];
     this.merchant = null;
     this.board = null;
     this.portal = null;

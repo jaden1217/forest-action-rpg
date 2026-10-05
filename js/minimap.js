@@ -117,6 +117,17 @@ const Minimap = {
       ctx.fillRect(ox + mx * scale, oy + my * scale, size * scale, size * scale);
     };
 
+    /* 보물 상자 — 아직 안 연 것만 금빛으로 깜빡인다. 연 것은 어둡게 남아
+       "저기는 이미 다녀왔다"가 보인다 */
+    if (World.chests) {
+      for (const c of World.chests) {
+        const open = Landmarks.isOpened(c.mapId, c.index);
+        if (open) { put(c.x, c.y, '#6f6a5c', 1); continue; }
+        if (Math.floor(World.time * 3) % 2 === 0) continue;
+        put(c.x, c.y, '#ffe066', 1);
+      }
+    }
+
     for (const d of Items.drops) {
       put(d.x, d.y, d.kind === 'weapon' ? '#ffffff' : '#ffd93d', 1);
     }
