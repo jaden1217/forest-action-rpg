@@ -40,6 +40,7 @@ const Save = {
         bag: Inventory.serialize(p),
         gear: { head: p.gear.head, body: p.gear.body, trinket: p.gear.trinket },
       },
+      quests: Quests.serialize(),
       drops: drops.map(d => ({
         kind: d.kind, weapon: d.weapon, level: d.level, amount: d.amount, id: d.id,
         item: d.item, growing: !!d.growing,

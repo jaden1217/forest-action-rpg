@@ -853,6 +853,31 @@ function makeGrassTuft(seed, lean, pal) {
 
 /* 동굴 입구 — 포자 골짜기의 이정표. 미니맵에도 표시된다.
    지금은 들어갈 수 없는 장식이지만, 나중에 보스방 입구로 쓸 자리다. */
+/* 의뢰 게시판 (24x28) — 기둥 둘에 널빤지를 얹고 종이 세 장을 압정으로 박았다.
+   상인 옆에 서서, 멀리서도 "뭔가 읽을 것이 있다"로 보이게 종이를 밝게 둔다. */
+function makeQuestBoard(seed) {
+  const cv = makeCanvas(24, 28), ctx = cv.getContext('2d');
+  const rng = Util.makeRng(seed);
+  const OUT = '#2a1b10', DARK = '#5e3f22', MID = '#8a5f33', LIT = '#b98a52';
+  // 기둥 둘
+  ctx.fillStyle = OUT; ctx.fillRect(3, 12, 4, 16); ctx.fillRect(17, 12, 4, 16);
+  ctx.fillStyle = DARK; ctx.fillRect(4, 12, 2, 15); ctx.fillRect(18, 12, 2, 15);
+  // 판
+  ctx.fillStyle = OUT; ctx.fillRect(1, 2, 22, 15);
+  ctx.fillStyle = MID; ctx.fillRect(2, 3, 20, 13);
+  ctx.fillStyle = DARK; for (let y = 6; y < 16; y += 3) ctx.fillRect(2, y, 20, 1);
+  ctx.fillStyle = LIT; ctx.fillRect(2, 3, 20, 1);
+  // 종이 세 장 — 글줄처럼 보이는 가는 선과 붉은 압정
+  for (const p of [[4, 5], [10, 4], [15, 7]]) {
+    ctx.fillStyle = '#2a2418'; ctx.fillRect(p[0] - 1, p[1] - 1, 7, 8);
+    ctx.fillStyle = '#efe6d0'; ctx.fillRect(p[0], p[1], 5, 6);
+    ctx.fillStyle = '#9a8f78';
+    for (let k = 0; k < 3; k++) ctx.fillRect(p[0] + 1, p[1] + 1 + k * 2, 3 + (rng() < 0.5 ? 0 : 1) - 1, 1);
+    ctx.fillStyle = '#c93f3f'; ctx.fillRect(p[0] + 2, p[1] - 1, 1, 1);
+  }
+  return cv;
+}
+
 /* 9주차: 가판대 (34x30). 상인이 이 앞에 선다.
    붉은 줄무늬 차양이 멀리서도 "가게"로 읽히게 해준다. */
 function makeStall(seed) {
@@ -1462,6 +1487,7 @@ function buildSprites() {
   };
   SPRITES.merchant = [makeSprite('merchant', MERCHANT), makeSprite('merchant_blink', MERCHANT_BLINK)];
   SPRITES.stall = makeStall(1201);
+  SPRITES.questBoard = makeQuestBoard(1303);
 
   /* 몬스터 — 종류마다 색이 하나다. 레벨은 머리 위 이름표 색이 알려준다.
      (예전에는 레벨 등급 8종을 전부 찍어 두고 골라 썼다) */

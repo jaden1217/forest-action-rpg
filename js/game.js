@@ -66,6 +66,7 @@ const Game = {
     Projectiles.reset();
     Ambient.reset();
     Shop.reset();
+    Quests.reset();
     this.showInventory = false;
     this.showMap = false;
     this.confirmNewGame = false;
@@ -74,6 +75,7 @@ const Game = {
     // 시작 지점은 숲 한가운데 — 사방 어디로 가든 점점 위험해진다
     this.player = new Player(World.startX, World.startY);
     if (saved) Save.apply(saved, this.player);
+    Quests.deserialize(saved && saved.quests, this.player);   // 저장된 의뢰를 되살리고 빈자리를 채운다
     this.forestBanner = 2.8;   // 맵 이름을 한 번 띄운다
     this.boss = null;
     this.bossReadyIn = CONFIG.maps.forest.caves.map(() => 0);   // 동굴은 숲에만 있다
@@ -155,12 +157,26 @@ const Game = {
     this.exitPrompt = false;
     this.shopPrompt = false;
     this.portalPrompt = false;
+    this.boardPrompt = false;
     if (this.inArena) this.updateArenaGate(dt);
     else {
       this.updateCaveGate();
       this.updateShopGate();
+      this.updateBoardGate();
       this.updatePortalGate();
     }
+  },
+
+  // 게시판 앞에서 F — 상인·동굴 다음 차례다
+  updateBoardGate() {
+    const b = World.board;
+    if (!b || this.player.dead || this.cavePrompt || this.shopPrompt || Items.nearWeapon) return;
+    if (Util.dist(this.player.x, this.player.y, b.x, b.y) > CONFIG.quests.interactRange) return;
+
+    this.boardPrompt = true;
+    if (!Items.pickupRequested) return;
+    Items.pickupRequested = false;
+    Quests.openBoard();
   },
 
   // 텔레포트 비석 앞에서 F — 다른 맵의 비석 앞으로 옮겨간다
@@ -386,6 +402,7 @@ const Game = {
       if (!this.enemies[i].dead) continue;
       const e = this.enemies[i];
       Items.dropFor(e);
+      Quests.onKill(e);         // 처치 의뢰는 여기서 센다
       this.enemies.splice(i, 1);
       if (e.isBoss) {
         // 보스는 일반 몬스터 정원과 무관하다. 한참 뒤에 다시 도전할 수 있다
@@ -407,7 +424,7 @@ const Game = {
   },
 
   paused() {
-    return this.showInventory || this.showMap || this.confirmNewGame || Shop.open || PatchNotes.open;
+    return this.showInventory || this.showMap || this.confirmNewGame || Shop.open || Quests.open || PatchNotes.open;
   },
 
   // 이름표 시간과 배경음 — 시작점에서 멀어질수록 곡이 무거워진다 (맵마다 spec.bgm 에 곡과 경계가 있다)
@@ -442,6 +459,7 @@ const Game = {
     }
     // 상점이나 인벤토리가 열려 있으면 그쪽이 키를 다 가져간다
     if (Shop.open) { Shop.handleInput(this.player); return; }
+    if (Quests.open) { Quests.handleInput(this.player); return; }
     if (this.showInventory) { Inventory.handleInput(this.player); return; }
     if (Input.pressed.KeyV) { Sound.toggle(); Sound.play('toggle'); this.soundFlash = 1.4; }
     if (Input.inventoryPressed()) { this.showInventory = true; Inventory.message = ''; }
@@ -508,6 +526,7 @@ const Game = {
           Ambient.update(dt, this.cam);
           this.updateBanners(dt);
           this.updateHeartbeat(dt);
+          Quests.update(dt, this.player);
         }
         FX.update(dt);
       }
@@ -623,8 +642,11 @@ const Game = {
     if (this.cavePrompt) UI.drawCavePrompt(ui, this.cavePrompt, cam, this.bossReadyIn[this.cavePrompt.caveIndex], 'ENTER');
     if (this.exitPrompt) UI.drawCavePrompt(ui, World.arenaExit, cam, 0, 'LEAVE');
     if (this.shopPrompt && !this.showMap) Shop.drawPrompt(ui, cam);
+    if (this.boardPrompt && !this.showMap) Quests.drawPrompt(ui, cam);
     if (this.portalPrompt && !this.showMap) UI.drawPortalPrompt(ui, World.portal, cam, CONFIG.maps[World.spec.portalTo]);
+    if (!this.showMap && !this.showInventory && !Shop.open && !Quests.open && !this.title) Quests.drawTracker(ui, this.player);
     if (Shop.open) Shop.draw(ui, this.player);
+    if (Quests.open) Quests.draw(ui, this.player);
     if (this.lairBanner > 0) UI.drawBanner(ui, this.bossSpec(this.arenaCave).lairName, '#ff6b6b', this.lairBanner);
     if (this.forestBanner > 0 && !this.showMap && !this.showInventory && !Shop.open && !this.title) UI.drawBanner(ui, World.spec.name, World.spec.color, this.forestBanner);
     if (this.confirmNewGame) UI.drawConfirm(ui);

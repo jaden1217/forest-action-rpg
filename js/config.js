@@ -460,6 +460,29 @@ const CONFIG = {
     },
   },
 
+  /* ── 의뢰 (로드맵 4주차) ────────────────────────────────
+     늘 세 개가 걸려 있고, 그 셋이 화면 오른쪽에 항상 적혀 있다.
+     이 게임에 가장 크게 비어 있던 것이 "다음에 뭘 하지?" 였다.
+
+     보상을 골드 + 장비 한 점으로 잡은 이유: 의뢰를 하다 보면 장비가 저절로 갖춰지게 하려고.
+     등급은 최소 FINE 이라 바닥에서 줍는 것보다 쓸 만하다. */
+  quests: {
+    slots: 3,
+    interactRange: 26,
+    reachRange: 48,         // 탐험 의뢰 — 이 거리 안에 들어가면 가본 것으로 친다
+    types: ['kill', 'collect', 'explore'],
+    kill: { min: 8, max: 16 },
+    collect: { min: 4, max: 9 },
+    goldBase: 40,
+    goldPerLevel: 14,
+    goldMult: { kill: 1.0, collect: 0.9, explore: 1.25 },
+    rarityWeights: [0, 55, 32, 13],   // COMMON 은 보상으로 안 나온다
+    monsterNames: {
+      slime: 'SLIMES', wolf: 'WOLVES', mushroom: 'MUSHROOMS',
+      scorpion: 'SCORPIONS', cactus: 'CACTI', sandworm: 'SANDWORMS',
+    },
+  },
+
   // 텔레포트 비석 — 맵마다 시작점 옆에 하나. 앞에서 F 를 누르면 다른 맵의 비석 앞으로 옮겨간다
   portal: {
     interactRange: 26,
