@@ -26,6 +26,7 @@ class Enemy {
     this.radius = 7 * stats.scale;
     this.dead = false;
 
+    this.status = {};          // 걸려 있는 상태이상 (Status 가 다룬다)
     this.dir = Math.random() * Math.PI * 2;
     this.contactTimer = 0;
     this.hurtFlash = 0;
@@ -73,8 +74,13 @@ class Enemy {
     }
   }
 
+  // 보스는 지속 시간을 절반만 받는다 (지속 피해로 녹아버리지 않게)
+  statusResist(type) { return this.isBoss ? CONFIG.status.bossResist : 0; }
+
   update(dt, player) {
     if (this.dead) return;
+    Status.update(this, dt, false);
+    if (this.dead) return;     // 화상·중독으로 여기서 쓰러질 수 있다
     this.unstick();
     this.contactTimer = Math.max(0, this.contactTimer - dt);
     this.hurtFlash = Math.max(0, this.hurtFlash - dt);
@@ -101,9 +107,12 @@ class Enemy {
     return true;
   }
 
-  // x축과 y축을 따로 밀어 벽에 붙어도 미끄러지듯 움직인다.
-  // 벽에 막히면 방향을 튕겨 제자리에 끼지 않게 한다.
+  /* x축과 y축을 따로 밀어 벽에 붙어도 미끄러지듯 움직인다.
+     벽에 막히면 방향을 튕겨 제자리에 끼지 않게 한다.
+     빙결은 여기서 한 번에 처리한다 — 모든 몬스터가 이 길로 움직이므로 종류마다 손볼 것이 없다. */
   moveWithCollision(dx, dy) {
+    const slow = Status.speedScale(this);
+    dx *= slow; dy *= slow;
     const step = 2;
     let remain = dx;
     while (Math.abs(remain) > 0.001) {
@@ -127,6 +136,7 @@ class Enemy {
 
   // knockScale — 스킬처럼 더 세게 날려보내야 할 때 쓰는 추가 배수
   takeHit(damage, angle, crit, player, knockScale) {
+    damage = Math.round(damage * Status.damageTaken(this));   // 감전되어 있으면 더 아프다
     this.hp -= damage;
     this.hurtFlash = 0.12;
     this.showHp = 2.5;
@@ -188,6 +198,7 @@ class Enemy {
   // 레벨 표시와 체력바 — 모든 몬스터가 같은 자리에 같은 모양으로 띄운다
   drawLabel(ctx, sx, topY) {
     const pal = this.palette;
+    Status.drawMarks(ctx, this, sx, topY);
     UI.drawText(ctx, 'L' + this.level, sx - 4, topY - 5, this.labelColor, false);
 
     if (this.showHp > 0) {

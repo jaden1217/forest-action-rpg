@@ -460,6 +460,43 @@ const CONFIG = {
     },
   },
 
+  /* ── 상태이상 (로드맵 7주차) ────────────────────────────
+     몬스터와 플레이어 **양쪽에 같은 규칙으로** 걸린다 (js/status.js 하나가 둘 다 다룬다).
+
+       ratio      지속 피해 = '건 쪽의 힘' x 이 값 (플레이어면 그 일격의 피해, 몬스터면 공격력)
+       tick       몇 초마다 아픈가
+       blockRegen 걸려 있는 동안 자연 회복이 멈추는가
+       puff       매 프레임 알갱이가 피어오를 확률
+
+     화상은 짧고 세게, 중독은 길고 약한 대신 회복을 막는다.
+     빙결은 피해 없이 느리게 만들고, 감전은 받는 피해를 늘려서 다른 것과 겹칠 때 무섭다. */
+  status: {
+    list: {
+      burn: {
+        name: 'BURNING', short: 'BRN', color: '#ff8a3c',
+        time: 4, tick: 0.5, ratio: 0.16, rise: true, puff: 0.5,
+        puffColors: ['#ff8a3c', '#ffd27a', '#c93f3f'],
+      },
+      poison: {
+        name: 'POISONED', short: 'PSN', color: '#7dff8a',
+        time: 6, tick: 0.5, ratio: 0.08, blockRegen: true, rise: true, puff: 0.3,
+        puffColors: ['#7dff8a', '#3fa347'],
+      },
+      freeze: {
+        name: 'FROZEN', short: 'FRZ', color: '#9fe8ff',
+        time: 2.5, slow: 0.5, puff: 0.3,
+        puffColors: ['#9fe8ff', '#ffffff'],
+      },
+      shock: {
+        name: 'SHOCKED', short: 'SHK', color: '#ffe066',
+        time: 3, amp: 1.3, rise: true, puff: 0.35,
+        puffColors: ['#ffe066', '#ffffff'],
+      },
+    },
+    bossResist: 0.5,        // 보스는 지속 시간을 절반만 받는다 (지속 피해로 녹지 않게)
+    monsterPoison: 0.7,     // 몬스터가 거는 중독의 세기 배수 (몬스터 공격력 기준)
+  },
+
   /* ── 발견 안개 (로드맵 6주차) ───────────────────────────
      지도가 처음부터 다 보이면 '내가 만든 기록'이 아니라 그냥 설명서다.
      가본 곳만 밝아지게 하고, 처음 들어간 구역마다 경험치 한 덩이를 준다. */
@@ -476,8 +513,9 @@ const CONFIG = {
      보스가 '있어도 그만'이 아니라 **다음 무대를 여는 열쇠**가 되게 한다.
      숲 보스 셋 중 하나라도 잡아야 사막으로 가는 비석이 깨어난다. */
   gate: {
-    desertNeedsBoss: true,
-    lockedText: 'SLAY A FOREST BOSS',
+    // 숲에서 가장 센 보스(늙은 버섯, Lv30)를 잡아야 사막 비석이 깨어난다.
+    // '아무 보스나'로는 1단계 보스만 잡고 넘어갈 수 있어서, 숲을 끝까지 보고 가게 했다
+    requiredBoss: 'mushroom',
   },
 
   /* ── 랜드마크와 보물 (로드맵 5주차) ──────────────────────
@@ -593,8 +631,7 @@ const CONFIG = {
     stingTime: 0.16,        // 찌르며 앞으로 나가는 시간
     stingSpeed: 150,
     recover: 0.5,
-    contactCooldown: 0.9,
-    poison: { time: 4, tick: 0.5, ratio: 0.2 },   // 4초 동안 0.5초마다 공격력의 20%
+    contactCooldown: 0.9,   // 찌르면 중독을 건다 (세기는 CONFIG.status 가 정한다)
   },
 
   // 선인장 — 뿌리내린 채 사방으로 가시를 쏜다. 조준하지 않는 대신 고리로 퍼져서 틈새로 피해야 한다
@@ -943,11 +980,18 @@ const CONFIG = {
       armor:       { word: 'STURDY',   label: 'ARM',   range: [2, 5],  perLevel: 0.12 },
       maxHp:       { word: 'HEARTY',   label: 'HP',    range: [5, 12], perLevel: 0.8 },
       power:       { word: 'BRUTAL',   label: 'ATK',   range: [1, 2],  perLevel: 0.12 },
+      // 때릴 때 확률로 상태이상을 건다 (7주차) — 이 넷이 붙어야 플레이어도 불을 붙일 수 있다
+      fiery:       { word: 'FIERY',    label: 'BURN',  range: [6, 12], perLevel: 0.15, pct: true, status: 'burn' },
+      frosty:      { word: 'FROSTY',   label: 'FREEZE',range: [6, 12], perLevel: 0.15, pct: true, status: 'freeze' },
+      shocking:    { word: 'SHOCKING', label: 'SHOCK', range: [6, 12], perLevel: 0.15, pct: true, status: 'shock' },
+      venomous:    { word: 'VENOMOUS', label: 'VENOM', range: [6, 12], perLevel: 0.15, pct: true, status: 'poison' },
+      ward:        { word: 'WARDED',   label: 'WARD',  range: [5, 12], perLevel: 0.3,  pct: true },
     },
     // 여러 점을 겹쳐 입었을 때의 총합 상한 (없는 것은 안 묶는다)
     caps: {
       attackSpeed: 40, crit: 25, critMult: 120, speed: 40,
       lifesteal: 20, potion: 100, cooldown: 45, knockRes: 80, gold: 150,
+      fiery: 45, frosty: 45, shocking: 45, venomous: 45, ward: 70,
     },
   },
 

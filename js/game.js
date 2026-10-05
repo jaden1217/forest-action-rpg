@@ -205,8 +205,8 @@ const Game = {
   /* 비석이 깨어났는가 — 숲 보스 셋 중 하나라도 잡았으면.
      보스를 '있어도 그만'이 아니라 다음 무대를 여는 열쇠로 만드는 장치다. */
   portalUnlocked() {
-    if (!CONFIG.gate.desertNeedsBoss) return true;
-    return CONFIG.maps.forest.caves.some(c => this.bossSlain[c.boss]);
+    const need = CONFIG.gate.requiredBoss;
+    return !need || !!this.bossSlain[need];
   },
 
   // 텔레포트 비석 앞에서 F — 다른 맵의 비석 앞으로 옮겨간다

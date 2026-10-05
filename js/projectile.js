@@ -55,6 +55,8 @@ const Projectiles = {
         // 무적 시간 중이면 피해가 들어가지 않으므로 탄도 그대로 지나가게 둔다
         if (player.invuln <= 0) {
           player.takeDamage(p.damage, p.x, p.y);
+          // 포자는 독을 품고 있다 (가시는 그냥 아프다)
+          if (p.type === 'mushroom') Status.apply(player, 'poison', p.damage * CONFIG.status.monsterPoison, null);
           this.burst(p);
           this.list.splice(i, 1);
         }

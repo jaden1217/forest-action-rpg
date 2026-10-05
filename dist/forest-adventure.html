@@ -153,7 +153,7 @@ html, body {
 }
 
 </style>
-<!-- built 2026-10-05 10:11 by tools/build.js -->
+<!-- built 2026-10-05 10:32 by tools/build.js -->
 </head>
 <body>
   <div id="stage">
@@ -641,6 +641,43 @@ const CONFIG = {
     },
   },
 
+  /* ── 상태이상 (로드맵 7주차) ────────────────────────────
+     몬스터와 플레이어 **양쪽에 같은 규칙으로** 걸린다 (js/status.js 하나가 둘 다 다룬다).
+
+       ratio      지속 피해 = '건 쪽의 힘' x 이 값 (플레이어면 그 일격의 피해, 몬스터면 공격력)
+       tick       몇 초마다 아픈가
+       blockRegen 걸려 있는 동안 자연 회복이 멈추는가
+       puff       매 프레임 알갱이가 피어오를 확률
+
+     화상은 짧고 세게, 중독은 길고 약한 대신 회복을 막는다.
+     빙결은 피해 없이 느리게 만들고, 감전은 받는 피해를 늘려서 다른 것과 겹칠 때 무섭다. */
+  status: {
+    list: {
+      burn: {
+        name: 'BURNING', short: 'BRN', color: '#ff8a3c',
+        time: 4, tick: 0.5, ratio: 0.16, rise: true, puff: 0.5,
+        puffColors: ['#ff8a3c', '#ffd27a', '#c93f3f'],
+      },
+      poison: {
+        name: 'POISONED', short: 'PSN', color: '#7dff8a',
+        time: 6, tick: 0.5, ratio: 0.08, blockRegen: true, rise: true, puff: 0.3,
+        puffColors: ['#7dff8a', '#3fa347'],
+      },
+      freeze: {
+        name: 'FROZEN', short: 'FRZ', color: '#9fe8ff',
+        time: 2.5, slow: 0.5, puff: 0.3,
+        puffColors: ['#9fe8ff', '#ffffff'],
+      },
+      shock: {
+        name: 'SHOCKED', short: 'SHK', color: '#ffe066',
+        time: 3, amp: 1.3, rise: true, puff: 0.35,
+        puffColors: ['#ffe066', '#ffffff'],
+      },
+    },
+    bossResist: 0.5,        // 보스는 지속 시간을 절반만 받는다 (지속 피해로 녹지 않게)
+    monsterPoison: 0.7,     // 몬스터가 거는 중독의 세기 배수 (몬스터 공격력 기준)
+  },
+
   /* ── 발견 안개 (로드맵 6주차) ───────────────────────────
      지도가 처음부터 다 보이면 '내가 만든 기록'이 아니라 그냥 설명서다.
      가본 곳만 밝아지게 하고, 처음 들어간 구역마다 경험치 한 덩이를 준다. */
@@ -657,8 +694,9 @@ const CONFIG = {
      보스가 '있어도 그만'이 아니라 **다음 무대를 여는 열쇠**가 되게 한다.
      숲 보스 셋 중 하나라도 잡아야 사막으로 가는 비석이 깨어난다. */
   gate: {
-    desertNeedsBoss: true,
-    lockedText: 'SLAY A FOREST BOSS',
+    // 숲에서 가장 센 보스(늙은 버섯, Lv30)를 잡아야 사막 비석이 깨어난다.
+    // '아무 보스나'로는 1단계 보스만 잡고 넘어갈 수 있어서, 숲을 끝까지 보고 가게 했다
+    requiredBoss: 'mushroom',
   },
 
   /* ── 랜드마크와 보물 (로드맵 5주차) ──────────────────────
@@ -774,8 +812,7 @@ const CONFIG = {
     stingTime: 0.16,        // 찌르며 앞으로 나가는 시간
     stingSpeed: 150,
     recover: 0.5,
-    contactCooldown: 0.9,
-    poison: { time: 4, tick: 0.5, ratio: 0.2 },   // 4초 동안 0.5초마다 공격력의 20%
+    contactCooldown: 0.9,   // 찌르면 중독을 건다 (세기는 CONFIG.status 가 정한다)
   },
 
   // 선인장 — 뿌리내린 채 사방으로 가시를 쏜다. 조준하지 않는 대신 고리로 퍼져서 틈새로 피해야 한다
@@ -1124,11 +1161,18 @@ const CONFIG = {
       armor:       { word: 'STURDY',   label: 'ARM',   range: [2, 5],  perLevel: 0.12 },
       maxHp:       { word: 'HEARTY',   label: 'HP',    range: [5, 12], perLevel: 0.8 },
       power:       { word: 'BRUTAL',   label: 'ATK',   range: [1, 2],  perLevel: 0.12 },
+      // 때릴 때 확률로 상태이상을 건다 (7주차) — 이 넷이 붙어야 플레이어도 불을 붙일 수 있다
+      fiery:       { word: 'FIERY',    label: 'BURN',  range: [6, 12], perLevel: 0.15, pct: true, status: 'burn' },
+      frosty:      { word: 'FROSTY',   label: 'FREEZE',range: [6, 12], perLevel: 0.15, pct: true, status: 'freeze' },
+      shocking:    { word: 'SHOCKING', label: 'SHOCK', range: [6, 12], perLevel: 0.15, pct: true, status: 'shock' },
+      venomous:    { word: 'VENOMOUS', label: 'VENOM', range: [6, 12], perLevel: 0.15, pct: true, status: 'poison' },
+      ward:        { word: 'WARDED',   label: 'WARD',  range: [5, 12], perLevel: 0.3,  pct: true },
     },
     // 여러 점을 겹쳐 입었을 때의 총합 상한 (없는 것은 안 묶는다)
     caps: {
       attackSpeed: 40, crit: 25, critMult: 120, speed: 40,
       lifesteal: 20, potion: 100, cooldown: 45, knockRes: 80, gold: 150,
+      fiery: 45, frosty: 45, shocking: 45, venomous: 45, ward: 70,
     },
   },
 
@@ -4914,7 +4958,7 @@ class Player {
     this.recalcStats();
     Inventory.create(this);
 
-    this.poison = null;        // 전갈 독 — { time, tick, dmg, next }. 0.5초마다 조금씩 깎이고 자연 회복이 멈춘다
+    this.status = {};          // 걸려 있는 상태이상 (Status 가 다룬다 — 몬스터와 같은 규칙)
     this.attackTimer = 0;      // 휘두르는 중이면 0보다 큼
     this.cooldown = 0;
     this.attackBuffer = 0;     // 쿨다운 중에 누른 공격을 잠깐 기억해둔다
@@ -5069,7 +5113,7 @@ class Player {
 
   // 손 빠르기 — QUICK 옵션과 광폭화 버프가 함께 곱해진다
   attackSpeedMult() {
-    return (1 + this.stat('attackSpeed') / 100) * (this.buff ? this.buff.attackSpeed : 1);
+    return (1 + this.stat('attackSpeed') / 100) * (this.buff ? this.buff.attackSpeed : 1) * Status.speedScale(this);
   }
 
   // 스킬 쿨다운 — ARCANE 옵션만큼 줄어든다
@@ -5344,8 +5388,8 @@ class Player {
     this.cooldown = Math.max(0, this.cooldown - dt);
     this.invuln = Math.max(0, this.invuln - dt);
     this.potionCooldown = Math.max(0, this.potionCooldown - dt);
+    Status.update(this, dt, true);
     this.updateRegen(dt);
-    this.updatePoison(dt);
     this.updateSecondWind(dt);
 
     // ── 이동 입력
@@ -5369,7 +5413,7 @@ class Player {
       const speedScale = this.activeSkill
         ? (this.skillSpec(this.activeSkill).moveScale || 0)
         : (this.attackTimer > 0 ? 0.35 : 1);
-      const walk = c.speed * this.speedMult();   // 장비가 걸음을 빠르게/느리게 한다
+      const walk = c.speed * this.speedMult() * Status.speedScale(this);   // 장비와 빙결이 걸음을 바꾼다
       const vx = ix * walk * speedScale + this.kx;
       const vy = iy * walk * speedScale + this.ky;
       this.moveWithCollision(vx * dt, vy * dt);
@@ -5503,6 +5547,14 @@ class Player {
       // 사방 공격은 바깥쪽으로, 베는 공격은 휘두른 방향으로 날린다
       s.takeHit(dmg, omni ? toEnemy : base, crit, this, knockMult);
       this.sinceCombat = 0;   // 때리는 중에도 자연 회복은 멈춘다
+      /* 장비에 붙은 FIERY / FROSTY / SHOCKING / VENOMOUS 가 확률로 상태이상을 건다.
+         세기는 '이 일격의 피해' 기준이라 레벨이 올라도 따로 손볼 것이 없다 */
+      for (const key in CONFIG.affixes.list) {
+        const spec = CONFIG.affixes.list[key];
+        if (!spec.status) continue;
+        const chance = this.stat(key);
+        if (chance > 0 && Math.random() < chance / 100) Status.apply(s, spec.status, dmg, this);
+      }
       // MOMENTUM — 치명타가 터지면 모든 스킬 쿨다운이 조금씩 당겨진다
       if (crit && this.has('momentum')) {
         const cut = this.uniq('momentum').cut;
@@ -5526,8 +5578,8 @@ class Player {
   takeDamage(amount, fromX, fromY) {
     if (this.invuln > 0 || this.dashIFrames > 0 || this.dead) return;
     const c = CONFIG.player;
-    // 입고 있는 것이 피해를 비율로 깎는다 (최소 1은 들어간다)
-    amount = Math.max(1, Math.round(amount * (1 - this.damageReduction())));
+    // 입고 있는 것이 피해를 비율로 깎고, 감전되어 있으면 더 아프다 (최소 1은 들어간다)
+    amount = Math.max(1, Math.round(amount * (1 - this.damageReduction()) * Status.damageTaken(this)));
     this.hp -= amount;
     this.invuln = c.invulnTime;
     this.sinceCombat = 0;      // 맞으면 자연 회복은 처음부터 다시 기다린다
@@ -5567,7 +5619,7 @@ class Player {
   reviveAt(x, y) {
     this.dead = false;
     this.deadTimer = 0;
-    this.poison = null;
+    Status.clear(this);
     this.hp = this.maxHp;
     this.sinceCombat = 0;
     this.x = x; this.y = y;
@@ -5628,6 +5680,7 @@ class Player {
   updateRegen(dt) {
     const c = CONFIG.player;
     this.sinceCombat += dt;
+    if (Status.blocksRegen(this)) { this.sinceCombat = 0; this.regenTick = 0; return; }   // 중독·화상 중에는 안 찬다
     if (this.sinceCombat < c.regenDelay || this.hp >= this.maxHp) { this.regenTick = 0; return; }
     this.hp = Math.min(this.maxHp, this.hp + this.maxHp * c.regenRate * dt);
     // 1.5초마다 작은 + 표시 — 지금 차고 있다는 걸 알려준다
@@ -5655,30 +5708,8 @@ class Player {
     FX.number(this.x, this.y - 30, 'SECOND WIND', '#ffb35c');
   }
 
-  /* 독 — 전갈에게 찔리면 걸린다. 무적 시간과 무관하게 tick 초마다 dmg 만큼 깎이되 1 아래로는 안 내려간다
-     (독만으로 죽지는 않는다). 걸려 있는 동안 자연 회복은 멈춘다. 다시 찔리면 시간이 새로 시작된다. */
-  applyPoison(dmg, time, tick) {
-    this.poison = { time: time, tick: tick, dmg: dmg, next: tick };
-    FX.number(this.x, this.y - 22, 'POISONED', '#7dff8a');
-  }
-
-  updatePoison(dt) {
-    const p = this.poison;
-    if (!p || this.dead) return;
-    p.time -= dt;
-    p.next -= dt;
-    this.sinceCombat = 0;
-    if (p.next <= 0) {
-      p.next = p.tick;
-      const hit = Math.min(p.dmg, Math.max(0, this.hp - 1));
-      if (hit > 0) {
-        this.hp -= hit;
-        FX.number(this.x + Util.rand(-6, 6), this.y - 12, '-' + hit, '#7dff8a');
-      }
-      FX.burst(this.x, this.y - 4, 3, ['#7dff8a', '#3fa347'], { speed: 12, life: 0.5, gravity: -30, size: 1 });
-    }
-    if (p.time <= 0) this.poison = null;
-  }
+  // 장비의 WARD 옵션만큼 상태이상이 짧게 걸린다
+  statusResist(type) { return this.stat('ward') / 100; }
 
   // 포션 한 개가 채우는 양 — 최대 체력의 30%, 최소 30
   potionHeal() {
@@ -6009,6 +6040,8 @@ const Projectiles = {
         // 무적 시간 중이면 피해가 들어가지 않으므로 탄도 그대로 지나가게 둔다
         if (player.invuln <= 0) {
           player.takeDamage(p.damage, p.x, p.y);
+          // 포자는 독을 품고 있다 (가시는 그냥 아프다)
+          if (p.type === 'mushroom') Status.apply(player, 'poison', p.damage * CONFIG.status.monsterPoison, null);
           this.burst(p);
           this.list.splice(i, 1);
         }
@@ -6075,6 +6108,7 @@ class Enemy {
     this.radius = 7 * stats.scale;
     this.dead = false;
 
+    this.status = {};          // 걸려 있는 상태이상 (Status 가 다룬다)
     this.dir = Math.random() * Math.PI * 2;
     this.contactTimer = 0;
     this.hurtFlash = 0;
@@ -6122,8 +6156,13 @@ class Enemy {
     }
   }
 
+  // 보스는 지속 시간을 절반만 받는다 (지속 피해로 녹아버리지 않게)
+  statusResist(type) { return this.isBoss ? CONFIG.status.bossResist : 0; }
+
   update(dt, player) {
     if (this.dead) return;
+    Status.update(this, dt, false);
+    if (this.dead) return;     // 화상·중독으로 여기서 쓰러질 수 있다
     this.unstick();
     this.contactTimer = Math.max(0, this.contactTimer - dt);
     this.hurtFlash = Math.max(0, this.hurtFlash - dt);
@@ -6150,9 +6189,12 @@ class Enemy {
     return true;
   }
 
-  // x축과 y축을 따로 밀어 벽에 붙어도 미끄러지듯 움직인다.
-  // 벽에 막히면 방향을 튕겨 제자리에 끼지 않게 한다.
+  /* x축과 y축을 따로 밀어 벽에 붙어도 미끄러지듯 움직인다.
+     벽에 막히면 방향을 튕겨 제자리에 끼지 않게 한다.
+     빙결은 여기서 한 번에 처리한다 — 모든 몬스터가 이 길로 움직이므로 종류마다 손볼 것이 없다. */
   moveWithCollision(dx, dy) {
+    const slow = Status.speedScale(this);
+    dx *= slow; dy *= slow;
     const step = 2;
     let remain = dx;
     while (Math.abs(remain) > 0.001) {
@@ -6176,6 +6218,7 @@ class Enemy {
 
   // knockScale — 스킬처럼 더 세게 날려보내야 할 때 쓰는 추가 배수
   takeHit(damage, angle, crit, player, knockScale) {
+    damage = Math.round(damage * Status.damageTaken(this));   // 감전되어 있으면 더 아프다
     this.hp -= damage;
     this.hurtFlash = 0.12;
     this.showHp = 2.5;
@@ -6237,6 +6280,7 @@ class Enemy {
   // 레벨 표시와 체력바 — 모든 몬스터가 같은 자리에 같은 모양으로 띄운다
   drawLabel(ctx, sx, topY) {
     const pal = this.palette;
+    Status.drawMarks(ctx, this, sx, topY);
     UI.drawText(ctx, 'L' + this.level, sx - 4, topY - 5, this.labelColor, false);
 
     if (this.showHp > 0) {
@@ -6635,7 +6679,7 @@ class Scorpion extends Enemy {
         // 찌르는 동안 닿으면 피해 + 독
         if (!this.stung && this.touchPlayer(player, cfg.contactCooldown)) {
           this.stung = true;
-          player.applyPoison(Math.max(1, Math.round(this.stats.atk * cfg.poison.ratio)), cfg.poison.time, cfg.poison.tick);
+          Status.apply(player, 'poison', this.stats.atk * CONFIG.status.monsterPoison, this);
         }
         if (this.timer <= 0) {
           this.state = 'recover';
@@ -9816,6 +9860,162 @@ const Fog = {
 
 </script>
   <script>
+// ── js/status.js
+'use strict';
+
+/* 상태이상 — 화상 / 빙결 / 감전 / 중독 (로드맵 7주차).
+
+   **몬스터와 플레이어 양쪽에 같은 규칙으로 걸린다.** 그래서 이 파일 하나가 둘 다 다룬다
+   (전갈의 독만 따로 굴러가던 것을 여기로 흡수했다).
+
+     BURN   화상  0.5초마다 아픔. 짧고 세다
+     POISON 중독  0.5초마다 조금씩. 길고 약한 대신 **자연 회복이 멈춘다**
+     FREEZE 빙결  걸음과 손이 느려진다 (피해는 없다)
+     SHOCK  감전  **받는 피해가 늘어난다** — 다른 상태와 겹칠 때 가장 무섭다
+
+   세기는 '건 쪽의 힘'을 기준으로 잡는다 — 플레이어가 걸면 그 일격의 피해,
+   몬스터가 걸면 그 몬스터의 공격력. 그래야 레벨이 올라도 따로 손볼 것이 없다.
+
+   거는 방법
+     - 플레이어 → 장비 옵션 (FIERY / FROSTY / SHOCKING / VENOMOUS 가 붙으면 확률로 건다)
+     - 몬스터 → 전갈 찌르기(중독), 버섯·늙은 버섯의 포자(중독)
+
+   저항(resist)은 **지속 시간을 줄인다**. 플레이어는 WARD 옵션, 보스는 타고난 저항이 있다. */
+
+const Status = {
+  spec(type) { return CONFIG.status.list[type]; },
+
+  /* 건다. power 는 '건 쪽의 힘' — 지속 피해가 이 값에 비례한다.
+     같은 상태를 다시 걸면 더 센 쪽으로 덮어쓰고 시간을 새로 센다 (쌓이지는 않는다). */
+  apply(target, type, power, source) {
+    const spec = this.spec(type);
+    if (!target || target.dead || !spec) return;
+    const resist = Util.clamp(target.statusResist ? target.statusResist(type) : 0, 0, 0.9);
+    const time = spec.time * (1 - resist);
+    if (time <= 0.1) return;
+
+    if (!target.status) target.status = {};
+    const dmg = spec.ratio ? Math.max(1, Math.round(power * spec.ratio)) : 0;
+    const cur = target.status[type];
+    target.status[type] = {
+      time: time,
+      tick: spec.tick || 0,
+      next: cur ? Math.min(cur.next, spec.tick || 0) : (spec.tick || 0),
+      dmg: cur ? Math.max(cur.dmg, dmg) : dmg,
+      source: source || null,
+    };
+    if (!cur) {
+      FX.number(target.x, target.y - 26, spec.name, spec.color);
+      FX.burst(target.x, target.y - 4, 6, [spec.color, '#ffffff'], { speed: 26, life: 0.4, gravity: -20, size: 1 });
+    }
+  },
+
+  has(target, type) { return !!(target.status && target.status[type]); },
+  clear(target) { target.status = {}; },
+
+  // 걸음·손이 얼마나 느려지나 (빙결)
+  speedScale(target) {
+    return this.has(target, 'freeze') ? CONFIG.status.list.freeze.slow : 1;
+  },
+
+  // 받는 피해 배수 (감전)
+  damageTaken(target) {
+    return this.has(target, 'shock') ? CONFIG.status.list.shock.amp : 1;
+  },
+
+  // 자연 회복이 막혔는가 (중독·화상)
+  blocksRegen(target) {
+    if (!target.status) return false;
+    for (const type in target.status) if (this.spec(type).blockRegen) return true;
+    return false;
+  },
+
+  /* 매 프레임 — 시간을 깎고, 지속 피해를 넣고, 알갱이를 띄운다.
+     몬스터가 지속 피해로 죽으면 평소 죽음과 같은 길(die)을 타야 드랍·의뢰가 돈다. */
+  update(target, dt, isPlayer) {
+    const st = target.status;
+    if (!st) return;
+    for (const type in st) {
+      const s = st[type], spec = this.spec(type);
+      s.time -= dt;
+
+      if (s.tick > 0 && s.dmg > 0) {
+        s.next -= dt;
+        if (s.next <= 0) {
+          s.next = s.tick;
+          this.hurt(target, s.dmg, spec, isPlayer, s.source);
+        }
+      }
+
+      // 몸에서 피어오르는 알갱이 — 무엇이 걸렸는지 멀리서도 보인다
+      if (Math.random() < spec.puff) {
+        FX.burst(target.x + Util.rand(-5, 5), target.y - Util.rand(0, 8), 1, spec.puffColors,
+          { speed: spec.rise ? 10 : 4, life: 0.5, gravity: spec.rise ? -34 : 10, size: 1 });
+      }
+
+      if (s.time <= 0) delete st[type];
+      if (target.dead) return;
+    }
+  },
+
+  hurt(target, dmg, spec, isPlayer, source) {
+    if (isPlayer) {
+      // 상태이상만으로는 죽지 않는다 — 체력 1 아래로는 안 내려간다
+      const hit = Math.min(dmg, Math.max(0, target.hp - 1));
+      if (hit > 0) {
+        target.hp -= hit;
+        FX.number(target.x + Util.rand(-6, 6), target.y - 12, '-' + hit, spec.color);
+      }
+      target.sinceCombat = 0;
+      return;
+    }
+    target.hp -= dmg;
+    target.showHp = 2.0;
+    FX.number(target.x + Util.rand(-4, 4), target.y - 10 - target.radius, dmg, spec.color);
+    if (target.hp <= 0 && !target.dead) target.die(source || Game.player);
+  },
+
+  /* 머리 위 작은 표 — 걸린 것마다 색 네모 하나. 글자를 쓰기엔 자리가 없다 */
+  drawMarks(ctx, target, sx, topY) {
+    const st = target.status;
+    if (!st) return;
+    const types = Object.keys(st);
+    if (!types.length) return;
+    let x = sx - (types.length * 4 - 1) / 2;
+    for (const type of types) {
+      const spec = this.spec(type);
+      ctx.fillStyle = '#17110d';
+      ctx.fillRect(x - 1, topY - 12, 4, 4);
+      ctx.fillStyle = spec.color;
+      ctx.fillRect(x, topY - 11, 2, 2);
+      x += 4;
+    }
+  },
+
+  /* 플레이어 HUD — 남은 시간이 보이는 칩 한 줄 */
+  drawHud(ctx, player, x, y) {
+    const st = player.status;
+    if (!st) return;
+    for (const type in st) {
+      const spec = this.spec(type), s = st[type];
+      ctx.fillStyle = '#17110d';
+      ctx.fillRect(x - 1, y - 1, 8, 8);
+      ctx.fillStyle = spec.color;
+      ctx.fillRect(x, y, 6, 6);
+      // 남은 시간을 아래에서부터 어둡게 덮어 모래시계처럼 보이게
+      const gone = Math.round(6 * (1 - s.time / (spec.time || 1)));
+      if (gone > 0) {
+        ctx.fillStyle = 'rgba(10,12,10,0.65)';
+        ctx.fillRect(x, y + 6 - gone, 6, gone);
+      }
+      UI.drawText(ctx, spec.short, x + 9, y, spec.color);
+      x += 9 + UI.textWidth(spec.short) + 4;
+    }
+  },
+};
+
+</script>
+  <script>
 // ── js/ui.js
 'use strict';
 
@@ -10045,8 +10245,7 @@ const UI = {
     }
     this.drawText(ctx, 'HP', 8, 16, '#f0d9b5');
     this.drawText(ctx, Math.max(0, Math.ceil(player.hp)) + '/' + player.maxHp, 20, 16, '#f0d9b5');
-    // 독 — 남은 시간 동안 초록 글자가 깜빡인다
-    if (player.poison && Math.floor(World.time * 4) % 2 === 0) this.drawText(ctx, 'POISON', 83, 16, '#7dff8a');
+
 
     // ── 레벨 / 경험치
     this.bar(ctx, 8, 25, 72, 4, player.xp / player.xpNeed, '#9be564', '#25401c');
@@ -10085,6 +10284,9 @@ const UI = {
       }
       this.drawText(ctx, 'DASH', 8 + charges * 12 + 2, 76, '#7ec8ff');
     }
+
+    // ── 걸려 있는 상태이상 — 색 칩에 남은 시간이 아래부터 어두워진다
+    Status.drawHud(ctx, player, 8, 95);
 
     // ── 가방 — 몇 칸이 찼는지. 꽉 차면 붉게 (전리품이 더 안 끌려온다는 뜻)
     if (player.bag) {
@@ -10228,7 +10430,8 @@ const UI = {
     if (!portal || !dest) return;
     const sx = Math.round(portal.x - cam.x), sy = Math.round(portal.y - cam.y);
     if (locked) {
-      this.drawText(ctx, CONFIG.gate.lockedText, sx, sy - 44, '#ff6b6b', true);
+      const boss = CONFIG.bosses[CONFIG.gate.requiredBoss];
+      this.drawText(ctx, 'SLAY ' + (boss ? boss.name : 'THE BOSS'), sx, sy - 44, '#ff6b6b', true);
       this.drawText(ctx, 'SEALED', sx, sy - 52, '#8f9aa8', true);
       return;
     }
@@ -10361,6 +10564,16 @@ const UI = {
    새 작업을 올릴 때 PATCH_NOTES 맨 앞에 한 항목을 추가하면 된다. */
 
 const PATCH_NOTES = [
+  {
+    date: '2026-10-12',
+    notes: [
+      '상태이상 넷 — 화상(짧고 세게) / 중독(길고 약하게, 자연 회복 정지) / 빙결(절반으로 느리게) / 감전(받는 피해 1.3배)',
+      '몬스터와 플레이어 양쪽에 같은 규칙으로 걸린다. 머리 위 색 네모와 HUD 칩으로 보인다',
+      '장비 옵션 FIERY / FROSTY / SHOCKING / VENOMOUS 가 붙으면 때릴 때 확률로 건다 — 불 붙은 늑대가 타들어가며 달려온다',
+      'WARD 옵션은 걸리는 시간을 줄인다. 보스는 타고나길 절반만 걸린다',
+      '사막 비석이 이제 숲에서 가장 센 보스(ELDER SHROOM)를 잡아야 열린다',
+    ],
+  },
   {
     date: '2026-10-11',
     notes: [
@@ -10778,8 +10991,8 @@ const Game = {
   /* 비석이 깨어났는가 — 숲 보스 셋 중 하나라도 잡았으면.
      보스를 '있어도 그만'이 아니라 다음 무대를 여는 열쇠로 만드는 장치다. */
   portalUnlocked() {
-    if (!CONFIG.gate.desertNeedsBoss) return true;
-    return CONFIG.maps.forest.caves.some(c => this.bossSlain[c.boss]);
+    const need = CONFIG.gate.requiredBoss;
+    return !need || !!this.bossSlain[need];
   },
 
   // 텔레포트 비석 앞에서 F — 다른 맵의 비석 앞으로 옮겨간다

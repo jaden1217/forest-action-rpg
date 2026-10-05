@@ -62,7 +62,7 @@ class Scorpion extends Enemy {
         // 찌르는 동안 닿으면 피해 + 독
         if (!this.stung && this.touchPlayer(player, cfg.contactCooldown)) {
           this.stung = true;
-          player.applyPoison(Math.max(1, Math.round(this.stats.atk * cfg.poison.ratio)), cfg.poison.time, cfg.poison.tick);
+          Status.apply(player, 'poison', this.stats.atk * CONFIG.status.monsterPoison, this);
         }
         if (this.timer <= 0) {
           this.state = 'recover';

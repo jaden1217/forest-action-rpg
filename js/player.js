@@ -44,7 +44,7 @@ class Player {
     this.recalcStats();
     Inventory.create(this);
 
-    this.poison = null;        // 전갈 독 — { time, tick, dmg, next }. 0.5초마다 조금씩 깎이고 자연 회복이 멈춘다
+    this.status = {};          // 걸려 있는 상태이상 (Status 가 다룬다 — 몬스터와 같은 규칙)
     this.attackTimer = 0;      // 휘두르는 중이면 0보다 큼
     this.cooldown = 0;
     this.attackBuffer = 0;     // 쿨다운 중에 누른 공격을 잠깐 기억해둔다
@@ -199,7 +199,7 @@ class Player {
 
   // 손 빠르기 — QUICK 옵션과 광폭화 버프가 함께 곱해진다
   attackSpeedMult() {
-    return (1 + this.stat('attackSpeed') / 100) * (this.buff ? this.buff.attackSpeed : 1);
+    return (1 + this.stat('attackSpeed') / 100) * (this.buff ? this.buff.attackSpeed : 1) * Status.speedScale(this);
   }
 
   // 스킬 쿨다운 — ARCANE 옵션만큼 줄어든다
@@ -474,8 +474,8 @@ class Player {
     this.cooldown = Math.max(0, this.cooldown - dt);
     this.invuln = Math.max(0, this.invuln - dt);
     this.potionCooldown = Math.max(0, this.potionCooldown - dt);
+    Status.update(this, dt, true);
     this.updateRegen(dt);
-    this.updatePoison(dt);
     this.updateSecondWind(dt);
 
     // ── 이동 입력
@@ -499,7 +499,7 @@ class Player {
       const speedScale = this.activeSkill
         ? (this.skillSpec(this.activeSkill).moveScale || 0)
         : (this.attackTimer > 0 ? 0.35 : 1);
-      const walk = c.speed * this.speedMult();   // 장비가 걸음을 빠르게/느리게 한다
+      const walk = c.speed * this.speedMult() * Status.speedScale(this);   // 장비와 빙결이 걸음을 바꾼다
       const vx = ix * walk * speedScale + this.kx;
       const vy = iy * walk * speedScale + this.ky;
       this.moveWithCollision(vx * dt, vy * dt);
@@ -633,6 +633,14 @@ class Player {
       // 사방 공격은 바깥쪽으로, 베는 공격은 휘두른 방향으로 날린다
       s.takeHit(dmg, omni ? toEnemy : base, crit, this, knockMult);
       this.sinceCombat = 0;   // 때리는 중에도 자연 회복은 멈춘다
+      /* 장비에 붙은 FIERY / FROSTY / SHOCKING / VENOMOUS 가 확률로 상태이상을 건다.
+         세기는 '이 일격의 피해' 기준이라 레벨이 올라도 따로 손볼 것이 없다 */
+      for (const key in CONFIG.affixes.list) {
+        const spec = CONFIG.affixes.list[key];
+        if (!spec.status) continue;
+        const chance = this.stat(key);
+        if (chance > 0 && Math.random() < chance / 100) Status.apply(s, spec.status, dmg, this);
+      }
       // MOMENTUM — 치명타가 터지면 모든 스킬 쿨다운이 조금씩 당겨진다
       if (crit && this.has('momentum')) {
         const cut = this.uniq('momentum').cut;
@@ -656,8 +664,8 @@ class Player {
   takeDamage(amount, fromX, fromY) {
     if (this.invuln > 0 || this.dashIFrames > 0 || this.dead) return;
     const c = CONFIG.player;
-    // 입고 있는 것이 피해를 비율로 깎는다 (최소 1은 들어간다)
-    amount = Math.max(1, Math.round(amount * (1 - this.damageReduction())));
+    // 입고 있는 것이 피해를 비율로 깎고, 감전되어 있으면 더 아프다 (최소 1은 들어간다)
+    amount = Math.max(1, Math.round(amount * (1 - this.damageReduction()) * Status.damageTaken(this)));
     this.hp -= amount;
     this.invuln = c.invulnTime;
     this.sinceCombat = 0;      // 맞으면 자연 회복은 처음부터 다시 기다린다
@@ -697,7 +705,7 @@ class Player {
   reviveAt(x, y) {
     this.dead = false;
     this.deadTimer = 0;
-    this.poison = null;
+    Status.clear(this);
     this.hp = this.maxHp;
     this.sinceCombat = 0;
     this.x = x; this.y = y;
@@ -758,6 +766,7 @@ class Player {
   updateRegen(dt) {
     const c = CONFIG.player;
     this.sinceCombat += dt;
+    if (Status.blocksRegen(this)) { this.sinceCombat = 0; this.regenTick = 0; return; }   // 중독·화상 중에는 안 찬다
     if (this.sinceCombat < c.regenDelay || this.hp >= this.maxHp) { this.regenTick = 0; return; }
     this.hp = Math.min(this.maxHp, this.hp + this.maxHp * c.regenRate * dt);
     // 1.5초마다 작은 + 표시 — 지금 차고 있다는 걸 알려준다
@@ -785,30 +794,8 @@ class Player {
     FX.number(this.x, this.y - 30, 'SECOND WIND', '#ffb35c');
   }
 
-  /* 독 — 전갈에게 찔리면 걸린다. 무적 시간과 무관하게 tick 초마다 dmg 만큼 깎이되 1 아래로는 안 내려간다
-     (독만으로 죽지는 않는다). 걸려 있는 동안 자연 회복은 멈춘다. 다시 찔리면 시간이 새로 시작된다. */
-  applyPoison(dmg, time, tick) {
-    this.poison = { time: time, tick: tick, dmg: dmg, next: tick };
-    FX.number(this.x, this.y - 22, 'POISONED', '#7dff8a');
-  }
-
-  updatePoison(dt) {
-    const p = this.poison;
-    if (!p || this.dead) return;
-    p.time -= dt;
-    p.next -= dt;
-    this.sinceCombat = 0;
-    if (p.next <= 0) {
-      p.next = p.tick;
-      const hit = Math.min(p.dmg, Math.max(0, this.hp - 1));
-      if (hit > 0) {
-        this.hp -= hit;
-        FX.number(this.x + Util.rand(-6, 6), this.y - 12, '-' + hit, '#7dff8a');
-      }
-      FX.burst(this.x, this.y - 4, 3, ['#7dff8a', '#3fa347'], { speed: 12, life: 0.5, gravity: -30, size: 1 });
-    }
-    if (p.time <= 0) this.poison = null;
-  }
+  // 장비의 WARD 옵션만큼 상태이상이 짧게 걸린다
+  statusResist(type) { return this.stat('ward') / 100; }
 
   // 포션 한 개가 채우는 양 — 최대 체력의 30%, 최소 30
   potionHeal() {

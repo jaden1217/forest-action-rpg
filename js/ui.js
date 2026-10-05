@@ -226,8 +226,7 @@ const UI = {
     }
     this.drawText(ctx, 'HP', 8, 16, '#f0d9b5');
     this.drawText(ctx, Math.max(0, Math.ceil(player.hp)) + '/' + player.maxHp, 20, 16, '#f0d9b5');
-    // 독 — 남은 시간 동안 초록 글자가 깜빡인다
-    if (player.poison && Math.floor(World.time * 4) % 2 === 0) this.drawText(ctx, 'POISON', 83, 16, '#7dff8a');
+
 
     // ── 레벨 / 경험치
     this.bar(ctx, 8, 25, 72, 4, player.xp / player.xpNeed, '#9be564', '#25401c');
@@ -266,6 +265,9 @@ const UI = {
       }
       this.drawText(ctx, 'DASH', 8 + charges * 12 + 2, 76, '#7ec8ff');
     }
+
+    // ── 걸려 있는 상태이상 — 색 칩에 남은 시간이 아래부터 어두워진다
+    Status.drawHud(ctx, player, 8, 95);
 
     // ── 가방 — 몇 칸이 찼는지. 꽉 차면 붉게 (전리품이 더 안 끌려온다는 뜻)
     if (player.bag) {
@@ -409,7 +411,8 @@ const UI = {
     if (!portal || !dest) return;
     const sx = Math.round(portal.x - cam.x), sy = Math.round(portal.y - cam.y);
     if (locked) {
-      this.drawText(ctx, CONFIG.gate.lockedText, sx, sy - 44, '#ff6b6b', true);
+      const boss = CONFIG.bosses[CONFIG.gate.requiredBoss];
+      this.drawText(ctx, 'SLAY ' + (boss ? boss.name : 'THE BOSS'), sx, sy - 44, '#ff6b6b', true);
       this.drawText(ctx, 'SEALED', sx, sy - 52, '#8f9aa8', true);
       return;
     }
