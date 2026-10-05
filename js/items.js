@@ -38,6 +38,22 @@ const Items = {
       }
       return;
     }
+    /* 엘리트 보상 — "쫓아가 볼까"가 서야 한다.
+       포션은 확정 두 개, 전리품 두 배, 그리고 **장비가 RARE 이상으로 확정** 떨어진다.
+       경험치는 스폰할 때 이미 곱해져 있고(stats.xp), 골드는 여기서 곱한다. */
+    if (enemy.elite) {
+      const el = CONFIG.elite;
+      this.spawn(enemy.x, enemy.y, 2);
+      const gid = Gear.randomId();
+      const rarity = Math.max(el.rarityFloor, Gear.rollRarity());   // 전설도 평소 확률대로 섞여 나온다
+      this.spawnGear(enemy.x, enemy.y, gid, enemy.level, { item: Gear.roll(gid, enemy.level, rarity) });
+      this.dropWeaponFor(enemy);
+      const eLoot = CONFIG.loot.byType[enemy.TYPE];
+      if (eLoot) this.spawnLoot(enemy.x, enemy.y, eLoot, (CONFIG.loot.amountByTier[tier] || 1) * el.loot);
+      const eg = CONFIG.gold;
+      this.giveGold(enemy, Math.max(1, Math.round((eg.amountByTier[tier] || eg.amountByTier[0]) * el.gold)));
+      return;
+    }
     if (Math.random() < cfg.potionDropChance[tier]) {
       let amount = 1;
       if (tier >= 4 && Math.random() < cfg.potionDoubleChance) amount = 2;

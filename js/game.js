@@ -144,10 +144,16 @@ const Game = {
       const make = this.ENEMY_TYPES[type] || this.ENEMY_TYPES.slime;
 
       const e = make(x, y, level);
+      // 몇 마리는 엘리트로 — 접두사가 붙고 덩치와 보상이 커진다 (나머지는 Elite 가 다 한다)
+      const prefix = Elite.roll(level);
+      if (prefix) Elite.make(e, prefix);
       this.enemies.push(e);
-      // 등장 연출 — 그 종류의 색으로 터진다
+      // 등장 연출 — 그 종류의 색으로 터진다 (엘리트는 접두사 색으로 한 번 더)
       const pal = e.palette;
       FX.burst(x, y, 8, [pal.M, pal.n], { speed: 30, life: 0.35, gravity: 40 });
+      if (prefix) {
+        FX.burst(x, y - 2, 16, [CONFIG.elite.prefixes[prefix].color, '#ffffff'], { speed: 60, life: 0.5, gravity: -10 });
+      }
       return e;
     }
     return null;
@@ -697,6 +703,8 @@ const Game = {
     const ui = UI.fx;
     // 보스 방은 겉맵 지도에 없는 곳이라 미니맵을 띄우지 않는다
     if (!this.showMap && !this.inArena) Minimap.drawCorner(ui, this.player, this.enemies);
+    // 화면 밖 엘리트는 가장자리에 별로 — 평범한 사냥 중에 '어, 저거'가 생기는 자리
+    if (!this.showMap && !this.title && !this.player.dead) Elite.drawMarkers(ui, cam, this.enemies, this.player);
     UI.draw(ui, this.player, this.showInventory);
     if (this.showMap) Minimap.drawFull(ui, this.player, this.enemies);
     if (this.boss && !this.boss.dead && !this.showMap) UI.drawBossBar(ui, this.boss);

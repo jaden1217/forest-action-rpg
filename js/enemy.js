@@ -27,6 +27,7 @@ class Enemy {
     this.dead = false;
 
     this.status = {};          // 걸려 있는 상태이상 (Status 가 다룬다)
+    this.elite = null;         // 엘리트 접두사 id — 붙이고 다루는 일은 Elite 가 한다
     this.dir = Math.random() * Math.PI * 2;
     this.contactTimer = 0;
     this.hurtFlash = 0;
@@ -101,6 +102,7 @@ class Enemy {
     if (!Util.aabb(this.hurtBox, player.hurtBox)) return false;
     player.takeDamage(damage === undefined ? this.stats.atk : damage, this.x, this.y);
     this.contactTimer = cooldown;
+    if (this.elite) Elite.onTouch(this, player);   // 불타는 엘리트는 닿으면 화상을 옮긴다
     return true;
   }
 
@@ -164,6 +166,7 @@ class Enemy {
     Sound.play('kill');
     FX.number(this.x, this.y - 18, '+' + this.stats.xp + 'XP', '#9be564');
     player.gainXp(this.stats.xp);
+    if (this.elite) Elite.onDie(this, player);     // 불꽃이 퍼지거나, 둘로 갈라진다
   }
 
   /* ── 그리기 ────────────────────────────────────────────── */
@@ -172,6 +175,7 @@ class Enemy {
     if (this.dead) return;
     const sx = Math.round(this.x - cam.x);
     const sy = Math.round(this.y - cam.y);
+    if (this.elite) Elite.drawAura(ctx, this, sx, sy);   // 발밑 고리는 몸에 가려지지 않게 먼저
     // 맞은 직후엔 발을 축으로 옆으로 퍼졌다 돌아온다 — 충격이 몸에 전해지는 느낌
     if (this.hurtFlash > 0) {
       const k = this.hurtFlash / 0.12;
@@ -195,7 +199,9 @@ class Enemy {
   // 레벨 표시와 체력바 — 모든 몬스터가 같은 자리에 같은 모양으로 띄운다
   drawLabel(ctx, sx, topY) {
     const pal = this.palette;
-    Status.drawMarks(ctx, this, sx, topY);
+    // 엘리트는 별과 접두사가 한 줄 더 붙으므로 상태이상 표를 그만큼 위로 올린다
+    Status.drawMarks(ctx, this, sx, topY - (this.elite ? 7 : 0));
+    if (this.elite) Elite.drawName(ctx, this, sx, topY - 12);
     UI.drawText(ctx, 'L' + this.level, sx - 4, topY - 5, this.labelColor, false);
 
     if (this.showHp > 0) {

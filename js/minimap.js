@@ -143,6 +143,8 @@ const Minimap = {
     for (const s of enemies) {
       if (s.dead) continue;
       if (!Fog.seenAt(World.mapId, s.x, s.y)) continue;
+      // 엘리트는 접두사 색으로 두 칸 — 점들 사이에서 혼자 눈에 띈다
+      if (s.elite) { put(s.x, s.y, Elite.dotColor(s), 2); continue; }
       // 점 색도 이름표와 같은 규칙 — 지도만 봐도 어느 쪽이 버거운지 보인다
       put(s.x, s.y, difficultyColor(s.level, player.level), 1);
     }

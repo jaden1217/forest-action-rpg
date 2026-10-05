@@ -153,7 +153,7 @@ html, body {
 }
 
 </style>
-<!-- built 2026-10-05 11:11 by tools/build.js -->
+<!-- built 2026-10-05 11:58 by tools/build.js -->
 </head>
 <body>
   <div id="stage">
@@ -545,6 +545,45 @@ const CONFIG = {
     // 어떤 몬스터가 몇 레벨로 나올지는 그 자리의 "위험도"(시작점에서의 거리)가 정한다 (CONFIG.maps)
   },
 
+  /* ── 엘리트 몬스터 (로드맵 9주차) ───────────────────────
+     250마리가 전부 똑같으면 사냥은 배경음이 된다. 그중 몇 마리에 접두사를 붙여
+     "어, 저거"를 만든다 — 덩치가 크고, 발밑에 고리가 돌고, 이름표에 별이 붙는다.
+
+     엘리트는 보스가 아니다. 보스는 동굴에 들어가 약속하고 싸우지만 엘리트는 길에서 마주친다.
+     그래서 숫자를 보스만큼 올리지 않았다 — 체력 2.6배 정도라 피해 갈 수도, 붙어볼 수도 있다.
+     대신 보상은 확실하게 올렸다 (경험치 4배, 골드 3배, 전리품 2배, 장비는 RARE 이상 확정).
+
+     접두사는 수치만 바꾸는 것이 아니라 **싸우는 법을 바꾼다** —
+     날쌘 놈에게서는 못 도망치고, 단단한 놈은 밀리지 않아 치고 빠지기가 안 통하고,
+     불타는 놈은 죽을 때가 위험하고, 분열하는 놈은 죽인 뒤에도 끝나지 않는다. */
+  elite: {
+    chance: 0.03,           // 스폰 때 이 확률로 엘리트가 된다 (250마리 중 7~8마리)
+    minLevel: 4,            // 시작점 바로 옆(1~3레벨)에는 안 나온다 — 첫 걸음은 배우는 시간이다
+    hp: 2.6, atk: 1.4, xp: 4, gold: 3, loot: 2,
+    scale: 1.2,             // 덩치
+    rarityFloor: 2,         // 떨구는 장비의 최소 등급 (2 = RARE)
+    markerRange: 260,       // 화면 밖에 있어도 이 거리 안이면 가장자리에 별이 뜬다
+    prefixes: {
+      // weight = 뽑히는 비율. speed/hp 같은 값은 그 몬스터 능력치에 곱한다
+      swift: {
+        name: 'SWIFT', color: '#7ec8ff', weight: 30,
+        speed: 1.6, interval: 0.6, hp: 0.8,     // 빠르고 자주 쏘는 대신 물렁하다
+      },
+      tough: {
+        name: 'TOUGH', color: '#c8d0d8', weight: 30,
+        hp: 1.5, knockback: 0.12, scale: 1.12,  // 거의 밀리지 않는다
+      },
+      burning: {
+        name: 'BURNING', color: '#ff8a3c', weight: 22,
+        atk: 1.1, burn: true, novaRadius: 42,   // 닿으면 화상, 죽을 때 불꽃이 퍼진다
+      },
+      splitting: {
+        name: 'SPLITTING', color: '#9be564', weight: 18,
+        hp: 0.85, split: 2, splitLevelBelow: 2, // 죽으면 평범한 개체 둘로 갈라진다
+      },
+    },
+  },
+
   /* ── 맵 — 지금은 둘: 태초의 숲과 작열하는 사막 (텔레포트 비석으로 오간다) ────
      두 맵은 크기가 같고 같은 뼈대로 만든다. 지역 경계 대신 "시작점에서 얼마나 멀리 왔는가"
      (위험도 t, 0~1)가 몬스터 레벨·종류, 초목, 소품을 정한다.
@@ -709,6 +748,7 @@ const CONFIG = {
     /* 상태이상은 **막을 수 없다.** 저항 수치를 두면 "저항 올리면 그만"이 되어
        불·얼음·독을 설계한 보람이 사라진다 — 걸리면 걸리는 것이고, 대신 길이를 짧게 잡았다. */
     monsterPoison: 0.7,     // 몬스터가 거는 중독의 세기 배수 (몬스터 공격력 기준)
+    monsterBurn: 0.5,       // 몬스터가 거는 화상의 세기 배수 (불타는 엘리트가 쓴다)
   },
 
   /* ── 발견 안개 (로드맵 6주차) ───────────────────────────
@@ -4799,6 +4839,8 @@ const Minimap = {
     for (const s of enemies) {
       if (s.dead) continue;
       if (!Fog.seenAt(World.mapId, s.x, s.y)) continue;
+      // 엘리트는 접두사 색으로 두 칸 — 점들 사이에서 혼자 눈에 띈다
+      if (s.elite) { put(s.x, s.y, Elite.dotColor(s), 2); continue; }
       // 점 색도 이름표와 같은 규칙 — 지도만 봐도 어느 쪽이 버거운지 보인다
       put(s.x, s.y, difficultyColor(s.level, player.level), 1);
     }
@@ -6188,6 +6230,7 @@ class Enemy {
     this.dead = false;
 
     this.status = {};          // 걸려 있는 상태이상 (Status 가 다룬다)
+    this.elite = null;         // 엘리트 접두사 id — 붙이고 다루는 일은 Elite 가 한다
     this.dir = Math.random() * Math.PI * 2;
     this.contactTimer = 0;
     this.hurtFlash = 0;
@@ -6262,6 +6305,7 @@ class Enemy {
     if (!Util.aabb(this.hurtBox, player.hurtBox)) return false;
     player.takeDamage(damage === undefined ? this.stats.atk : damage, this.x, this.y);
     this.contactTimer = cooldown;
+    if (this.elite) Elite.onTouch(this, player);   // 불타는 엘리트는 닿으면 화상을 옮긴다
     return true;
   }
 
@@ -6325,6 +6369,7 @@ class Enemy {
     Sound.play('kill');
     FX.number(this.x, this.y - 18, '+' + this.stats.xp + 'XP', '#9be564');
     player.gainXp(this.stats.xp);
+    if (this.elite) Elite.onDie(this, player);     // 불꽃이 퍼지거나, 둘로 갈라진다
   }
 
   /* ── 그리기 ────────────────────────────────────────────── */
@@ -6333,6 +6378,7 @@ class Enemy {
     if (this.dead) return;
     const sx = Math.round(this.x - cam.x);
     const sy = Math.round(this.y - cam.y);
+    if (this.elite) Elite.drawAura(ctx, this, sx, sy);   // 발밑 고리는 몸에 가려지지 않게 먼저
     // 맞은 직후엔 발을 축으로 옆으로 퍼졌다 돌아온다 — 충격이 몸에 전해지는 느낌
     if (this.hurtFlash > 0) {
       const k = this.hurtFlash / 0.12;
@@ -6356,7 +6402,9 @@ class Enemy {
   // 레벨 표시와 체력바 — 모든 몬스터가 같은 자리에 같은 모양으로 띄운다
   drawLabel(ctx, sx, topY) {
     const pal = this.palette;
-    Status.drawMarks(ctx, this, sx, topY);
+    // 엘리트는 별과 접두사가 한 줄 더 붙으므로 상태이상 표를 그만큼 위로 올린다
+    Status.drawMarks(ctx, this, sx, topY - (this.elite ? 7 : 0));
+    if (this.elite) Elite.drawName(ctx, this, sx, topY - 12);
     UI.drawText(ctx, 'L' + this.level, sx - 4, topY - 5, this.labelColor, false);
 
     if (this.showHp > 0) {
@@ -8702,6 +8750,22 @@ const Items = {
       }
       return;
     }
+    /* 엘리트 보상 — "쫓아가 볼까"가 서야 한다.
+       포션은 확정 두 개, 전리품 두 배, 그리고 **장비가 RARE 이상으로 확정** 떨어진다.
+       경험치는 스폰할 때 이미 곱해져 있고(stats.xp), 골드는 여기서 곱한다. */
+    if (enemy.elite) {
+      const el = CONFIG.elite;
+      this.spawn(enemy.x, enemy.y, 2);
+      const gid = Gear.randomId();
+      const rarity = Math.max(el.rarityFloor, Gear.rollRarity());   // 전설도 평소 확률대로 섞여 나온다
+      this.spawnGear(enemy.x, enemy.y, gid, enemy.level, { item: Gear.roll(gid, enemy.level, rarity) });
+      this.dropWeaponFor(enemy);
+      const eLoot = CONFIG.loot.byType[enemy.TYPE];
+      if (eLoot) this.spawnLoot(enemy.x, enemy.y, eLoot, (CONFIG.loot.amountByTier[tier] || 1) * el.loot);
+      const eg = CONFIG.gold;
+      this.giveGold(enemy, Math.max(1, Math.round((eg.amountByTier[tier] || eg.amountByTier[0]) * el.gold)));
+      return;
+    }
     if (Math.random() < cfg.potionDropChance[tier]) {
       let amount = 1;
       if (tier >= 4 && Math.random() < cfg.potionDoubleChance) amount = 2;
@@ -10310,6 +10374,200 @@ const Forge = {
 
 </script>
   <script>
+// ── js/elite.js
+'use strict';
+
+/* 엘리트 몬스터 — 길에서 갑자기 만나는 강화 개체 (로드맵 9주차).
+
+   맵에 250마리가 돌아다니는데 전부 똑같으면 사냥은 배경음이 된다.
+   그중 몇 마리에 **접두사**를 붙여 "어, 저거"를 만든다.
+
+     SWIFT     날쌘    훨씬 빠르다. 도망칠 수 없다 (대신 물렁하다)
+     TOUGH     단단한  밀리지 않는다. 치고 빠지는 수법이 안 통한다
+     BURNING   불타는  닿으면 화상, 죽을 때 불꽃이 퍼진다 (주변 몬스터까지 탄다)
+     SPLITTING 분열하는 죽으면 같은 종류 둘로 갈라진다
+
+   엘리트는 **보스가 아니다.** 보스는 동굴에 들어가 약속하고 싸우지만
+   엘리트는 길에서 마주친다. 그래서 숫자를 보스만큼 올리지 않았다 —
+   체력 2.6배 정도라 피해 갈 수도 있고, 붙어볼 수도 있다.
+
+   대신 보상은 확실하게 올렸다. 경험치 4배, 골드 3배, 전리품 2배,
+   그리고 **장비는 RARE 이상이 확정으로 떨어진다.** 그 한 번이 "쫓아가 볼까"를 만든다.
+
+   이 파일은 종류별 파일(slime / wolf / …)을 건드리지 않는다 —
+   능력치 표를 곱하고, 바닥에 고리를 그리고, 죽을 때를 가로채는 일만 한다.
+   그래서 몬스터가 더 늘어도 엘리트는 공짜로 따라온다. */
+
+const Elite = {
+  spec(enemy) { return enemy && enemy.elite ? CONFIG.elite.prefixes[enemy.elite] : null; },
+
+  // 스폰할 때 한 번 굴린다 — 접두사 하나, 또는 평범하면 null
+  roll(level) {
+    const cfg = CONFIG.elite;
+    if (level < cfg.minLevel) return null;          // 시작점 바로 옆은 배우는 자리다
+    if (Math.random() >= cfg.chance) return null;
+    const ids = Object.keys(cfg.prefixes);
+    return ids[Util.weightedIndex(ids.map(id => cfg.prefixes[id].weight))];
+  },
+
+  /* 평범한 개체를 엘리트로 바꾼다.
+     능력치 표(stats)는 한 마리씩 복사해 두었으므로 여기서 곱해도
+     같은 레벨의 다른 개체는 그대로다. */
+  make(enemy, prefixId) {
+    const cfg = CONFIG.elite, p = cfg.prefixes[prefixId];
+    if (!enemy || !p) return enemy;
+    enemy.elite = prefixId;
+
+    const s = enemy.stats;
+    const mul = (key, a, b) => {
+      if (s[key] === undefined) return;
+      const v = s[key] * (a || 1) * (b === undefined ? 1 : b);
+      // 쏘는 간격만 소수로 둔다 (나머지는 정수여야 데미지 숫자가 깔끔하다)
+      s[key] = key === 'interval' ? +v.toFixed(2) : Math.max(1, Math.round(v));
+    };
+    mul('hp', cfg.hp, p.hp);
+    mul('atk', cfg.atk, p.atk);
+    mul('xp', cfg.xp, p.xp);
+    mul('speed', p.speed);
+    mul('lunge', p.speed);        // 늑대의 돌진 속도도 같이 오른다
+    mul('interval', p.interval);  // 버섯·선인장이 쏘는 간격 (작을수록 자주)
+    mul('knockback', p.knockback);
+
+    enemy.maxHp = s.hp;
+    enemy.hp = s.hp;
+    // 덩치 — 멀리서도 '저건 다르다'가 먼저 보인다
+    s.scale = +(s.scale * cfg.scale * (p.scale || 1)).toFixed(3);
+    enemy.scale = s.scale;
+    enemy.radius = 7 * s.scale;
+    enemy.auraT = Math.random() * Math.PI * 2;
+    return enemy;
+  },
+
+  /* ── 접두사가 하는 일 ──────────────────────────────────── */
+
+  // 닿았을 때 — 불타는 엘리트는 화상을 옮긴다
+  onTouch(enemy, player) {
+    const p = this.spec(enemy);
+    if (!p || !p.burn) return;
+    Status.apply(player, 'burn', enemy.stats.atk * CONFIG.status.monsterBurn, enemy);
+  },
+
+  // 죽을 때 — 불꽃이 퍼지거나, 둘로 갈라진다
+  onDie(enemy, player) {
+    const p = this.spec(enemy);
+    if (!p) return;
+    FX.ring(enemy.x, enemy.y + 2, enemy.radius + 6, p.color);
+    FX.number(enemy.x, enemy.y - 32, p.name + ' SLAIN', p.color, true);
+    FX.addShake(3);
+    if (p.burn) this.nova(enemy, p, player);
+    if (p.split) this.split(enemy, p);
+  },
+
+  /* 불타는 엘리트가 죽으며 터뜨리는 불.
+     가까이 붙어 있으면 플레이어도 탄다 — 마지막 일격을 넣고 물러서게 만든다.
+     **주변 몬스터도 같이 탄다.** 떼로 몰려 있을 때 불이 옮겨 붙으면서 한몫 한다
+     (불로 죽은 것도 공은 플레이어에게 간다). */
+  nova(enemy, p, player) {
+    FX.burst(enemy.x, enemy.y - 2, 30, ['#ff8a3c', '#ffd27a', '#c93f3f'], { speed: 95, life: 0.7, gravity: -10 });
+    FX.ring(enemy.x, enemy.y + 2, p.novaRadius, '#ff8a3c');
+    Sound.play('heavy');
+    const pl = Game.player;
+    if (pl && !pl.dead && Util.dist(pl.x, pl.y, enemy.x, enemy.y) < p.novaRadius) {
+      Status.apply(pl, 'burn', enemy.stats.atk * CONFIG.status.monsterBurn, enemy);
+    }
+    for (const s of Game.enemies) {
+      if (s === enemy || s.dead) continue;
+      if (Util.dist(s.x, s.y, enemy.x, enemy.y) > p.novaRadius) continue;
+      Status.apply(s, 'burn', enemy.stats.atk, player || pl);
+    }
+  },
+
+  /* 분열 — 같은 종류의 **평범한** 개체 둘로 갈라진다.
+     갈라진 것은 엘리트가 아니므로 또 갈라지지는 않는다 (끝없이 늘어나면 안 된다). */
+  split(enemy, p) {
+    const make = Game.ENEMY_TYPES[enemy.TYPE];
+    if (!make) return;
+    const lv = Math.max(1, enemy.level - p.splitLevelBelow);
+    for (let i = 0; i < p.split; i++) {
+      const base = (i / p.split) * Math.PI * 2 + Math.random();
+      // 한 방향만 보면 나무에 막혀 한 마리가 안 나온다 — 각도와 거리를 같이 흔들어 찾는다.
+      // 끝까지 빈 자리가 없으면 죽은 자리에 그냥 놓는다 (unstick 이 알아서 빼낸다)
+      let x = enemy.x, y = enemy.y;
+      search:
+      for (let r = 12; r <= 44; r += 8) {
+        for (const off of [0, 0.7, -0.7, 1.5, -1.5, Math.PI]) {
+          const cx = enemy.x + Math.cos(base + off) * r, cy = enemy.y + Math.sin(base + off) * r;
+          if (!World.isFreeSpot(cx, cy, 9)) continue;
+          x = cx; y = cy;
+          break search;
+        }
+      }
+      Game.enemies.push(make(x, y, lv));
+      FX.burst(x, y, 10, [enemy.palette.M, p.color], { speed: 50, life: 0.4 });
+    }
+    Sound.play('split');
+  },
+
+  /* ── 보이기 ────────────────────────────────────────────── */
+
+  /* 발밑을 도는 점 고리. 몸 그림에는 손대지 않으므로 종류가 늘어도 공짜로 따라온다.
+     도트가 돌아가는 것만으로 "저건 평범한 놈이 아니다"가 읽힌다. */
+  drawAura(ctx, enemy, sx, sy) {
+    const p = this.spec(enemy);
+    if (!p) return;
+    const t = World.time * 1.6 + (enemy.auraT || 0);
+    const r = enemy.radius + 4;
+    ctx.save();
+    ctx.globalAlpha = 0.8 + Math.sin(t * 2) * 0.2;
+    // 글자처럼 검은 그림자를 한 겹 깔아야 풀밭 위에서도 고리가 읽힌다
+    for (const [c, o] of [['#120f0b', 1], [p.color, 0]]) {
+      ctx.fillStyle = c;
+      for (let i = 0; i < 12; i++) {
+        const a = t + (i / 12) * Math.PI * 2;
+        ctx.fillRect(Math.round(sx + Math.cos(a) * r) + o, Math.round(sy + 7 + Math.sin(a) * r * 0.42) + o, 2, 2);
+      }
+    }
+    ctx.restore();
+    if (Math.random() < 0.28) {
+      FX.burst(enemy.x + Util.rand(-4, 4), enemy.y - Util.rand(0, 8), 1, [p.color, '#ffffff'],
+        { speed: 10, life: 0.5, gravity: -26, size: 1 });
+    }
+  },
+
+  // 머리 위 이름표 — 별 하나와 접두사. 레벨 줄은 그 아래에 그대로 남는다
+  drawName(ctx, enemy, sx, y) {
+    const p = this.spec(enemy);
+    if (!p) return;
+    UI.drawText(ctx, '^ ' + p.name, sx, y, p.color, true);
+  },
+
+  /* 화면 밖에 엘리트가 있으면 가장자리에 그 색 별을 띄운다 — "어, 저거"가 생기는 자리.
+     가까운 것만(markerRange) 알려주므로 지도가 별로 뒤덮이지 않는다.
+     안개는 따지지 않는다 — 이 거리면 보이든 안 보이든 기척이 느껴질 자리고,
+     못 가본 쪽을 가리킬 때는 그게 가볼 이유가 된다. */
+  drawMarkers(ctx, cam, enemies, player) {
+    const range = CONFIG.elite.markerRange;
+    for (const e of enemies) {
+      if (e.dead || !e.elite) continue;
+      const p = this.spec(e);
+      if (!p) continue;
+      if (Util.dist(e.x, e.y, player.x, player.y) > range) continue;
+      const sx = e.x - cam.x, sy = e.y - cam.y;
+      // 화면 안에 몸이 보이면 굳이 가리키지 않는다
+      if (sx > 8 && sx < CONFIG.VIEW_W - 8 && sy > 18 && sy < CONFIG.VIEW_H - 8) continue;
+      UI.drawText(ctx, '^', Util.clamp(sx, 10, CONFIG.VIEW_W - 10), Util.clamp(sy, 20, CONFIG.VIEW_H - 14), p.color, true);
+    }
+  },
+
+  // 미니맵 점 색 (엘리트는 난이도 색 대신 접두사 색으로 찍는다)
+  dotColor(enemy) {
+    const p = this.spec(enemy);
+    return p ? p.color : '#ffffff';
+  },
+};
+
+</script>
+  <script>
 // ── js/ui.js
 'use strict';
 
@@ -10375,6 +10633,7 @@ const FONT = {
   '?': ['.###.', '#...#', '....#', '...#.', '..#..', '.....', '..#..'],
   '>': ['.....', '#....', '.#...', '..#..', '.#...', '#....', '.....'],   // 상점 커서
   '*': ['.....', '..#..', '#.#.#', '.###.', '#.#.#', '..#..', '.....'],   // 전설 고유 효과 표
+  '^': ['.....', '..#..', '.###.', '#####', '.###.', '##.##', '.....'],   // 엘리트 별
   '%': ['##..#', '##.#.', '...#.', '..#..', '.#...', '.#.##', '#..##'],
   '(': ['...#.', '..#..', '.#...', '.#...', '.#...', '..#..', '...#.'],
   ')': ['.#...', '..#..', '...#.', '...#.', '...#.', '..#..', '.#...'],
@@ -10865,6 +11124,17 @@ const UI = {
 
 const PATCH_NOTES = [
   {
+    date: '2026-10-14',
+    notes: [
+      '엘리트 몬스터가 나타난다 — 스폰의 3%가 접두사를 달고 나온다',
+      'SWIFT(날쌘) / TOUGH(단단한) / BURNING(불타는) / SPLITTING(분열하는)',
+      '덩치가 크고 발밑에 고리가 돌고 이름표에 별이 붙는다. 미니맵에도 따로 찍힌다',
+      '화면 밖에 있어도 가까우면 화면 가장자리에 별이 떠서 알려준다',
+      '보상은 경험치 4배, 골드 3배, 전리품 2배, 장비는 RARE 이상 확정',
+      '불타는 엘리트는 죽을 때 불꽃이 퍼져 주변 몬스터까지 태운다',
+    ],
+  },
+  {
     date: '2026-10-13',
     notes: [
       '대장간이 생겼다 — 상인 옆 모루 앞에서 F. 전리품과 골드로 무기에 속성을 박는다',
@@ -11240,10 +11510,16 @@ const Game = {
       const make = this.ENEMY_TYPES[type] || this.ENEMY_TYPES.slime;
 
       const e = make(x, y, level);
+      // 몇 마리는 엘리트로 — 접두사가 붙고 덩치와 보상이 커진다 (나머지는 Elite 가 다 한다)
+      const prefix = Elite.roll(level);
+      if (prefix) Elite.make(e, prefix);
       this.enemies.push(e);
-      // 등장 연출 — 그 종류의 색으로 터진다
+      // 등장 연출 — 그 종류의 색으로 터진다 (엘리트는 접두사 색으로 한 번 더)
       const pal = e.palette;
       FX.burst(x, y, 8, [pal.M, pal.n], { speed: 30, life: 0.35, gravity: 40 });
+      if (prefix) {
+        FX.burst(x, y - 2, 16, [CONFIG.elite.prefixes[prefix].color, '#ffffff'], { speed: 60, life: 0.5, gravity: -10 });
+      }
       return e;
     }
     return null;
@@ -11793,6 +12069,8 @@ const Game = {
     const ui = UI.fx;
     // 보스 방은 겉맵 지도에 없는 곳이라 미니맵을 띄우지 않는다
     if (!this.showMap && !this.inArena) Minimap.drawCorner(ui, this.player, this.enemies);
+    // 화면 밖 엘리트는 가장자리에 별로 — 평범한 사냥 중에 '어, 저거'가 생기는 자리
+    if (!this.showMap && !this.title && !this.player.dead) Elite.drawMarkers(ui, cam, this.enemies, this.player);
     UI.draw(ui, this.player, this.showInventory);
     if (this.showMap) Minimap.drawFull(ui, this.player, this.enemies);
     if (this.boss && !this.boss.dead && !this.showMap) UI.drawBossBar(ui, this.boss);
