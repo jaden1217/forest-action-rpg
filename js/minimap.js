@@ -50,7 +50,8 @@ const Minimap = {
       if (!p.landmark) continue;
       ctx.fillStyle = p.landmark === 'shop' ? '#ffe066'
         : (p.landmark === 'portal' ? '#5ff0ff'
-        : (p.landmark === 'board' ? '#e8dcc0' : (p.landmark === 'forge' ? '#ff8a3c' : '#e08a4f')));
+        : (p.landmark === 'board' ? '#e8dcc0' : (p.landmark === 'forge' ? '#ff8a3c'
+        : (p.landmark === 'alchemist' ? '#7dff8a' : (p.landmark === 'stash' ? '#ffffff' : '#e08a4f')))));
       ctx.fillRect(Math.floor(p.x / CONFIG.TILE) - 1, Math.floor(p.y / CONFIG.TILE) - 1, 3, 3);
       ctx.fillStyle = '#1d1a17';
       ctx.fillRect(Math.floor(p.x / CONFIG.TILE), Math.floor(p.y / CONFIG.TILE), 1, 1);

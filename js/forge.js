@@ -38,16 +38,30 @@ const Forge = {
     return (row && row[element]) || 1;
   },
 
-  /* ── 대장간 세우기 — 상인 반대편, 게시판과 나란히 ── */
+  /* ── 대장간 세우기 — 상인 반대편, 게시판과 나란히 ──
+     거점 10주차: 보스 하나를 잡기 전에는 모루만 있고 대장장이가 없다. */
   place() {
     const x = World.startX + 70, y = World.startY + 20;
     World.addProp(SPRITES.anvil, x, y, { solid: [9, 3, 5], footHeight: 3 }).anvil = true;
+    World.smith = null;
+    this.npc = null;
+    // 조건을 채웠으면 바로 이사 온다 (저장 불러오기·사막 포함)
+    if (typeof Village !== 'undefined' && Village.smithHome && !Village.smithHome()) return;
+    this.spawnSmith();
+  },
+
+  // 마을에 뒤늦게 이사 올 때 (조건을 채운 뒤)
+  spawnSmith() {
+    if (World.smith) return World.smith;
+    const x = World.startX + 70, y = World.startY + 20;
     const npc = World.addProp(SPRITES.smith[0], x - 16, y - 2, { footHeight: 2 });
     npc.smith = true;
     npc.landmark = 'forge';
     npc.draw = (ctx, cam) => this.drawNpc(ctx, cam, npc);
     this.npc = npc;
     World.smith = npc;
+    if (World.buildGrid) World.buildGrid();
+    return npc;
   },
 
   drawNpc(ctx, cam, npc) {
@@ -97,6 +111,41 @@ const Forge = {
     }
   },
 
+  /* 강화 값 — 지금 든 무기 레벨 기준 */
+  upgradeCost(player) {
+    const u = CONFIG.forge.upgrade;
+    const lv = player.weaponLevel || 1;
+    return {
+      gold: Math.round(u.goldBase + lv * u.goldPerLevel),
+      loot: u.loot,
+      need: Math.round(u.lootBase + lv * u.lootPerLevel / 4),
+    };
+  },
+
+  reforgeCost(item) {
+    const r = CONFIG.forge.reforge;
+    const lv = (item && item.level) || 1;
+    return {
+      gold: Math.round(r.goldBase + lv * r.goldPerLevel),
+      loot: r.loot,
+      need: r.lootBase,
+    };
+  },
+
+  // 재련할 수 있는 장비 목록 — 가방 + 입고 있는 것
+  reforgeTargets(player) {
+    const out = [];
+    for (let i = 1; i < player.bag.length; i++) {
+      const s = player.bag[i];
+      if (s && s.kind === 'gear') out.push({ bagIndex: i, item: s });
+    }
+    for (const slot of CONFIG.gear.slots) {
+      const s = player.gear && player.gear[slot];
+      if (s) out.push({ slot: slot, item: s });
+    }
+    return out;
+  },
+
   entries(player) {
     const list = [];
     for (const id in CONFIG.forge.elements) {
@@ -111,6 +160,29 @@ const Forge = {
       });
     }
     list.push({ id: null, name: 'REMOVE', color: '#8f9aa8', remove: true, ok: !!player.weaponElement });
+    // 강화 — 성장 무기는 레벨을 알아서 따라가므로 필요 없다
+    const up = this.upgradeCost(player);
+    const upHeld = this.lootHeld(player, up.loot);
+    const upMax = player.weaponGrowing || player.weaponLevel >= CONFIG.forge.upgrade.maxLevel;
+    list.push({
+      upgrade: true, name: 'UPGRADE ' + player.weaponLabel(), color: '#ffe066',
+      loot: CONFIG.loot.items[up.loot].name, need: up.need, held: upHeld,
+      gold: up.gold, worn: false,
+      maxed: upMax,
+      ok: !upMax && upHeld >= up.need && player.gold >= up.gold,
+    });
+    // 재련 — 장비 하나당 한 줄
+    for (const t of this.reforgeTargets(player).slice(0, 6)) {
+      const c = this.reforgeCost(t.item);
+      const held = this.lootHeld(player, c.loot);
+      list.push({
+        reforge: true, target: t, name: 'REFORGE ' + Gear.name(t.item).slice(0, 14),
+        fullName: Gear.name(t.item), color: Gear.color(t.item),
+        loot: CONFIG.loot.items[c.loot].name, need: c.need, held: held,
+        gold: c.gold, worn: false,
+        ok: held >= c.need && player.gold >= c.gold,
+      });
+    }
     return list;
   },
 
@@ -120,6 +192,43 @@ const Forge = {
       player.weaponElement = null;
       Sound.play('blip');
       this.say('ELEMENT REMOVED');
+      return;
+    }
+    if (item.upgrade) {
+      if (player.weaponGrowing) { this.say('GROWING NEEDS NO UPGRADE'); Sound.play('error'); return; }
+      if (player.weaponLevel >= CONFIG.forge.upgrade.maxLevel) { this.say('MAX LEVEL'); Sound.play('error'); return; }
+      if (item.held < item.need) { this.say('NEED MORE ' + item.loot); Sound.play('error'); return; }
+      if (player.gold < item.gold) { this.say('NOT ENOUGH GOLD'); Sound.play('error'); return; }
+      const up = this.upgradeCost(player);
+      this.takeLoot(player, up.loot, up.need);
+      player.gold -= up.gold;
+      player.weaponLevel = Math.min(CONFIG.forge.upgrade.maxLevel, player.weaponLevel + 1);
+      player.recalcStats();
+      Sound.play('levelup');
+      FX.burst(player.x, player.y - 4, 20, ['#ffe066', '#ffffff'], { speed: 60, life: 0.6, gravity: 20 });
+      FX.number(player.x, player.y - 30, player.weaponLabel() + '!', '#ffe066');
+      this.say('UPGRADED TO L' + player.weaponLevel);
+      return;
+    }
+    if (item.reforge) {
+      if (item.held < item.need) { this.say('NEED MORE ' + item.loot); Sound.play('error'); return; }
+      if (player.gold < item.gold) { this.say('NOT ENOUGH GOLD'); Sound.play('error'); return; }
+      const t = item.target;
+      const src = t.bagIndex !== undefined ? player.bag[t.bagIndex] : player.gear[t.slot];
+      if (!src || src.kind !== 'gear') { this.say('GEAR IS GONE'); Sound.play('error'); return; }
+      const c = this.reforgeCost(src);
+      this.takeLoot(player, c.loot, c.need);
+      player.gold -= c.gold;
+      // 등급·개수는 그대로, 값만 다시 굴린다
+      const fresh = Gear.roll(src.id, src.level, src.rarity);
+      if (fresh) {
+        src.affixes = fresh.affixes;
+        player.recalcStats();
+      }
+      Sound.play('levelup');
+      FX.burst(player.x, player.y - 4, 18, [Gear.color(src), '#ffffff'], { speed: 55, life: 0.6, gravity: 20 });
+      FX.number(player.x, player.y - 30, Gear.name(src), Gear.color(src));
+      this.say('REFORGED ' + Gear.spec(src.id).name);
       return;
     }
     if (item.worn) { this.say('ALREADY FORGED'); Sound.play('error'); return; }
@@ -166,7 +275,9 @@ const Forge = {
 
   /* ── 창 ──────────────────────────────────────────────── */
   draw(ctx, player) {
-    const w = 206, h = 122;
+    const list = this.entries(player);
+    this.cursor = Util.clamp(this.cursor, 0, Math.max(0, list.length - 1));
+    const w = 206, h = Math.min(196, 52 + list.length * 13 + 22);
     const x = Math.round((CONFIG.VIEW_W - w) / 2), y = Math.round((CONFIG.VIEW_H - h) / 2);
     UI.panel(ctx, x, y, w, h, '#ff8a3c');
     UI.divider(ctx, x + 6, y + 15, w - 12);
@@ -178,10 +289,10 @@ const Forge = {
     const cur = el ? el.name : 'NO ELEMENT';
     UI.drawText(ctx, cur, x + w - 10 - UI.textWidth(cur), y + 19, el ? el.color : '#5f6b59');
 
-    const list = this.entries(player);
     const rowY = y + 32, rowH = 13;
     for (let i = 0; i < list.length; i++) {
       const it = list[i], ry = rowY + i * rowH;
+      if (ry > y + h - 24) break;
       if (i === this.cursor) {
         ctx.fillStyle = 'rgba(255,138,60,0.12)';
         ctx.fillRect(x + 6, ry - 3, w - 12, rowH - 1);
@@ -190,6 +301,10 @@ const Forge = {
       UI.drawText(ctx, it.name, x + 18, ry, it.worn ? '#9be564' : it.color);
       if (it.remove) {
         UI.drawText(ctx, 'FREE', x + w - 12 - UI.textWidth('FREE'), ry, it.ok ? '#f0d9b5' : '#6f7a68');
+        continue;
+      }
+      if (it.maxed) {
+        UI.drawText(ctx, 'MAX', x + w - 12 - UI.textWidth('MAX'), ry, '#6f7a68');
         continue;
       }
       // 재료와 값 — 모자라면 붉게

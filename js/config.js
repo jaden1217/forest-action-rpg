@@ -513,6 +513,12 @@ const CONFIG = {
     goldBase: 60,
     goldPerLevel: 8,
     bonus: 0.25,            // 추가 피해 = 그 일격 x 이 값 x 약점 배수
+    /* 강화 — 지금 든 무기의 레벨을 +1 (최대 60). 전리품이 재료다.
+       레벨업(공격 +2)보다 싸게 잡아 "마을에 들를 이유"가 되게 한다. */
+    upgrade: { goldBase: 30, goldPerLevel: 6, loot: 'fang', lootBase: 2, lootPerLevel: 1, maxLevel: 60 },
+    /* 재련 — 장비 한 점의 옵션 값을 다시 굴린다 (등급·개수는 그대로, 값만 새로).
+       전설 고유 효과·세트는 바뀌지 않으므로 "아깝게 굴러간 것"을 고치는 용도다. */
+    reforge: { goldBase: 40, goldPerLevel: 10, loot: 'gel', lootBase: 3 },
     elements: {
       flame: { name: 'FLAME', status: 'burn',   color: '#ff8a3c', chance: 1.0, loot: 'cap',     cost: 8 },
       frost: { name: 'FROST', status: 'freeze', color: '#9fe8ff', chance: 0.4, loot: 'gel',     cost: 10 },
@@ -1098,5 +1104,53 @@ const CONFIG = {
     },
     magnetRadius: 30,       // 이 거리 안이면 끌려온다 (포션과 같다)
     lifetime: 60,           // 바닥에 남아있는 시간 (초)
+  },
+
+  /* ── 거점 (로드맵 10주차) ───────────────────────────────
+     상인 옆을 마을로 키운다. 마을은 "돌아오는 곳"이다 —
+     팔고, 박고, 빚고, 맡기고, 다시 나간다.
+
+       대장장이  강화·재련·속성 부여 (보스 하나 처치하면 이사 온다)
+       연금술사  포션·해독제 제작 (전리품 50개 팔면 이사 온다)
+       창고      가방 밖 보관 (처음부터 있다 — 맡기는 데 조건은 없다)
+       귀환      T 를 누르면 마을 시작점으로 돌아온다 (보스 방 안에서는 안 된다)
+
+     이사 조건을 테라리아처럼 건 이유: "보스가 관문"에 이어
+     "마을이 커지는 맛"을 주려고. 조건을 채우면 다음에 마을에 갈 때
+     새 집과 함께 배너가 뜬다. */
+  village: {
+    interactRange: 26,
+    // 대장장이 = 보스 하나 처치, 연금술사 = 전리품 50개 판매
+    smithNeedBoss: 1,
+    alchemistNeedLootSold: 50,
+    returnKey: 'KeyT',
+  },
+
+  /* ── 연금술 (로드맵 10주차) ─────────────────────────────
+     전리품이 '팔 것'과 '대장간 재료'에 이어 **세 번째 쓸 곳**을 갖는다.
+     상점 포션(20G)보다 싸게 먹히도록 값을 잡아, 모은 전리품으로 빚어 쓰게 한다. */
+  alchemy: {
+    interactRange: 26,
+    recipes: {
+      // 가벼운 전리품 몇 개로 포션 한 병 — 상점(20G)보다 싸다
+      potion: { name: 'BREW POTION', color: '#e5484d', gold: 4, loot: { gel: 3 }, gain: 1 },
+      // 묵직한 전리품으로 포션 두 병
+      potionBig: { name: 'BREW 2 POTIONS', color: '#ffd93d', gold: 8, loot: { fang: 3, cap: 3 }, gain: 2 },
+      // 걸린 상태이상을 전부 지우고 잠깐 해독 상태가 된다 (그 동안 새로 안 걸린다)
+      antidote: { name: 'ANTIDOTE', color: '#7dff8a', gold: 10, loot: { cap: 2, stinger: 1 }, wardTime: 15 },
+      // 중독·화상에 걸려도 자연 회복이 멈추지 않는 약 (다음에 걸릴 때부터 적용, 60초)
+      tonic: { name: 'TONIC', color: '#5ff0ff', gold: 14, loot: { cactusFruit: 2, wormScale: 1 }, tonicTime: 60 },
+    },
+    wardTime: 15,     // 해독제 해독 지속
+    tonicTime: 60,    // 강장제 지속
+  },
+
+  /* ── 창고 (로드맵 10주차) ───────────────────────────────
+     가방 밖 보관. 무기·장비·전리품을 맡긴다 (포션 주머니는 못 맡긴다).
+     칸 제한은 두지 않았다 — "맡기는 데 조건은 없다"가 이 시설의 성격이다.
+     대신 한 번에 한 칸씩 옮긴다 (Space 로 맡기고, 창고 쪽에서 Space 로 찾는다). */
+  stash: {
+    interactRange: 26,
+    maxItems: 200,
   },
 };

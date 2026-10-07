@@ -64,6 +64,12 @@ const Game = {
     Landmarks.deserialize(saved && saved.landmarks);   // 이미 연 상자는 열린 채로 다시 선다
     Fog.deserialize(saved && saved.fog);                // 밝혀둔 지도도 그대로
     this.bossSlain = Object.assign({}, (saved && saved.bossSlain) || {});
+    if (typeof Village !== 'undefined') Village.reset();
+    // 불러오기면 거점 데이터를 먼저 얹어 마을 배치에 반영한다 (연금술사 이사 여부)
+    if (typeof Village !== 'undefined' && saved && saved.village) {
+      Village.lootSold = Math.max(0, saved.village.lootSold | 0);
+      Village.announced = Object.assign({}, saved.village.announced || {});
+    }
     World.init(this.seed, (saved && CONFIG.maps[saved.map]) ? saved.map : 'forest');
     Minimap.build();
     FX.reset();
@@ -82,6 +88,7 @@ const Game = {
     this.player = new Player(World.startX, World.startY);
     if (saved) Save.apply(saved, this.player);
     Quests.deserialize(saved && saved.quests, this.player);   // 저장된 의뢰를 되살리고 빈자리를 채운다
+    if (typeof Village !== 'undefined') Village.deserialize(saved && saved.village, this.player);
     this.forestBanner = 2.8;   // 맵 이름을 한 번 띄운다
     this.boss = null;
     this.bossReadyIn = CONFIG.maps.forest.caves.map(() => 0);   // 동굴은 숲에만 있다
@@ -171,6 +178,8 @@ const Game = {
     this.portalPrompt = false;
     this.boardPrompt = false;
     this.forgePrompt = false;
+    this.alchemistPrompt = false;
+    this.stashPrompt = false;
     this.chestPrompt = null;
     if (this.inArena) this.updateArenaGate(dt);
     else {
@@ -178,6 +187,8 @@ const Game = {
       this.updateShopGate();
       this.updateBoardGate();
       this.updateForgeGate();
+      this.updateAlchemistGate();
+      this.updateStashGate();
       this.updateChestGate();
       this.updatePortalGate();
     }
@@ -193,6 +204,30 @@ const Game = {
     if (!Items.pickupRequested) return;
     Items.pickupRequested = false;
     Forge.openForge();
+  },
+
+  // 연금술사 앞에서 F — 포션·해독제를 빚는다 (이사 와야 있다)
+  updateAlchemistGate() {
+    const n = World.alchemist;
+    if (!n || this.player.dead || this.cavePrompt || this.shopPrompt || this.boardPrompt || this.forgePrompt || Items.nearWeapon) return;
+    if (Util.dist(this.player.x, this.player.y, n.x, n.y) > CONFIG.alchemy.interactRange) return;
+
+    this.alchemistPrompt = true;
+    if (!Items.pickupRequested) return;
+    Items.pickupRequested = false;
+    Village.openAlchemy();
+  },
+
+  // 창고 앞에서 F — 가방 밖 보관
+  updateStashGate() {
+    const c = World.stashChest;
+    if (!c || this.player.dead || this.cavePrompt || this.shopPrompt || this.boardPrompt || this.forgePrompt || this.alchemistPrompt || Items.nearWeapon) return;
+    if (Util.dist(this.player.x, this.player.y, c.x, c.y) > CONFIG.stash.interactRange) return;
+
+    this.stashPrompt = true;
+    if (!Items.pickupRequested) return;
+    Items.pickupRequested = false;
+    Village.openStash();
   },
 
   // 보물 상자 앞에서 F — 아직 안 연 상자만 받는다
@@ -470,6 +505,8 @@ const Game = {
         if (!this.bossSlain[type]) {
           this.bossSlain[type] = true;
           if (this.portalUnlocked()) this.gateBanner = 3.2;
+          // 대장장이 이사 조건 — 보스 하나면 마을로 온다
+          if (typeof Village !== 'undefined') Village.checkMoveIns(false);
         }
       } else if (!this.inArena) {
         this.respawnQueue.push(Util.rand(CONFIG.spawn.respawnMin, CONFIG.spawn.respawnMax));
@@ -487,6 +524,7 @@ const Game = {
   },
 
   paused() {
+    if (typeof Village !== 'undefined' && (Village.stashOpen || Village.alchemyOpen)) return true;
     return this.showInventory || this.showMap || this.confirmNewGame || Shop.open || Quests.open || Forge.open || PatchNotes.open;
   },
 
@@ -525,6 +563,10 @@ const Game = {
     if (Shop.open) { Shop.handleInput(this.player); return; }
     if (Quests.open) { Quests.handleInput(this.player); return; }
     if (Forge.open) { Forge.handleInput(this.player); return; }
+    if (typeof Village !== 'undefined') {
+      if (Village.stashOpen) { Village.handleStashInput(this.player); return; }
+      if (Village.alchemyOpen) { Village.handleAlchemyInput(this.player); return; }
+    }
     if (this.showInventory) { Inventory.handleInput(this.player); return; }
     if (Input.pressed.KeyV) { Sound.toggle(); Sound.play('toggle'); this.soundFlash = 1.4; }
     if (Input.inventoryPressed()) { this.showInventory = true; Inventory.message = ''; }
@@ -567,6 +609,8 @@ const Game = {
       this.handleMenuInput();
       this.player.bufferInput();
       if (Input.pickupPressed()) Items.pickupRequested = true;
+      // 거점 귀환 — T 로 마을 시작점으로 (보스 방·일시정지 중에는 안 된다)
+      if (Input.pressed.KeyT && typeof Village !== 'undefined') Village.tryReturn(this.player);
 
       Save.tick(dt, this);
       this.soundFlash = Math.max(0, this.soundFlash - dt);
@@ -713,6 +757,8 @@ const Game = {
     if (this.shopPrompt && !this.showMap) Shop.drawPrompt(ui, cam);
     if (this.boardPrompt && !this.showMap) Quests.drawPrompt(ui, cam);
     if (this.forgePrompt && !this.showMap) Forge.drawPrompt(ui, cam);
+    if (this.alchemistPrompt && !this.showMap && typeof Village !== 'undefined') Village.drawAlchemistPrompt(ui, cam);
+    if (this.stashPrompt && !this.showMap && typeof Village !== 'undefined') Village.drawStashPrompt(ui, cam);
     if (this.chestPrompt && !this.showMap) Landmarks.drawPrompt(ui, cam, this.chestPrompt);
     if (this.portalPrompt && !this.showMap) {
       UI.drawPortalPrompt(ui, World.portal, cam, CONFIG.maps[World.spec.portalTo],
@@ -722,6 +768,10 @@ const Game = {
     if (Shop.open) Shop.draw(ui, this.player);
     if (Quests.open) Quests.draw(ui, this.player);
     if (Forge.open) Forge.draw(ui, this.player);
+    if (typeof Village !== 'undefined') {
+      if (Village.stashOpen) Village.drawStashWindow(ui, this.player);
+      if (Village.alchemyOpen) Village.drawAlchemy(ui, this.player);
+    }
     if (this.lairBanner > 0) UI.drawBanner(ui, this.bossSpec(this.arenaCave).lairName, '#ff6b6b', this.lairBanner);
     if (this.forestBanner > 0 && !this.showMap && !this.showInventory && !Shop.open && !this.title) UI.drawBanner(ui, World.spec.name, World.spec.color, this.forestBanner);
     if (this.gateBanner > 0 && !this.showMap) UI.drawBanner(ui, 'THE OBELISK AWAKENS', '#5ff0ff', this.gateBanner);

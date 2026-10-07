@@ -127,6 +127,8 @@ const Inventory = {
       if (player.bag[i] && player.bag[i].kind === 'loot') player.bag[i] = null;
     }
     player.gold += v.value;
+    // 연금술사 이사 조건 — 판 전리품 개수를 센다
+    if (typeof Village !== 'undefined' && v.items > 0) Village.addLootSold(v.items);
     return v;
   },
 

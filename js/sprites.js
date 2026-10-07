@@ -1647,6 +1647,12 @@ function buildSprites() {
     makeSprite('smith', MERCHANT, SMITH_PAL),
     makeSprite('smith_work', MERCHANT.map((row, i) => (i < 2 ? '................' : MERCHANT[i - 1])), SMITH_PAL),
   ];
+  /* 연금술사 — 상인과 같은 몸에 초록 로브와 약병. 거점 10주차 */
+  const ALCHEMIST_PAL = { u: '#1f5a2a', U: '#2f7a3c', v: '#7dff8a', y: '#ffd93d' };
+  SPRITES.alchemist = [
+    makeSprite('alchemist', MERCHANT, ALCHEMIST_PAL),
+    makeSprite('alchemist_blink', MERCHANT_BLINK, ALCHEMIST_PAL),
+  ];
   // 랜드마크 — 보물 상자(닫힘/열림)와 그 둘레에 놓는 소품들
   SPRITES.chest = [makeChest(false), makeChest(true)];
   SPRITES.ruinPillar = [0, 1, 2].map(i => makeRuinPillar(1401 + i * 131));

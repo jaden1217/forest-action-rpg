@@ -28,6 +28,8 @@ const Status = {
   apply(target, type, power, source) {
     const spec = this.spec(type);
     if (!target || target.dead || !spec) return;
+    // 해독제 해독 상태 — 새로 안 걸린다
+    if (target.wardTimer > 0) return;
     const time = spec.time;
 
     if (!target.status) target.status = {};
@@ -59,8 +61,9 @@ const Status = {
     return this.has(target, 'shock') ? CONFIG.status.list.shock.amp : 1;
   },
 
-  // 자연 회복이 막혔는가 (중독·화상)
+  // 자연 회복이 막혔는가 (중독·화상) — 강장제가 도는 동안은 안 막힌다
   blocksRegen(target) {
+    if (target.tonicTimer > 0) return false;
     if (!target.status) return false;
     for (const type in target.status) if (this.spec(type).blockRegen) return true;
     return false;

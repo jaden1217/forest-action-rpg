@@ -43,6 +43,7 @@ const Save = {
       quests: Quests.serialize(),
       landmarks: Landmarks.serialize(),
       fog: Fog.serialize(),
+      village: (typeof Village !== 'undefined') ? Village.serialize() : null,
       bossSlain: game.bossSlain,
       drops: drops.map(d => ({
         kind: d.kind, weapon: d.weapon, level: d.level, amount: d.amount, id: d.id,

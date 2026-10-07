@@ -47,6 +47,8 @@ class Player {
     Inventory.create(this);
 
     this.status = {};          // 걸려 있는 상태이상 (Status 가 다룬다 — 몬스터와 같은 규칙)
+    this.wardTimer = 0;        // 해독제 해독 — 새로 안 걸린다
+    this.tonicTimer = 0;       // 강장제 — 중독·화상 중에도 자연 회복이 멈추지 않는다
     this.attackTimer = 0;      // 휘두르는 중이면 0보다 큼
     this.cooldown = 0;
     this.attackBuffer = 0;     // 쿨다운 중에 누른 공격을 잠깐 기억해둔다
@@ -476,6 +478,8 @@ class Player {
     this.cooldown = Math.max(0, this.cooldown - dt);
     this.invuln = Math.max(0, this.invuln - dt);
     this.potionCooldown = Math.max(0, this.potionCooldown - dt);
+    this.wardTimer = Math.max(0, (this.wardTimer || 0) - dt);
+    this.tonicTimer = Math.max(0, (this.tonicTimer || 0) - dt);
     Status.update(this, dt, true);
     this.updateRegen(dt);
     this.updateSecondWind(dt);

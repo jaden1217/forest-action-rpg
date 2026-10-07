@@ -52,6 +52,8 @@ const World = {
     this.time = 0;
     this.caves = this.spec.caves.map(() => null);   // 동굴 입구 — 각자 자기 보스 방으로 이어진다 (사막엔 없다)
     this.merchant = null;   // 상인 (Shop.place 가 채운다)
+    this.alchemist = null;
+    this.stashChest = null;
 
     this.buildDanger(seed);
     this.buildTiles(seed);
@@ -63,7 +65,8 @@ const World = {
     this.board = null;  // 의뢰 게시판 (Quests.place 가 채운다)
     Shop.place();       // 9주차: 시작 지점 옆 가판대와 상인
     Quests.place();     // 의뢰 게시판 — 상인 반대편
-    Forge.place();      // 대장간 — 무기에 속성을 박는 모루
+    Forge.place();      // 대장간 — 무기에 속성을 박는 모루 (보스 전에는 모루만)
+    if (typeof Village !== 'undefined') Village.place();   // 10주차: 거점 — 연금술사·창고·모닥불·집
     this.placePortal(); // 텔레포트 비석 — 시작 지점 반대편
     this.buildGrid();   // 바위·그루터기·가판대까지 포함해 다시 만든다
   },
@@ -80,7 +83,7 @@ const World = {
     'cols', 'rows', 'w', 'h', 'ground', 'props', 'solids', 'grid',
     'tiles', 'tileBlocked', 'shade', 'colorRow', 'dangerNoise',
     'startX', 'startY', 'wetNoise', 'openNoise', 'caves', 'arenaExit', 'merchant', 'board', 'smith', 'chests',
-    'time', 'isArena', 'mapId', 'spec', 'portal',
+    'time', 'isArena', 'mapId', 'spec', 'portal', 'alchemist', 'stashChest',
   ],
 
   snapshot() {
@@ -112,6 +115,8 @@ const World = {
     this.merchant = null;
     this.board = null;
     this.smith = null;
+    this.alchemist = null;
+    this.stashChest = null;
     this.portal = null;
     this.isArena = true;
     this.arenaCave = caveIndex || 0;
