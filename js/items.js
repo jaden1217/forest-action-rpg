@@ -21,6 +21,7 @@ const Items = {
   // 몬스터가 죽으면 호출 — 포션과 무기를 각각 확률로 떨군다.
   // 포션 확률은 레벨이 아니라 색 등급(5단계)으로 본다 — 레벨은 23까지 올라가기 때문이다.
   dropFor(enemy) {
+    if (enemy.noDrop) return;   // 습격이 끝나며 물러간 것 — 잡은 게 아니다
     const cfg = CONFIG.items;
     const tier = levelTier(enemy.level);
 
@@ -72,9 +73,11 @@ const Items = {
     this.giveGold(enemy, Math.max(1, Math.round(base * Util.rand(1 - g.variance, 1 + g.variance))));
   },
 
-  // 잡은 자리에서 금화가 튀어오르며 액수가 뜨고, 주머니에 바로 더해진다
+  // 잡은 자리에서 금화가 튀어오르며 액수가 뜨고, 주머니에 바로 더해진다.
+  // 밤에 태어난 놈은 값어치도 더 나간다 (Events 가 배수를 안다)
   giveGold(enemy, amount) {
-    Game.player.addGold(amount, enemy.x, enemy.y);
+    const mult = (typeof Events !== 'undefined') ? Events.goldMult(enemy) : 1;
+    Game.player.addGold(Math.max(1, Math.round(amount * mult)), enemy.x, enemy.y);
   },
 
   /* 무기 드랍 규칙

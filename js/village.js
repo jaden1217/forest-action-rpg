@@ -230,7 +230,7 @@ const Village = {
     const z = this.zoneFor();
     const speed = CONFIG.village.pushSpeed;
     for (const e of Game.enemies) {
-      if (!e || e.dead || !this.isSafe(e.x, e.y)) continue;
+      if (!e || e.dead || e.raider || !this.isSafe(e.x, e.y)) continue;   // 습격대는 들어오라고 둔다
       const dx = e.x - z.cx, dy = e.y - z.cy;
       const d = Math.sqrt(dx * dx + dy * dy) || 1;
       // moveWithCollision 을 타면 안쪽에서 바깥으로는 나갈 수 있다 (차단은 바깥→안쪽만 막는다)

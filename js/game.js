@@ -79,6 +79,7 @@ const Game = {
     Shop.reset();
     Quests.reset();
     Forge.reset();
+    if (typeof Events !== 'undefined') Events.deserialize(saved && saved.events);   // 며칠째 몇 시인가
     this.showInventory = false;
     this.showMap = false;
     this.confirmNewGame = false;
@@ -153,8 +154,10 @@ const Game = {
       const make = this.ENEMY_TYPES[type] || this.ENEMY_TYPES.slime;
 
       const e = make(x, y, level);
+      // 밤에 태어났으면 더 세다 — 날이 밝아도 그대로다 (Events)
+      if (typeof Events !== 'undefined') Events.applySpawn(e);
       // 몇 마리는 엘리트로 — 접두사가 붙고 덩치와 보상이 커진다 (나머지는 Elite 가 다 한다)
-      const prefix = Elite.roll(level);
+      const prefix = Elite.roll(level, (typeof Events !== 'undefined') ? Events.eliteChanceMult() : 1);
       if (prefix) Elite.make(e, prefix);
       this.enemies.push(e);
       // 등장 연출 — 그 종류의 색으로 터진다 (엘리트는 접두사 색으로 한 번 더)
@@ -498,7 +501,8 @@ const Game = {
       if (!this.enemies[i].dead) continue;
       const e = this.enemies[i];
       Items.dropFor(e);
-      Quests.onKill(e);         // 처치 의뢰는 여기서 센다
+      // 조용히 물러난 것(습격 종료·밤의 교대)은 잡은 게 아니므로 의뢰에도 안 센다
+      if (!e.noDrop) Quests.onKill(e);
       this.enemies.splice(i, 1);
       if (e.isBoss) {
         // 보스는 일반 몬스터 정원과 무관하다. 한참 뒤에 다시 도전할 수 있다
@@ -512,6 +516,9 @@ const Game = {
           // 대장장이 이사 조건 — 보스 하나면 마을로 온다
           if (typeof Village !== 'undefined') Village.checkMoveIns(false);
         }
+      } else if (e.raider) {
+        // 습격대는 평소 정원과 무관하다 — 다시 채우지 않고, 남은 수만 센다
+        if (typeof Events !== 'undefined') Events.onRaiderDead(e);
       } else if (!this.inArena) {
         this.respawnQueue.push(Util.rand(CONFIG.spawn.respawnMin, CONFIG.spawn.respawnMax));
       }
@@ -639,6 +646,7 @@ const Game = {
           World.update(dt);
           Ambient.update(dt, this.cam);
           this.updateBanners(dt);
+          if (typeof Events !== 'undefined') Events.update(dt);   // 하루·모래폭풍·습격
           this.updateHeartbeat(dt);
           Quests.update(dt, this.player);
           Landmarks.update(dt, this.player);
@@ -743,6 +751,11 @@ const Game = {
     FX.drawSparks(ctx, cam);
     FX.drawNumbers(ctx, cam);
     Ambient.drawOverlay(ctx);
+    // 하늘빛(밤·황혼)과 모래폭풍은 세상 위에 한 겹 덮는다 — 글자와 창(고운 레이어)은 그 위다
+    if (typeof Events !== 'undefined') {
+      Events.drawSky(ctx, this.player, cam);
+      Events.drawStorm(ctx);
+    }
     ctx.drawImage(SPRITES.vignette, 0, 0);   // 가장자리를 어둡게 해 화면 중앙에 시선을 모은다
     UI.drawLowHp(ctx, this.player);
     FX.drawFlashes(ctx);
@@ -780,6 +793,10 @@ const Game = {
     if (this.lairBanner > 0) UI.drawBanner(ui, this.bossSpec(this.arenaCave).lairName, '#ff6b6b', this.lairBanner);
     if (this.forestBanner > 0 && !this.showMap && !this.showInventory && !Shop.open && !this.title) UI.drawBanner(ui, World.spec.name, World.spec.color, this.forestBanner);
     if (this.gateBanner > 0 && !this.showMap) UI.drawBanner(ui, 'THE OBELISK AWAKENS', '#5ff0ff', this.gateBanner);
+    if (typeof Events !== 'undefined') {
+      if (!this.showMap && !this.showInventory && !this.title && !Shop.open && !Quests.open) Events.drawHud(ui);
+      if (Events.raidBanner > 0 && !this.showMap) UI.drawBanner(ui, Events.raidBannerText, Events.raidBannerColor, Events.raidBanner);
+    }
     if (this.confirmNewGame) UI.drawConfirm(ui);
     if (this.soundFlash > 0) UI.drawSoundState(ui, Sound.enabled);
     // 장면 전환은 맨 위를 덮는다

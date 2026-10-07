@@ -54,7 +54,9 @@ const Shop = {
     if (!this.npc) return;
     const sx = Math.round(this.npc.x - cam.x), sy = Math.round(this.npc.y - cam.y);
     if (Math.floor(World.time * 3) % 2 === 0) return;
-    UI.drawText(ctx, 'F  SHOP', sx, sy - 24, '#ffe066', true);
+    const closed = (typeof Events !== 'undefined' && Events.shopClosed());
+    if (closed) UI.drawText(ctx, 'CLOSED', sx, sy - 24, '#c05a5a', true);
+    else UI.drawText(ctx, 'F  SHOP', sx, sy - 24, '#ffe066', true);
   },
 
   /* ── 목록 ──────────────────────────────────────────────
@@ -144,6 +146,13 @@ const Shop = {
   },
 
   openShop() {
+    // 습격을 놓치면 상인이 며칠 문을 닫는다 (Events)
+    if (typeof Events !== 'undefined' && Events.shopClosed()) {
+      const n = this.npc || World.merchant;
+      if (n) FX.number(n.x, n.y - 26, 'CLOSED ' + Events.shopClosedDays() + 'D', '#c05a5a', true);
+      Sound.play('error');
+      return;
+    }
     this.open = true;
     this.cursor = 0;
     this.message = '';

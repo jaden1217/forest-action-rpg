@@ -24,13 +24,19 @@
 const Elite = {
   spec(enemy) { return enemy && enemy.elite ? CONFIG.elite.prefixes[enemy.elite] : null; },
 
-  // 스폰할 때 한 번 굴린다 — 접두사 하나, 또는 평범하면 null
-  roll(level) {
+  // 접두사 하나만 뽑는다 (확률은 보지 않는다 — 습격대처럼 '엘리트로 정해진' 자리에서 쓴다)
+  rollPrefix() {
+    const ids = Object.keys(CONFIG.elite.prefixes);
+    return ids[Util.weightedIndex(ids.map(id => CONFIG.elite.prefixes[id].weight))];
+  },
+
+  /* 스폰할 때 한 번 굴린다 — 접두사 하나, 또는 평범하면 null.
+     mult 는 확률 배수다 (밤·모래폭풍이 엘리트를 더 자주 불러낸다). */
+  roll(level, mult) {
     const cfg = CONFIG.elite;
     if (level < cfg.minLevel) return null;          // 시작점 바로 옆은 배우는 자리다
-    if (Math.random() >= cfg.chance) return null;
-    const ids = Object.keys(cfg.prefixes);
-    return ids[Util.weightedIndex(ids.map(id => cfg.prefixes[id].weight))];
+    if (Math.random() >= cfg.chance * (mult || 1)) return null;
+    return this.rollPrefix();
   },
 
   /* 평범한 개체를 엘리트로 바꾼다.
