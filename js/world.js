@@ -20,6 +20,10 @@ const TILE_BASE_COLOR = {
   desert: [
     ['#3f8b40', '#9a6b3c', '#d9c27f', '#2f6f9e', '#e0cc8a'],   // 오아시스 풀, 갈라진 땅, 모래, 물, 모래언덕
   ],
+  snow: [
+    ['#dceaf3', '#96c4da', '#bad0dc', '#2b5a78', '#e8f2f8'],   // 눈, 맨 얼음, 서리 모래, 얼어붙은 못, 눈더미
+    ['#b4cadc', '#85b3cb', '#a8c0cf', '#23506d', '#d6e6f0'],   // 그늘진 눈
+  ],
 };
 
 const World = {
@@ -39,7 +43,7 @@ const World = {
     const T = CONFIG.TILE;
     this.mapId = mapId || 'forest';
     this.spec = CONFIG.maps[this.mapId];
-    seed = seed + (this.mapId === 'desert' ? 50021 : 0);
+    seed = seed + (this.mapId === 'desert' ? 50021 : (this.mapId === 'tundra' ? 90031 : 0));
     this.cols = CONFIG.MAP_W;
     this.rows = CONFIG.MAP_H;
     this.isArena = false;
@@ -64,6 +68,7 @@ const World = {
     this.placeTrees(Util.makeRng(seed + 17));
     this.buildGrid();   // 나무 충돌을 먼저 등록해야 장식이 나무를 피해서 놓인다
     this.placeDecor(Util.makeRng(seed + 41));
+    this.placeCaves(Util.makeRng(seed + 61));   // 동굴 입구 — 맵마다 자기 caves 표대로
     Landmarks.place(Util.makeRng(seed + 97));   // 폐허·야영지·묻힌 상자 — 그 한가운데에 보물 상자
     this.board = null;  // 의뢰 게시판 (Quests.place 가 채운다)
     Shop.place();       // 9주차: 시작 지점 옆 가판대와 상인
@@ -300,7 +305,9 @@ const World = {
     this.shade = new Uint8Array(W * H);      // 빽빽한 숲 바닥은 그늘져서 잔디가 어둡다
     this.colorRow = new Uint8Array(W * H);   // 경계 흐리기·미니맵이 쓰는 색 줄 (숲: 볕 0 / 그늘 1, 사막: 0)
     const desert = this.spec.theme === 'desert';
-    const base = desert ? TILE_SAND : TILE_GRASS;   // 바탕 타일 — 사막은 모래
+    const snow = this.spec.theme === 'snow';
+    // 바탕 타일 — 사막은 모래, 설원은 눈(풀 자리를 눈으로 그린다)
+    const base = desert ? TILE_SAND : TILE_GRASS;
     // 시작 지점(맵 한가운데) 주변은 물 없이 비워둔다
     const cx = this.startX / CONFIG.TILE, cy = this.startY / CONFIG.TILE;
 
@@ -316,6 +323,10 @@ const World = {
             // 사막의 물은 드문 오아시스 — 물 둘레에만 풀이 자란다
             if (wet > cfg.oasisLevel) t = TILE_WATER;
             else if (wet > cfg.oasisGrassLevel) t = TILE_GRASS;
+          } else if (snow) {
+            // 설원의 물은 얼어붙은 못 — 둘레는 서리 섞인 모래밭이다
+            if (wet > cfg.waterLevel) t = TILE_WATER;
+            else if (wet > cfg.shoreLevel) t = TILE_SAND;
           } else if (wet > cfg.waterLevel) t = TILE_WATER;
           else if (wet > cfg.shoreLevel) t = TILE_SAND;
         }
@@ -386,7 +397,7 @@ const World = {
     for (let ty = 0; ty < H; ty++) {
       for (let tx = 0; tx < W; tx++) {
         const i = ty * W + tx;
-        const set = this.groundSet(this.tiles[i], this.spec.theme === 'desert' ? 'desert' : (this.shade[i] ? 'shade' : 'forest'));
+        const set = this.groundSet(this.tiles[i], this.groundSetName(this.shade[i]));
         ctx.drawImage(set[Math.floor(rng() * set.length)], tx * T, ty * T);
       }
     }
@@ -395,12 +406,20 @@ const World = {
     this.bakeDetails(ctx, rng);
   },
 
-  // 타일 종류 + 바닥 묶음 이름(forest / shade / stone) -> 실제로 쓸 바닥 타일들
+  // 이 맵(그리고 그늘 여부)이 쓰는 바닥 묶음 이름
+  groundSetName(shaded) {
+    const th = this.spec.theme;
+    if (th === 'desert') return 'desert';
+    if (th === 'snow') return shaded ? 'snowShade' : 'snow';
+    return shaded ? 'shade' : 'forest';
+  },
+
+  // 타일 종류 + 바닥 묶음 이름(forest / shade / stone / desert / snow) -> 실제로 쓸 바닥 타일들
   groundSet(tile, setName) {
     const g = SPRITES.groundSets[setName] || SPRITES.groundSets.forest;
     if (tile === TILE_DIRT) return g.dirt;
     if (tile === TILE_SAND) return g.sand || SPRITES.sand;    // 물가 모래 (사막은 자기 모래)
-    if (tile === TILE_WATER) return SPRITES.water;
+    if (tile === TILE_WATER) return g.water || SPRITES.water; // 설원은 얼어붙은 못
     if (tile === TILE_MEADOW) return g.meadow;
     return g.grass;
   },
@@ -453,6 +472,14 @@ const World = {
         const vz = this.villageZone;
         const inVillage = vz && x + T > vz.x0 && x < vz.x1 && y + T > vz.y0 && y < vz.y1;
         const rockOff = inVillage ? 0 : 1;
+
+        if (this.spec.theme === 'snow') {
+          // 설원 — 눈 위에는 아무것도 자라지 않는다. 맨 얼음에만 드물게 돌멩이
+          if (t === TILE_DIRT && rng() < 0.02 * rockOff) ctx.drawImage(SPRITES.rock[0], x + Math.floor(rng() * 5), y + Math.floor(rng() * 6));
+          else if (t === TILE_MEADOW && rng() < 0.05) { ctx.fillStyle = '#ffffff'; ctx.fillRect(x + Math.floor(rng() * 14), y + Math.floor(rng() * 14), 1, 1); }
+          else rng();   // 호출 횟수를 맞춰 지형이 시드대로 재현되게 한다
+          continue;
+        }
 
         if (desert) {
           // 사막 — 오아시스 풀에만 꽃, 모래엔 아주 드문 돌멩이, 갈라진 땅엔 자갈
@@ -544,7 +571,12 @@ const World = {
       buckets.get(k).push({ x: x, y: y });
 
       let sprite, solid;
-      if (desert) {
+      if (this.spec.theme === 'snow') {
+        // 설원 — 멀수록 얼음 기둥이 늘고, 눈 덮인 침엽수와 얼어 죽은 나무가 섞인다
+        if (force || rng() < this.forestAt('pineChance', x, y)) { sprite = Util.choice(SPRITES.iceSpire); solid = [5, 5, 8]; }
+        else if (rng() < this.forestAt('deadChance', x, y)) { sprite = Util.choice(SPRITES.deadTree); solid = [4, 4, 7]; }
+        else { sprite = Util.choice(SPRITES.snowPine); solid = [5, 5, 8]; }
+      } else if (desert) {
         // 오아시스 풀밭엔 야자수, 가장자리 담장과 먼 곳엔 바위기둥, 나머지는 선인장 (고사목이 조금 섞인다)
         if (t === TILE_GRASS) { sprite = Util.choice(SPRITES.palm); solid = [5, 5, 8]; }
         else if (force || rng() < this.forestAt('pineChance', x, y)) { sprite = Util.choice(SPRITES.rockSpire); solid = [7, 5, 8]; }
@@ -602,6 +634,7 @@ const World = {
 
     const desert = this.spec.theme === 'desert';
     if (desert) { this.placeDesertDecor(rng, spot); return; }
+    if (this.spec.theme === 'snow') { this.placeSnowDecor(rng, spot); return; }
 
     // 흔들리는 풀 — 숲을 살아있게 만드는 가장 큰 요소
     for (let i = 0, n = this.scaled(260); i < n; i++) {
@@ -622,27 +655,6 @@ const World = {
       this.addProp(Util.choice(SPRITES.boulder), s.x, s.y, { solid: [7, 4, 6], footHeight: 3 });
     }
 
-    /* 동굴 입구 셋 — 위험도 고리 위에 하나씩 (가까운 슬라임 굴 -> 중간 늑대 굴 -> 가장자리 버섯 굴).
-       방향은 120도씩 벌려 서로 다른 쪽에 두고, 맵마다 돌아가는 각도가 달라 매번 다른 자리다.
-       흔하면 이정표 구실을 못 하므로 희소하게 두었다. 미니맵에 따로 찍힌다. */
-    const base = rng() * Math.PI * 2;
-    this.spec.caves.forEach((spec, index) => {
-      const want = base + index * (Math.PI * 2 / 3);
-      for (let i = 0; i < 3000; i++) {
-        // 원하는 방향 ±30도, 원하는 고리 ±0.05 안에서 빈자리를 찾는다
-        const a = want + (rng() - 0.5) * (Math.PI / 3);
-        const t = spec.t + (rng() - 0.5) * 0.1;
-        const x = Util.clamp(this.startX + Math.cos(a) * t * this.w / 2, 40, this.w - 40);
-        const y = Util.clamp(this.startY + Math.sin(a) * t * this.h / 2, 50, this.h - 40);
-        if (Math.abs(this.dangerAt(x, y) - spec.t) > 0.06) continue;
-        if (!this.isFreeSpot(x, y, 22)) continue;
-        const p = this.addProp(Util.choice(SPRITES.caveEntrance), x, y, { solid: [12, 6, 9], footHeight: 3 });
-        p.landmark = true;
-        p.caveIndex = index;
-        this.caves[index] = p;   // 이 보스 방의 입구
-        break;
-      }
-    });
     for (let i = 0, n = this.scaled(22); i < n; i++) {   // 그루터기 — 부딪힌다
       const s = spot();
       if (s) this.addProp(SPRITES.stump[0], s.x, s.y, { solid: [5, 3, 5], footHeight: 3 });
@@ -667,6 +679,49 @@ const World = {
   },
 
   // 사막 소품 — 마른 풀, 마른 수풀, 바위(많다), 공 선인장(부딪힌다), 뼈
+  /* 동굴 입구 — **맵마다** 자기 caves 표대로 놓는다 (숲 셋, 사막 하나, 설원 없음).
+     예전에는 숲 소품 함수 안에 있어서 사막에 보스를 넣어도 입구가 안 생겼다.
+     위험도 고리 위에 하나씩, 방향은 120도씩 벌려 서로 다른 쪽에 둔다. */
+  placeCaves(rng) {
+    const base = rng() * Math.PI * 2;
+    this.spec.caves.forEach((spec, index) => {
+      const want = base + index * (Math.PI * 2 / 3);
+      for (let i = 0; i < 3000; i++) {
+        // 원하는 방향 ±30도, 원하는 고리 ±0.05 안에서 빈자리를 찾는다
+        const a = want + (rng() - 0.5) * (Math.PI / 3);
+        const tt = spec.t + (rng() - 0.5) * 0.1;
+        const x = Util.clamp(this.startX + Math.cos(a) * tt * this.w / 2, 40, this.w - 40);
+        const y = Util.clamp(this.startY + Math.sin(a) * tt * this.h / 2, 50, this.h - 40);
+        if (Math.abs(this.dangerAt(x, y) - spec.t) > 0.06) continue;
+        if (!this.isFreeSpot(x, y, 22)) continue;
+        const p = this.addProp(Util.choice(SPRITES.caveEntrance), x, y, { solid: [12, 6, 9], footHeight: 3 });
+        p.landmark = true;
+        p.caveIndex = index;
+        this.caves[index] = p;   // 이 보스 방의 입구
+        break;
+      }
+    });
+  },
+
+  /* 설원 소품 — 서리 덤불, 눈 덮인 바위, 얼음 조각.
+     숲만큼 빽빽하면 흰 바닥이 안 보여서 설원 같지 않다 — 성기게 둔다. */
+  placeSnowDecor(rng, spot) {
+    for (let i = 0, n = this.scaled(90); i < n; i++) {   // 서리 덤불
+      const s = spot();
+      if (s) this.addProp(Util.choice(SPRITES.frostBush), s.x, s.y, { footHeight: 3 });
+    }
+    for (let i = 0, n = this.scaled(80); i < n; i++) {   // 눈 덮인 바위 (부딪힌다)
+      const s = spot();
+      if (!s) continue;
+      if (rng() > this.forestAt('boulders', s.x, s.y) * 0.4) continue;
+      this.addProp(Util.choice(SPRITES.boulder), s.x, s.y, { solid: [7, 4, 6], footHeight: 3 });
+    }
+    for (let i = 0, n = this.scaled(60); i < n; i++) {   // 눈 덮인 작은 바위 (지나간다)
+      const s = spot();
+      if (s) this.addProp(Util.choice(SPRITES.snowRock), s.x, s.y, { footHeight: 2 });
+    }
+  },
+
   placeDesertDecor(rng, spot) {
     for (let i = 0, n = this.scaled(200); i < n; i++) {
       const s = spot();

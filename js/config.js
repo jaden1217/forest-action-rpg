@@ -11,7 +11,7 @@ const WEAPON_LEVEL_MAX = 60;
 /* 레벨을 색 등급으로 묶는다 — 이제 무기(칼날 색)와 드랍 양에만 쓴다.
    몬스터 색은 종류가 정하고(ENEMY_COLORS), 위험도는 이름표 색이 알려준다.
    (1~4 / 5~8 / 9~13 / 14~18 / 19~23 — 숲, 24~29 / 30~35 / 36~ — 사막) */
-const LEVEL_TIER_BREAKS = [4, 8, 13, 18, 23, 29, 35];
+const LEVEL_TIER_BREAKS = [4, 8, 13, 18, 23, 29, 35, 41, 48, 54];
 function levelTier(level) {
   for (let i = 0; i < LEVEL_TIER_BREAKS.length; i++) {
     if (level <= LEVEL_TIER_BREAKS[i]) return i;
@@ -31,6 +31,9 @@ const ENEMY_COLORS = {
   scorpion: { m: '#7a4a10', M: '#d98a2b', n: '#ffd27a' },   // 사막 — 호박빛 껍질
   cactus:   { m: '#4a6a12', M: '#8fbf3a', n: '#e0f08a' },   // 사막 — 라임빛 (배경 선인장보다 밝아야 몬스터로 읽힌다)
   sandworm: { m: '#3e2d4a', M: '#7a5f96', n: '#c7b0e0' },   // 사막 — 자줏빛 (모래 위에서 한눈에 보인다)
+  wisp:     { m: '#1b4a66', M: '#4fb8e0', n: '#d8f6ff' },   // 설원 — 푸른 불꽃 (눈 위에서 빛나 보인다)
+  yeti:     { m: '#5a4630', M: '#b89a74', n: '#f0e2cc' },   // 설원 — 누런 털 (흰 눈과 구별되게 탁하게)
+  golem:    { m: '#2a5a72', M: '#7fd4e8', n: '#e8fbff' },   // 설원 — 얼음덩이
 };
 
 /* 이름표 색 — 그 몬스터가 지금 나에게 얼마나 벅찬가 (레벨 차이로 잰다).
@@ -486,7 +489,9 @@ const CONFIG = {
       boulders: [1.6, 3.0],
       shadeLevel: 2,               // 그늘 없음 (사막은 늘 볕이 든다)
 
-      caves: [],                   // 사막 보스는 아직 없다
+      caves: [
+        { boss: 'sandlord', t: 0.82 },   // 사막의 유일한 동굴 — 모래의 군주
+      ],
 
       bgm: { edges: [0.55, 2], tracks: ['desert', 'cave', 'cave'] },
       minimap: {
@@ -494,6 +499,48 @@ const CONFIG = {
           [[63, 139, 64], [154, 107, 60], [217, 194, 127], [47, 111, 158], [224, 204, 138]],   // 오아시스 풀, 갈라진 땅, 모래, 물, 모래언덕
         ],
         tree: ['#2f7a3a'],
+      },
+      portalTo: 'tundra',
+    },
+
+    /* 얼어붙은 고원 — 세 번째이자 마지막 무대 (로드맵 12주차).
+       사막 보스를 잡아야 비석이 이곳을 가리킨다. 41~60레벨.
+         서리 망령  **벽을 통과해서** 온다. 나무 뒤에 숨는 게 안 통하는 첫 몬스터
+         설인       눈덩이를 포물선으로 던진다 — 떨어진 자리가 잠깐 빙판이 된다
+         얼음 골렘  느리고 단단하다. 죽을 때 사방으로 얼음 파편이 터진다
+       바닥은 눈, 물기 많은 곳은 얼어붙은 못, 개방도 낮은 곳은 맨 얼음(미끄럽지는 않다). */
+    tundra: {
+      id: 'tundra', theme: 'snow',
+      name: 'FROZEN HIGHLANDS',    // 얼어붙은 고원
+      color: '#bfe8ff',
+      wobble: 0.10,
+
+      levelRange: [41, 60],
+      safeRadius: 0.10,
+      curve: 1.25,
+      levelSpread: 2,
+
+      typeWeights: [
+        { wisp: 60, yeti: 30, golem: 10 },   // 비석 근처 — 망령이 떠다닌다
+        { yeti: 45, wisp: 30, golem: 25 },   // 중간 — 설인의 눈덩이밭
+        { golem: 45, yeti: 35, wisp: 20 },   // 가장자리 — 골렘이 버티고 선다
+      ],
+
+      treeDensity: [0.75, 1.3],    // 눈 덮인 침엽수·얼음 기둥
+      pineChance: [0.55, 0.85],    // 여기서는 '얼음 기둥' 비율
+      deadChance: [0.10, 0.25],    // 얼어 죽은 나무
+      boulders: [1.4, 2.6],
+      shadeLevel: 0.72,            // 빽빽한 곳은 그늘진 눈 (푸르스름하게)
+
+      caves: [],                   // 설원에는 동굴이 없다 — 이곳의 보상은 서리심 장비다
+
+      bgm: { edges: [0.45, 0.8], tracks: ['desert', 'cave', 'cave'] },
+      minimap: {
+        tiles: [
+          [[214, 232, 243], [150, 196, 218], [186, 212, 228], [40, 86, 120], [228, 240, 248]],  // 눈, 맨얼음, 서리모래, 얼어붙은 못, 눈더미
+          [[176, 200, 218], [126, 170, 196], [166, 190, 208], [34, 74, 104], [192, 212, 228]],  // 그늘진 눈
+        ],
+        tree: ['#9fc4d8', '#6f93a8'],
       },
       portalTo: 'forest',
     },
@@ -516,6 +563,19 @@ const CONFIG = {
     /* 강화 — 지금 든 무기의 레벨을 +1 (최대 60). 전리품이 재료다.
        레벨업(공격 +2)보다 싸게 잡아 "마을에 들를 이유"가 되게 한다. */
     upgrade: { goldBase: 30, goldPerLevel: 6, loot: 'fang', lootBase: 2, lootPerLevel: 1, maxLevel: 60 },
+    /* 제작 — **설원 자원으로만** 만드는 서리심 한 벌 (로드맵 12주차).
+       떨어지지 않는 장비라 "설원에 가서 모아 와야만" 손에 들어온다.
+       등급은 RARE 고정(옵션 셋), 레벨은 만들 때의 내 레벨을 따른다 —
+       재련으로 옵션을 다시 굴릴 수 있으니 한 번 만들면 계속 쓴다. */
+    craft: {
+      goldBase: 400, goldPerLevel: 20,
+      rarity: 2,
+      recipes: [
+        { id: 'frostHelm',  loot: { wispEmber: 14, frostCore: 6 } },
+        { id: 'frostPlate', loot: { yetiPelt: 16, frostCore: 10 } },
+        { id: 'frostSigil', loot: { frostCore: 14, wispEmber: 8 } },
+      ],
+    },
     /* 재련 — 장비 한 점의 옵션 값을 다시 굴린다 (등급·개수는 그대로, 값만 새로).
        전설 고유 효과·세트는 바뀌지 않으므로 "아깝게 굴러간 것"을 고치는 용도다. */
     reforge: { goldBase: 40, goldPerLevel: 10, loot: 'gel', lootBase: 3 },
@@ -534,6 +594,10 @@ const CONFIG = {
       scorpion: { frost: 2.0, venom: 0.2 },
       cactus:   { frost: 2.0, flame: 0.2 },
       sandworm: { shock: 2.0, frost: 1.5, flame: 0.2 },
+      // 설원 — 여기서는 불꽃이 답이다. 서리는 거의 안 통한다
+      wisp:     { flame: 2.0, shock: 1.5, frost: 0.2 },
+      yeti:     { flame: 2.0, frost: 0.2 },
+      golem:    { shock: 2.0, flame: 1.5, frost: 0.2 },
     },
   },
 
@@ -587,10 +651,17 @@ const CONFIG = {
   /* ── 관문 (로드맵 6주차) ─────────────────────────────────
      보스가 '있어도 그만'이 아니라 **다음 무대를 여는 열쇠**가 되게 한다.
      숲 보스 셋 중 하나라도 잡아야 사막으로 가는 비석이 깨어난다. */
+  /* 관문 — 어느 맵에 들어가려면 무엇을 잡아야 하는가.
+     '아무 보스나'로는 1단계만 잡고 넘어갈 수 있어서, 각 무대를 끝까지 보고 가게 했다.
+       사막  숲에서 가장 센 보스(늙은 버섯 Lv30)
+       설원  사막의 유일한 보스(모래의 군주 Lv46)
+     숲은 시작하는 곳이라 조건이 없다. */
   gate: {
-    // 숲에서 가장 센 보스(늙은 버섯, Lv30)를 잡아야 사막 비석이 깨어난다.
-    // '아무 보스나'로는 1단계 보스만 잡고 넘어갈 수 있어서, 숲을 끝까지 보고 가게 했다
-    requiredBoss: 'mushroom',
+    requiredBoss: 'mushroom',    // (옛 이름 — 사막 열쇠. needs 가 비어 있을 때의 대비책)
+    needs: {
+      desert: 'mushroom',
+      tundra: 'sandlord',
+    },
   },
 
   /* ── 랜드마크와 보물 (로드맵 5주차) ──────────────────────
@@ -745,6 +816,62 @@ const CONFIG = {
      숲에 셋 있는 동굴 입구로 들어가면 나오는 전용 공간.
      화면이 24x13타일이므로 세로는 화면보다 조금만 크게 잡아 보스가 늘 눈에 들어오게 하고,
      대신 가로를 넓혀 좌우로 도망치며 싸우는 방으로 만들었다. */
+  /* ── 설원 몬스터 셋 (로드맵 12주차) ──────────────────────
+     41~60레벨. 셋 다 지금까지 없던 수를 하나씩 들고 온다. */
+
+  /* 서리 망령 — **벽을 통과해서** 온다.
+     나무 뒤로 돌아 피하는 수가 처음으로 안 통하는 상대라, 설원에서는 도망치는 법이 달라진다.
+     느리고 물렁한 대신 멈추지 않고, 닿으면 얼린다. */
+  wisp: {
+    levels: buildLevels(
+      { hp: 26, atk: 7, speed: 26, detect: 190, scale: 0.78, xp: 9, knockback: 54 },
+      ENEMY_GROWTH
+    ),
+    contactCooldown: 1.0,
+    freezeChance: 0.55,      // 닿으면 이 확률로 빙결
+    bobAmp: 3,               // 둥둥 떠 있는 높이
+    bobSpeed: 2.4,
+    wallAlpha: 0.45,         // 벽·나무 안에 있을 때의 투명도 (어디 있는지는 보인다)
+  },
+
+  /* 설인 — 눈덩이를 **포물선으로** 던진다. 날아오는 동안 그림자가 바닥을 따라오므로
+     떨어질 자리가 미리 보인다. 떨어진 자리는 잠깐 빙판이 되어 밟으면 느려진다. */
+  yeti: {
+    levels: buildLevels(
+      { hp: 52, atk: 10, speed: 30, detect: 170, scale: 1.0, xp: 12, knockback: 46 },
+      ENEMY_GROWTH,
+      (lv) => ({ interval: +(3.2 - (lv - 1) / (LEVEL_MAX - 1) * 1.0).toFixed(2) })
+    ),
+    windup: 0.6,             // 던지기 전 치켜드는 시간
+    throwRange: 150,
+    ballTime: 1.1,           // 눈덩이가 날아가는 시간 (초) — 그동안 그림자가 따라간다
+    ballRadius: 20,          // 떨어진 자리 피해 반경
+    damageMult: 1.1,
+    slickTime: 3.5,          // 빙판이 남는 시간 (초)
+    slickSlow: 0.62,         // 빙판 위에서의 이동 배수
+    keepDistance: 86,        // 이 거리쯤을 유지하며 던진다
+    contactCooldown: 1.0,
+  },
+
+  /* 얼음 골렘 — 느리고 단단하다. 넉백이 거의 안 통하고 받는 피해도 줄어든다.
+     대신 죽을 때 사방으로 얼음 파편이 터지므로 마지막 일격을 넣고 물러서야 한다. */
+  golem: {
+    levels: buildLevels(
+      { hp: 84, atk: 11, speed: 15, detect: 150, scale: 1.18, xp: 14, knockback: 14 },
+      ENEMY_GROWTH
+    ),
+    armor: 0.72,             // 받는 피해 배수 (단단하다)
+    contactCooldown: 1.2,
+    slam: { range: 36, windup: 0.78, radius: 42, damageMult: 1.5, cooldown: 3.2 },
+    shards: { count: 8, speed: 108, life: 1.1, damageMult: 0.8 },   // 죽을 때 터지는 파편
+  },
+
+  /* ── 사막 보스 — 모래의 군주 (로드맵 12주차) ─────────────
+     사막에 보스가 없어서 관문이 끊겨 있었다. 모래벌레의 수법을 보스 규모로 키운다.
+       잠행   땅속으로 사라져 발밑까지 따라온다 (땅속에서는 때릴 수 없다)
+       솟구침 잠행 끝에 튀어나오며 넓은 범위를 때린다 — 바닥 표시를 보고 비켜야 한다
+       모래비 사방으로 모래를 흩뿌린다 (고리 모양이라 사이로 빠져나간다)
+       부름   전갈 새끼를 불러낸다 */
   arena: {
     w: 40, h: 17,
     enterRange: 26,         // 동굴 입구에서 이 거리 안이면 들어갈 수 있다
@@ -881,6 +1008,59 @@ const CONFIG = {
         weight: [22, 26],
       },
     },
+
+    /* ── 사막의 유일한 보스 — 모래의 군주 (로드맵 12주차) ──
+       사막에 보스가 없어서 관문이 숲-사막에서 끊겨 있었다.
+       모래벌레의 수법("땅속으로 와서 발밑에서 솟구친다")을 보스 규모로 키운다.
+       땅속에 있는 동안은 때릴 수 없으므로, 이 보스는 **때릴 틈을 기다리는** 싸움이다. */
+    sandlord: {
+      type: 'sandworm', name: 'SAND LORD', lairName: 'THE SINKHOLE',
+      level: 46,
+      /* 46레벨 모래벌레의 표는 이미 숫자가 크다. 앞선 보스 셋은 모두
+         "한 대에 플레이어 체력의 20% 안팎, 50~70대쯤 때려야 잡힌다"에 맞춰져 있어서
+         여기에도 같은 자를 댔다 — 배수를 그대로 1.5로 두면 한 방에 죽었다
+         (체력 420에 피해 525). 배수가 1보다 작은 것은 표가 센 탓이다. */
+      hpMult: 5,
+      atkMult: 0.42,
+      xpMult: 30,
+      scale: 2.4,
+      speed: 96,              // 땅속에서는 빠르다 (밖에 나오면 거의 안 움직인다)
+      detect: 400,
+      contactCooldown: 1.0,
+      reward: { weapon: 'axe', chance: 0.12, potions: 8, trophy: 'lordScale' },
+
+      phase2At: 0.5,
+      phase2Speed: 1.3,
+      idleTime: [0.5, 1.0],   // 밖에 나와 있는 시간 — 때릴 틈이다
+
+      /* 잠행 → 솟구침. 땅속으로 사라져 발밑까지 따라온 뒤 튀어나온다.
+         바닥에 붉은 원이 뜨고 나서 터지므로, 보고 비키면 맞지 않는다 */
+      dive: {
+        windup: 0.5,          // 파고드는 시간
+        chase: [1.3, 0.9],    // 땅속에서 쫓아다니는 시간 [1페이즈, 2페이즈]
+        mark: 0.75,           // 솟구치기 전 바닥 표시가 떠 있는 시간
+        radius: 52,
+        damageMult: 1.7,
+        weight: [38, 36],
+      },
+      /* 모래비 — 사방으로 고리처럼 흩뿌린다. 고리라서 사이로 빠져나갈 수 있다 */
+      spray: {
+        windup: 0.55, rings: [2, 3], shots: [10, 14], speed: 78, life: 2.6,
+        damageMult: 0.85,
+        weight: [30, 30],
+      },
+      /* 모래 소용돌이 — 제자리에서 돌며 주위를 계속 때린다. 붙어 있으면 안 된다 */
+      storm: {
+        windup: 0.5, time: [1.6, 2.2], radius: 56, tick: 0.45,
+        damageMult: 0.7,
+        weight: [16, 20],
+      },
+      // 부름 — 전갈 새끼를 불러낸다
+      call: {
+        windup: 0.5, count: [3, 5], levelBelow: 8,
+        weight: [16, 14],
+      },
+    },
   },
 
   /* 타격감. 히트스톱은 맞는 순간 화면이 아주 잠깐 멈추는 것 — 길수록 묵직하다.
@@ -896,7 +1076,7 @@ const CONFIG = {
 
   items: {
     // 2주차: 슬라임이 떨구는 건 회복 포션 한 종류. 레벨이 높을수록 잘 나온다
-    potionDropChance: [0.10, 0.13, 0.17, 0.22, 0.30, 0.32, 0.34, 0.36], // 색 등급별 드랍 확률 (사막 등급 셋 포함)
+    potionDropChance: [0.10, 0.13, 0.17, 0.22, 0.30, 0.32, 0.34, 0.36, 0.38, 0.40, 0.42], // 색 등급별 (숲 다섯·사막 셋·설원 셋)
     potionDoubleChance: 0.25, // 높은 등급이 2개를 떨굴 확률
     /* 포션 1개 회복량 — 최대 체력의 비율로 잰다 (최소 30).
        11주차 밸런싱: 고정 30이면 23레벨(체력 236)에서는 13%밖에 안 채워 쓸모가 없었다 */
@@ -914,7 +1094,7 @@ const CONFIG = {
      (줍는 수고를 없앤 대신 확정 지급이고, 양은 그만큼 살짝 낮췄다)
      양은 레벨이 아니라 색 등급(5단계)으로 정해서, 멀리 나갈수록 벌이가 좋다. */
   gold: {
-    amountByTier: [2, 5, 8, 13, 20, 28, 38, 50],    // 등급별 기본량 (1~4 / 5~8 / 9~13 / 14~18 / 19~23 / 사막 24~29 / 30~35 / 36~)
+    amountByTier: [2, 5, 8, 13, 20, 28, 38, 50, 68, 90, 118],   // 숲 다섯 / 사막 셋 / 설원 셋 (36~41 / 42~48 / 49~)
     variance: 0.35,                     // 기본량의 ±35% 사이에서 흔들린다
     bossMult: 12,                       // 보스는 자기 등급 기본량의 12배
     color: '#ffe066',
@@ -976,6 +1156,16 @@ const CONFIG = {
         stats: { power: [1, 0.3] } },
       vitalCharm: { slot: 'trinket', name: 'VITAL CHARM', sprite: 'charm', unique: 'secondWind',
         stats: { maxHp: [14, 1.8] } },
+
+      /* ── 서리심 — 설원 자원으로만 **만드는** 최상위 한 벌 (로드맵 12주차).
+         떨어지지 않는다 (craftOnly). 대장간에서 설원 전리품으로 빚어야 한다.
+         바탕 수치가 기존 최고치보다 한 단 위고, 세 점을 다 갖추면 서리 보호막이 생긴다. */
+      frostHelm: { slot: 'head', name: 'FROSTHEART CROWN', sprite: 'helm', craftOnly: true, unique: 'thorns',
+        stats: { armor: [12, 0.34], maxHp: [8, 1.0] } },
+      frostPlate: { slot: 'body', name: 'FROSTHEART PLATE', sprite: 'mail', craftOnly: true, unique: 'aegis',
+        stats: { armor: [18, 0.46], maxHp: [12, 1.4], speed: [-3, 0] } },
+      frostSigil: { slot: 'trinket', name: 'FROSTHEART SIGIL', sprite: 'amulet', craftOnly: true, unique: 'overload',
+        stats: { power: [2, 0.4], maxHp: [10, 1.2] } },
     },
   },
 
@@ -997,6 +1187,12 @@ const CONFIG = {
     wanderer: {
       name: 'WANDERER', items: ['travelCloak', 'powerAmulet'],
       bonus: { 2: { cooldown: 10, gold: 25 } },
+    },
+    /* 서리심 — 설원에서 빚는 한 벌. 세 점이 최대이고, 다 갖추면 덤이 가장 크다.
+       "그 지역 자원으로만 만드는 최상위 장비 한 벌"이라 세 점을 다 모으는 것이 목표가 된다 */
+    frostheart: {
+      name: 'FROSTHEART', items: ['frostHelm', 'frostPlate', 'frostSigil'],
+      bonus: { 2: { armor: 20, frosty: 20 }, 3: { maxHp: 90, critMult: 40, knockRes: 40 } },
     },
   },
 
@@ -1085,8 +1281,9 @@ const CONFIG = {
      양은 색 등급이 정한다 (1~4레벨 1개 … 19~23레벨 3개). 보스는 자기 전리품을 하나 확정으로 준다. */
   loot: {
     dropChance: 0.20,
-    amountByTier: [1, 1, 2, 2, 3, 3, 4, 4],
-    byType: { slime: 'gel', wolf: 'fang', mushroom: 'cap', scorpion: 'stinger', cactus: 'cactusFruit', sandworm: 'wormScale' },
+    amountByTier: [1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6],
+    byType: { slime: 'gel', wolf: 'fang', mushroom: 'cap', scorpion: 'stinger', cactus: 'cactusFruit', sandworm: 'wormScale',
+              wisp: 'wispEmber', yeti: 'yetiPelt', golem: 'frostCore' },
     items: {
       gel:        { name: 'SLIME GEL',   value: 4,   color: '#8fe098' },
       fang:       { name: 'WOLF FANG',   value: 6,   color: '#e9f1f7' },
@@ -1094,9 +1291,13 @@ const CONFIG = {
       stinger:    { name: 'STINGER',     value: 12,  color: '#ffd27a' },   // 사막
       cactusFruit:{ name: 'CACTUS FRUIT', value: 10, color: '#e56b7a' },
       wormScale:  { name: 'WORM SCALE',  value: 15,  color: '#c9bb9c' },
+      wispEmber:  { name: 'WISP EMBER',  value: 26,  color: '#4fb8e0' },   // 설원
+      yetiPelt:   { name: 'YETI PELT',   value: 32,  color: '#f0e2cc' },
+      frostCore:  { name: 'FROST CORE',  value: 40,  color: '#e8fbff' },
       slimeCore:  { name: 'SLIME CORE',  value: 150, color: '#7ec8ff', trophy: true },
       alphaFang:  { name: 'ALPHA FANG',  value: 250, color: '#ff6b6b', trophy: true },
       elderSpore: { name: 'ELDER SPORE', value: 400, color: '#c79ce8', trophy: true },
+      lordScale:  { name: 'LORD SCALE',  value: 700, color: '#ffb35c', trophy: true },   // 모래의 군주
     },
     magnetRadius: 30,       // 이 거리 안이면 끌려온다 (포션과 같다)
     lifetime: 60,           // 바닥에 남아있는 시간 (초)

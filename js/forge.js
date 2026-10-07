@@ -186,10 +186,54 @@ const Forge = {
         ok: held >= c.need && player.gold >= c.gold,
       });
     }
+    /* 제작 — 설원 자원으로만 만드는 서리심 한 벌 (로드맵 12주차).
+       재료를 하나도 못 모았으면 줄을 띄우지 않는다 — 설원에 가기 전에는 있는 줄도 모른다.
+       한 번 설원을 밟아 전리품이 들어오면 그때부터 목록에 뜬다. */
+    for (const r of CONFIG.forge.craft.recipes) {
+      const spec = Gear.spec(r.id);
+      if (!spec) continue;
+      const parts = [];
+      let have = true, seen = false;
+      for (const lootId in r.loot) {
+        const held = this.lootHeld(player, lootId);
+        if (held > 0) seen = true;
+        if (held < r.loot[lootId]) have = false;
+        parts.push(CONFIG.loot.items[lootId].name.split(' ')[0] + ' ' + held + '/' + r.loot[lootId]);
+      }
+      if (!seen && !have) continue;   // 재료를 한 톨도 못 봤으면 숨긴다
+      const gold = this.craftGold(player);
+      list.push({
+        craft: true, recipe: r, name: 'FORGE ' + spec.name.replace('FROSTHEART ', ''),
+        fullName: spec.name, color: CONFIG.rarity.list[CONFIG.forge.craft.rarity].color,
+        lootText: parts.join('  '), lootOk: have,
+        gold: gold, worn: false,
+        ok: have && player.gold >= gold,
+      });
+    }
     return list;
   },
 
+  craftGold(player) {
+    const c = CONFIG.forge.craft;
+    return Math.round(c.goldBase + player.level * c.goldPerLevel);
+  },
+
   apply(item, player) {
+    if (item.craft) {
+      const r = item.recipe, spec = Gear.spec(r.id);
+      if (!item.lootOk) { this.say('NEED MORE MATERIALS'); Sound.play('error'); return; }
+      if (player.gold < item.gold) { this.say('NOT ENOUGH GOLD'); Sound.play('error'); return; }
+      // 가방에 자리가 있어야 받는다 (바닥에 떨구면 귀한 것을 잃을 수 있다)
+      const made = Gear.roll(r.id, player.level, CONFIG.forge.craft.rarity);
+      if (!Inventory.addGear(player, made)) { this.say('BAG IS FULL'); Sound.play('error'); return; }
+      for (const lootId in r.loot) this.takeLoot(player, lootId, r.loot[lootId]);
+      player.gold -= item.gold;
+      Sound.play('levelup');
+      FX.burst(player.x, player.y - 4, 30, ['#bfe8ff', '#ffffff'], { speed: 80, life: 0.8, gravity: 10 });
+      FX.number(player.x, player.y - 30, spec.name, '#bfe8ff', true);
+      this.say('FORGED ' + spec.name);
+      return;
+    }
     if (item.remove) {
       if (!player.weaponElement) { this.say('NOTHING TO REMOVE'); Sound.play('error'); return; }
       player.weaponElement = null;
@@ -280,7 +324,7 @@ const Forge = {
   draw(ctx, player) {
     const list = this.entries(player);
     this.cursor = Util.clamp(this.cursor, 0, Math.max(0, list.length - 1));
-    const w = 206, h = Math.min(196, 52 + list.length * 13 + 22);
+    const w = 214, h = Math.min(190, 52 + list.length * 13 + 22);
     const x = Math.round((CONFIG.VIEW_W - w) / 2), y = Math.round((CONFIG.VIEW_H - h) / 2);
     UI.panel(ctx, x, y, w, h, '#ff8a3c');
     UI.divider(ctx, x + 6, y + 15, w - 12);
@@ -292,10 +336,16 @@ const Forge = {
     const cur = el ? el.name : 'NO ELEMENT';
     UI.drawText(ctx, cur, x + w - 10 - UI.textWidth(cur), y + 19, el ? el.color : '#5f6b59');
 
+    /* 줄이 많아져서(속성 넷 + 해제 + 강화 + 재련 여섯 + 제작 셋) 창 하나에 다 안 들어간다.
+       커서를 따라 목록이 흐르게 하고, 위아래에 더 있다는 표시를 둔다 */
     const rowY = y + 32, rowH = 13;
-    for (let i = 0; i < list.length; i++) {
-      const it = list[i], ry = rowY + i * rowH;
-      if (ry > y + h - 24) break;
+    const rows = Math.max(1, Math.floor((h - 56) / rowH));
+    const top = Util.clamp(this.cursor - Math.floor(rows / 2), 0, Math.max(0, list.length - rows));
+    if (top > 0) UI.drawText(ctx, '-', x + w / 2, rowY - 8, '#7f6a52', true);
+    if (top + rows < list.length) UI.drawText(ctx, '-', x + w / 2, rowY + rows * rowH - 3, '#7f6a52', true);
+
+    for (let i = top; i < Math.min(list.length, top + rows); i++) {
+      const it = list[i], ry = rowY + (i - top) * rowH;
       if (i === this.cursor) {
         ctx.fillStyle = 'rgba(255,138,60,0.12)';
         ctx.fillRect(x + 6, ry - 3, w - 12, rowH - 1);
@@ -308,6 +358,13 @@ const Forge = {
       }
       if (it.maxed) {
         UI.drawText(ctx, 'MAX', x + w - 12 - UI.textWidth('MAX'), ry, '#6f7a68');
+        continue;
+      }
+      // 제작은 재료가 둘이라 한 줄로 이어 붙인다
+      if (it.craft) {
+        UI.drawText(ctx, it.lootText, x + 62, ry, it.lootOk ? '#7fa86a' : '#c05a5a');
+        const cp = it.gold + ' G';
+        UI.drawText(ctx, cp, x + w - 12 - UI.textWidth(cp), ry, player.gold >= it.gold ? CONFIG.gold.color : '#c05a5a');
         continue;
       }
       // 재료와 값 — 모자라면 붉게

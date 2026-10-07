@@ -184,7 +184,9 @@ class Player {
 
   // 장신구·망토가 더해주는 이동 속도 배수 (speed 는 %)
   speedMult() {
-    return Math.max(0.3, 1 + (this.gearStats.speed || 0) / 100);
+    // onSlick 은 설인의 빙판 — 밟고 있는 프레임에만 세워지고 쓰고 나면 지워진다
+    const slick = this.onSlick || 1;
+    return Math.max(0.3, (1 + (this.gearStats.speed || 0) / 100) * slick);
   }
 
   // 옵션 하나를 꺼내 쓴다 (안 붙어 있으면 0)
@@ -505,7 +507,8 @@ class Player {
       const speedScale = this.activeSkill
         ? (this.skillSpec(this.activeSkill).moveScale || 0)
         : (this.attackTimer > 0 ? 0.35 : 1);
-      const walk = c.speed * this.speedMult() * Status.speedScale(this);   // 장비와 빙결이 걸음을 바꾼다
+      const walk = c.speed * this.speedMult() * Status.speedScale(this);   // 장비·빙결·빙판이 걸음을 바꾼다
+      this.onSlick = 0;    // 이번 프레임 몫은 썼다 (설인이 다음 프레임에 다시 세운다)
       const vx = ix * walk * speedScale + this.kx;
       const vy = iy * walk * speedScale + this.ky;
       this.moveWithCollision(vx * dt, vy * dt);

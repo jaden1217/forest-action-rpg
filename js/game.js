@@ -20,7 +20,7 @@ const Game = {
   mapStates: {},     // 다른 맵에 있는 동안 접어둔 맵들 (맵·몬스터·드랍) — 텔레포트로 돌아오면 그대로 펼친다
   portalPrompt: false,   // 텔레포트 비석 앞에 서 있는가
   boss: null,        // 살아있는 보스
-  bossReadyIn: [0, 0, 0],   // 동굴마다 다시 도전할 수 있게 되기까지 남은 시간
+  bossReadyIn: {},   // 맵마다 동굴마다 다시 도전할 수 있게 되기까지 남은 시간 { forest:[...], desert:[...] }
   cavePrompt: null,  // 앞에 서 있는 동굴 입구 (입장 안내가 뜬다) — 없으면 null
   arenaCave: 0,      // 지금 들어가 있는 보스 방이 몇 번째 동굴 것인가 (CONFIG.maps.forest.caves 순서)
   exitPrompt: false, // 보스 방에서 나가는 굴 앞에 서 있는가
@@ -79,6 +79,7 @@ const Game = {
     Shop.reset();
     Quests.reset();
     Forge.reset();
+    Portal.reset();
     if (typeof Events !== 'undefined') Events.deserialize(saved && saved.events);   // 며칠째 몇 시인가
     this.showInventory = false;
     this.showMap = false;
@@ -92,7 +93,9 @@ const Game = {
     if (typeof Village !== 'undefined') Village.deserialize(saved && saved.village, this.player);
     this.forestBanner = 2.8;   // 맵 이름을 한 번 띄운다
     this.boss = null;
-    this.bossReadyIn = CONFIG.maps.forest.caves.map(() => 0);   // 동굴은 숲에만 있다
+    // 동굴은 맵마다 다르다 (숲 셋, 사막 하나, 설원 없음)
+    this.bossReadyIn = {};
+    for (const id in CONFIG.maps) this.bossReadyIn[id] = CONFIG.maps[id].caves.map(() => 0);
     this.cavePrompt = null;
     this.exitPrompt = false;
     this.inArena = false;
@@ -117,6 +120,10 @@ const Game = {
     scorpion: (x, y, lv) => new Scorpion(x, y, lv),
     cactus: (x, y, lv) => new Cactus(x, y, lv),
     sandworm: (x, y, lv) => new Sandworm(x, y, lv),
+    // 설원
+    wisp: (x, y, lv) => new Wisp(x, y, lv),
+    yeti: (x, y, lv) => new Yeti(x, y, lv),
+    golem: (x, y, lv) => new Golem(x, y, lv),
   },
 
   // 보스 종류 -> 클래스 (CONFIG.bosses[*].type)
@@ -124,11 +131,27 @@ const Game = {
     slime: (x, y) => new GiantSlime(x, y),
     wolf: (x, y) => new AlphaWolf(x, y),
     mushroom: (x, y) => new ElderShroom(x, y),
+    sandworm: (x, y) => new SandLord(x, y),
   },
 
-  // 몇 번째 동굴의 보스 설정인가 (CONFIG.maps.forest.caves 순서)
+  /* 몇 번째 동굴의 보스 설정인가 — **지금 맵의** caves 순서다.
+     (보스 방 안에서도 World.spec 은 들어온 겉맵 것이라 그대로 쓸 수 있다) */
   bossSpec(caveIndex) {
-    return CONFIG.bosses[CONFIG.maps.forest.caves[caveIndex].boss];
+    const caves = (World.spec && World.spec.caves) || [];
+    const cave = caves[caveIndex];
+    return cave ? CONFIG.bosses[cave.boss] : null;
+  },
+
+  // 이 동굴 보스의 설정 id (CONFIG.bosses 의 열쇠) — 처치 기록과 관문이 이걸 쓴다
+  bossKey(caveIndex) {
+    const caves = (World.spec && World.spec.caves) || [];
+    return caves[caveIndex] ? caves[caveIndex].boss : null;
+  },
+
+  // 이 맵 이 동굴이 다시 열리기까지 (초)
+  readyIn(caveIndex) {
+    const list = this.bossReadyIn[World.mapId];
+    return (list && list[caveIndex]) || 0;
   },
 
   /* ── 몬스터를 맵 아무 데나, 플레이어와 충분히 떨어진 빈 자리에 놓는다.
@@ -176,7 +199,10 @@ const Game = {
      들어가고 나오는 F 는 무기 줍기와 같은 키이므로, 발밑에 무기가 있으면 그쪽이 먼저다.
      (그래서 이 검사는 Items.update 보다 먼저 돌려 F 입력을 가로챈다) */
   updateGates(dt) {
-    for (let i = 0; i < this.bossReadyIn.length; i++) this.bossReadyIn[i] = Math.max(0, this.bossReadyIn[i] - dt);
+    for (const id in this.bossReadyIn) {
+      const list = this.bossReadyIn[id];
+      for (let i = 0; i < list.length; i++) list[i] = Math.max(0, list[i] - dt);
+    }
     this.cavePrompt = null;
     this.exitPrompt = false;
     this.shopPrompt = false;
@@ -266,8 +292,7 @@ const Game = {
   /* 비석이 깨어났는가 — 숲 보스 셋 중 하나라도 잡았으면.
      보스를 '있어도 그만'이 아니라 다음 무대를 여는 열쇠로 만드는 장치다. */
   portalUnlocked() {
-    const need = CONFIG.gate.requiredBoss;
-    return !need || !!this.bossSlain[need];
+    return Portal.entries().some(e => !e.here && e.ok);
   },
 
   // 텔레포트 비석 앞에서 F — 다른 맵의 비석 앞으로 옮겨간다
@@ -279,14 +304,13 @@ const Game = {
     this.portalPrompt = true;
     if (!Items.pickupRequested) return;
     Items.pickupRequested = false;
-    // 숲에서 사막으로 나가는 길만 잠겨 있다 (돌아오는 길은 늘 열려 있다)
-    if (World.mapId === 'forest' && !this.portalUnlocked()) {
+    // 무대가 셋이 되면서 "반대편"이 성립하지 않는다 — 어디로 갈지 고르는 창을 연다
+    if (Portal.entries().every(e => e.here || !e.ok)) {
       FX.number(p.x, p.y - 30, 'SEALED', '#ff6b6b');
       Sound.play('error');
       return;
     }
-    const target = World.spec.portalTo;
-    this.beginTransition(() => this.travel(target));
+    Portal.openPortal();
   },
 
   /* ── 맵 옮겨가기 ───────────────────────────────────────
@@ -354,7 +378,7 @@ const Game = {
       if (Util.dist(this.player.x, this.player.y, cave.x, cave.y) > CONFIG.arena.enterRange) continue;
 
       this.cavePrompt = cave;
-      if (this.bossReadyIn[index] > 0) return;   // 잡은 지 얼마 안 됐으면 아직 비어 있다
+      if (this.readyIn(index) > 0) return;   // 잡은 지 얼마 안 됐으면 아직 비어 있다
       if (!Items.pickupRequested) return;
 
       Items.pickupRequested = false;      // 이 F 입력은 입장에 쓴다
@@ -507,10 +531,14 @@ const Game = {
       if (e.isBoss) {
         // 보스는 일반 몬스터 정원과 무관하다. 한참 뒤에 다시 도전할 수 있다
         this.boss = null;
-        this.bossReadyIn[this.arenaCave] = CONFIG.arena.respawnDelay;
-        // 처음 잡은 보스라면 — 이게 다음 무대를 여는 열쇠다
-        const type = this.bossSpec(this.arenaCave).type;
-        if (!this.bossSlain[type]) {
+        const list = this.bossReadyIn[World.mapId];
+        if (list) list[this.arenaCave] = CONFIG.arena.respawnDelay;
+        /* 처음 잡은 보스라면 — 이게 다음 무대를 여는 열쇠다.
+           **보스 설정의 id** 로 적는다 (종류 이름이 아니라) — 모래의 군주는 종류가 'sandworm' 이라
+           종류로 적으면 평범한 모래벌레와 구별되지 않고 관문 열쇠가 안 맞는다.
+           앞선 보스 셋은 id 와 종류가 같아서 옛 저장도 그대로 열린다. */
+        const type = this.bossKey(this.arenaCave);
+        if (type && !this.bossSlain[type]) {
           this.bossSlain[type] = true;
           if (this.portalUnlocked()) this.gateBanner = 3.2;
           // 대장장이 이사 조건 — 보스 하나면 마을로 온다
@@ -533,7 +561,7 @@ const Game = {
 
   paused() {
     if (typeof Village !== 'undefined' && (Village.stashOpen || Village.alchemyOpen)) return true;
-    return this.showInventory || this.showMap || this.confirmNewGame || Shop.open || Quests.open || Forge.open || PatchNotes.open;
+    return this.showInventory || this.showMap || this.confirmNewGame || Shop.open || Quests.open || Forge.open || Portal.open || PatchNotes.open;
   },
 
   // 이름표 시간과 배경음 — 시작점에서 멀어질수록 곡이 무거워진다 (맵마다 spec.bgm 에 곡과 경계가 있다)
@@ -571,6 +599,7 @@ const Game = {
     if (Shop.open) { Shop.handleInput(this.player); return; }
     if (Quests.open) { Quests.handleInput(this.player); return; }
     if (Forge.open) { Forge.handleInput(this.player); return; }
+    if (Portal.open) { Portal.handleInput(this.player); return; }
     if (typeof Village !== 'undefined') {
       if (Village.stashOpen) { Village.handleStashInput(this.player); return; }
       if (Village.alchemyOpen) { Village.handleAlchemyInput(this.player); return; }
@@ -701,7 +730,14 @@ const Game = {
     World.drawGround(ctx, cam);
     Ambient.drawWater(ctx, cam);
     // 보스의 바닥 예고(돌진 경로, 착지 범위, 포자비 표시)는 바닥 바로 위, 캐릭터 아래에
-    for (const e of this.enemies) if (e.drawGround && !e.dead) e.drawGround(ctx, cam);
+    /* 바닥 예고는 화면 안에 있는 것만 그린다 — 설원의 설인·골렘은 250마리가 모두
+       빙판과 범위 원을 그리려 들어서, 안 걸러주면 프레임이 두 배로 무거워진다 */
+    for (const e of this.enemies) {
+      if (!e.drawGround || e.dead) continue;
+      if (e.x < cam.x - 80 || e.x > cam.x + CONFIG.VIEW_W + 80) continue;
+      if (e.y < cam.y - 80 || e.y > cam.y + CONFIG.VIEW_H + 80) continue;
+      e.drawGround(ctx, cam);
+    }
 
     // ── 화면에 보이는 것만 모아서 y좌표 순으로 그린다 (아래쪽이 앞)
     const drawables = [];
@@ -769,7 +805,7 @@ const Game = {
     UI.draw(ui, this.player, this.showInventory);
     if (this.showMap) Minimap.drawFull(ui, this.player, this.enemies);
     if (this.boss && !this.boss.dead && !this.showMap) UI.drawBossBar(ui, this.boss);
-    if (this.cavePrompt) UI.drawCavePrompt(ui, this.cavePrompt, cam, this.bossReadyIn[this.cavePrompt.caveIndex], 'ENTER');
+    if (this.cavePrompt) UI.drawCavePrompt(ui, this.cavePrompt, cam, this.readyIn(this.cavePrompt.caveIndex), 'ENTER');
     if (this.exitPrompt) UI.drawCavePrompt(ui, World.arenaExit, cam, 0, 'LEAVE');
     if (this.shopPrompt && !this.showMap) Shop.drawPrompt(ui, cam);
     if (this.boardPrompt && !this.showMap) Quests.drawPrompt(ui, cam);
@@ -777,23 +813,27 @@ const Game = {
     if (this.alchemistPrompt && !this.showMap && typeof Village !== 'undefined') Village.drawAlchemistPrompt(ui, cam);
     if (this.stashPrompt && !this.showMap && typeof Village !== 'undefined') Village.drawStashPrompt(ui, cam);
     if (this.chestPrompt && !this.showMap) Landmarks.drawPrompt(ui, cam, this.chestPrompt);
-    if (this.portalPrompt && !this.showMap) {
-      UI.drawPortalPrompt(ui, World.portal, cam, CONFIG.maps[World.spec.portalTo],
-        World.mapId === 'forest' && !this.portalUnlocked());
-    }
+    if (this.portalPrompt && !this.showMap) Portal.drawPrompt(ui, cam);
     if (!this.showMap && !this.showInventory && !Shop.open && !Quests.open && !this.title) Quests.drawTracker(ui, this.player);
     if (Shop.open) Shop.draw(ui, this.player);
     if (Quests.open) Quests.draw(ui, this.player);
     if (Forge.open) Forge.draw(ui, this.player);
+    if (Portal.open) Portal.draw(ui, this.player);
     if (typeof Village !== 'undefined') {
       if (Village.stashOpen) Village.drawStashWindow(ui, this.player);
       if (Village.alchemyOpen) Village.drawAlchemy(ui, this.player);
     }
-    if (this.lairBanner > 0) UI.drawBanner(ui, this.bossSpec(this.arenaCave).lairName, '#ff6b6b', this.lairBanner);
+    // 방 이름표는 보스 방을 나와 다른 맵으로 가 있는 동안에도 남아 있을 수 있다 —
+    // 그 맵에 그 동굴이 없으면 설정이 비어 있으므로 확인하고 그린다
+    if (this.lairBanner > 0) {
+      const lair = this.bossSpec(this.arenaCave);
+      if (lair) UI.drawBanner(ui, lair.lairName, '#ff6b6b', this.lairBanner);
+    }
     if (this.forestBanner > 0 && !this.showMap && !this.showInventory && !Shop.open && !this.title) UI.drawBanner(ui, World.spec.name, World.spec.color, this.forestBanner);
     if (this.gateBanner > 0 && !this.showMap) UI.drawBanner(ui, 'THE OBELISK AWAKENS', '#5ff0ff', this.gateBanner);
     if (typeof Events !== 'undefined') {
-      if (!this.showMap && !this.showInventory && !this.title && !Shop.open && !Quests.open) Events.drawHud(ui);
+      // 보스 방에서는 화면 위를 보스 체력바가 쓴다 — 날짜 시계는 비켜준다
+      if (!this.showMap && !this.showInventory && !this.title && !this.inArena && !Shop.open && !Quests.open) Events.drawHud(ui);
       if (Events.notice > 0 && !this.showMap) UI.drawBanner(ui, Events.noticeText, Events.noticeColor, Events.notice);
     }
     if (this.confirmNewGame) UI.drawConfirm(ui);

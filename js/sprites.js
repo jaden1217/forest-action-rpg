@@ -681,6 +681,138 @@ function makeCrackedTile(seed) {
   return cv;
 }
 
+/* ── 얼어붙은 고원 (로드맵 12주차) ──────────────────────
+   눈은 거의 흰색이라 알갱이를 너무 뿌리면 지저분해진다 — 아주 옅게만 섞는다.
+   대신 **푸른 그림자**로 요철을 준다 (흰 바탕에서 깊이가 보이는 거의 유일한 방법). */
+function makeSnowTile(seed) {
+  const cv = makeNoiseTile(seed, '#dceaf3', '#c7dbe8', '#f2f8fc');
+  const ctx = cv.getContext('2d');
+  const rng = Util.makeRng(seed + 11);
+  for (let i = 0; i < 2; i++) {   // 바람에 쓸린 자국
+    const x = Math.floor(rng() * 10), y = 2 + Math.floor(rng() * 12);
+    ctx.fillStyle = '#bcd4e4';
+    ctx.fillRect(x, y, 5, 1);
+  }
+  return cv;
+}
+
+// 그늘진 눈 — 빽빽한 침엽수 아래. 푸르스름하게 가라앉는다
+function makeShadeSnowTile(seed) {
+  return makeNoiseTile(seed, '#b4cadc', '#a1b9cd', '#c8dbe9');
+}
+
+// 맨 얼음 — 공터·길 자리. 금이 가 있어 눈과 바로 구분된다
+function makeIceTile(seed) {
+  const cv = makeNoiseTile(seed, '#96c4da', '#85b3cb', '#b4d9ea');
+  const ctx = cv.getContext('2d');
+  const rng = Util.makeRng(seed + 29);
+  for (let i = 0; i < 3; i++) {   // 갈라진 금
+    let x = Math.floor(rng() * 14), y = Math.floor(rng() * 14);
+    ctx.fillStyle = '#6e9bb4';
+    for (let k = 0; k < 5; k++) {
+      ctx.fillRect(x, y, 1, 1);
+      x += rng() < 0.6 ? 1 : 0; y += rng() < 0.5 ? 1 : 0;
+      if (x > 15 || y > 15) break;
+    }
+  }
+  return cv;
+}
+
+// 눈더미 — 꽃밭 자리. 가장 밝아서 지도에서 하얗게 뜬다
+function makeSnowDriftTile(seed) {
+  const cv = makeNoiseTile(seed, '#e8f2f8', '#d6e6f0', '#ffffff');
+  const ctx = cv.getContext('2d');
+  const rng = Util.makeRng(seed + 37);
+  for (let i = 0; i < 3; i++) {
+    const x = Math.floor(rng() * 9), y = 2 + Math.floor(rng() * 12);
+    ctx.fillStyle = '#cfe2ee';
+    ctx.fillRect(x, y, 4, 1);
+    ctx.fillRect(x + 3, y + 1, 4, 1);
+  }
+  return cv;
+}
+
+// 서리 섞인 모래 — 물가 자리 (얼어붙은 못 둘레)
+function makeFrostGravelTile(seed) {
+  return makeNoiseTile(seed, '#bad0dc', '#a8c0cf', '#cfe0ea');
+}
+
+// 얼어붙은 못 — 물 자리. 깊고 어두운 얼음이라 '못 건넌다'가 보인다
+function makeFrozenWaterTile(seed) {
+  const cv = makeNoiseTile(seed, '#2b5a78', '#23506d', '#3a7294');
+  const ctx = cv.getContext('2d');
+  const rng = Util.makeRng(seed + 43);
+  for (let i = 0; i < 2; i++) {
+    const x = Math.floor(rng() * 12), y = Math.floor(rng() * 14);
+    ctx.fillStyle = '#7fb4cf';
+    ctx.fillRect(x, y, 3, 1);
+  }
+  return cv;
+}
+
+/* 눈 덮인 침엽수 (20x36) — 가지 위에 눈이 얹혀 있다.
+   숲의 침엽수와 실루엣이 같아야 '같은 종류의 나무'로 읽히고, 색만 달라 설원이 된다 */
+  // 설원 초목
+function makeSnowPine(seed) {
+  const cv = makeCanvas(20, 36), ctx = cv.getContext('2d');
+  const rng = Util.makeRng(seed);
+  const OUT = '#16303a', DARK = '#1d4a46', MID = '#2a6a5c', SNOW = '#eaf4fa', SHADE = '#c3dae8';
+  ctx.fillStyle = '#3b2a1c'; ctx.fillRect(9, 28, 3, 8);       // 줄기
+  ctx.fillStyle = '#2a1d12'; ctx.fillRect(9, 28, 1, 8);
+  // 삼각 가지 세 단 — 아래가 넓다
+  const tier = (cy, half) => {
+    for (let y = 0; y < 9; y++) {
+      const w = Math.round(half * (y / 8));
+      ctx.fillStyle = OUT;
+      ctx.fillRect(10 - w - 1, cy + y, w * 2 + 3, 1);
+      ctx.fillStyle = y < 3 ? DARK : MID;
+      ctx.fillRect(10 - w, cy + y, w * 2 + 1, 1);
+    }
+    // 눈 — 가지 윗면에만 얹힌다
+    for (let y = 0; y < 5; y++) {
+      const w = Math.round(half * (y / 8));
+      ctx.fillStyle = y < 2 ? SNOW : SHADE;
+      ctx.fillRect(10 - w, cy + y, w * 2 + 1, 1);
+    }
+  };
+  tier(2, 5); tier(10, 7); tier(18, 9);
+  // 눈 몇 점이 더 얹혀 있다
+  for (let i = 0; i < 5; i++) {
+    ctx.fillStyle = SNOW;
+    ctx.fillRect(3 + Math.floor(rng() * 14), 12 + Math.floor(rng() * 14), 1, 1);
+  }
+  return cv;
+}
+
+// 얼음 기둥 (14x30) — 사막 바위기둥 자리. 속이 비쳐 보이게 밝은 심을 넣는다
+function makeIceSpire(seed) {
+  const cv = makeCanvas(14, 30), ctx = cv.getContext('2d');
+  const rng = Util.makeRng(seed);
+  const OUT = '#2b5a78', DARK = '#4e90b0', MID = '#79bdd8', LIT = '#c6ecfa';
+  const top = 2 + Math.floor(rng() * 4);
+  for (let y = top; y < 30; y++) {
+    const k = (y - top) / (30 - top);
+    const w = Math.round(1 + k * 5);
+    ctx.fillStyle = OUT; ctx.fillRect(7 - w - 1, y, w * 2 + 3, 1);
+    ctx.fillStyle = k < 0.3 ? LIT : (k < 0.65 ? MID : DARK);
+    ctx.fillRect(7 - w, y, w * 2 + 1, 1);
+    if (w > 2) { ctx.fillStyle = LIT; ctx.fillRect(7 - w + 1, y, 1, 1); }   // 빛나는 심
+  }
+  return cv;
+}
+
+// 눈 덮인 바위 (12x10)
+function makeSnowRock(seed) {
+  const cv = makeCanvas(12, 10), ctx = cv.getContext('2d');
+  const rng = Util.makeRng(seed);
+  ctx.fillStyle = '#4a5a66'; ctx.fillRect(1, 3, 10, 7);
+  ctx.fillStyle = '#6b7f8e'; ctx.fillRect(2, 4, 8, 5);
+  ctx.fillStyle = '#eaf4fa'; ctx.fillRect(2, 3, 8, 2);      // 윗면의 눈
+  ctx.fillStyle = '#c3dae8'; ctx.fillRect(2, 5, 7, 1);
+  for (let i = 0; i < 3; i++) { ctx.fillStyle = '#8c9fae'; ctx.fillRect(2 + Math.floor(rng() * 7), 6 + Math.floor(rng() * 3), 1, 1); }
+  return cv;
+}
+
 // 기둥 선인장 (22x40) — 몸통 하나에 팔 둘. 나무 자리에 선다 (부딪힌다)
 function makeCactus(seed) {
   const cv = makeCanvas(22, 40), ctx = cv.getContext('2d');
@@ -1397,6 +1529,81 @@ const CACTUS_MOB = [
   '......ooooo.....',
 ];
 
+/* ── 설원 몬스터 셋 (로드맵 12주차) ──────────────────────
+   m 어두운면 / M 본체 / n 하이라이트 는 ENEMY_COLORS 가 종류별로 채운다. */
+
+// 서리 망령 (14x16) — 둥둥 뜬 푸른 불꽃. 아래가 흩어져 있어 '발이 없다'가 보인다
+const WISP = [
+  '.....oMo......',
+  '....oMnMo.....',
+  '...oMnnnMo....',
+  '..oMnnknnMo...',
+  '..oMnnnnnMo...',
+  '..oMnkMknMo...',
+  '..oMnnnnnMo...',
+  '...oMnnnMo....',
+  '...oMMnMMo....',
+  '....oMMMo.....',
+  '....oMmMo.....',
+  '.....oMo......',
+  '....o.M.o.....',
+  '...o..m..o....',
+  '......o.......',
+  '.....o........',
+];
+
+/* 설인 (20x22) — 덩치 큰 털북숭이. 팔이 길어서 던지는 동작이 읽힌다.
+   흰 눈 위에서 묻히지 않도록 털을 누렇게(ENEMY_COLORS.yeti) 잡았다 */
+const YETI = [
+  '....oooooooo....',
+  '...oMMMMMMMMo...',
+  '..oMMnnnnnnMMo..',
+  '..oMnMkMMkMnMo..',
+  '..oMnMMMMMMnMo..',
+  '..oMMnMooMnMMo..',
+  '...oMMnnnnMMo...',
+  '..ooMMMMMMMMoo..',
+  '.oMMoMMMMMMoMMo.',
+  'oMMMoMnnnnMoMMMo',
+  'oMMMoMnnnnMoMMMo',
+  'oMMMoMMMMMMoMMMo',
+  '.oMMoMMMMMMoMMo.',
+  '..ooMMMMMMMMoo..',
+  '....oMMMMMMo....',
+  '....oMMooMMo....',
+  '....oMMooMMo....',
+  '...oMMMooMMMo...',
+  '...oMMMooMMMo...',
+  '..ooMMoooMMoo...',
+  '..oMMMo.oMMMo...',
+  '..ooooo.ooooo...',
+];
+
+/* 얼음 골렘 (18x20) — 각진 얼음덩이. 둥근 것이 많은 다른 몬스터들과 실루엣으로 구분된다.
+   가슴의 심(n)이 밝아서 '여기가 약점'처럼 읽힌다 */
+const GOLEM = [
+  '...oooo..oooo...',
+  '..oMMMMooMMMMo..',
+  '..oMnMMooMMnMo..',
+  '..oMMMMooMMMMo..',
+  '..ooMMMMMMMMoo..',
+  '.oMMMMkMMkMMMMo.',
+  'oMMMMMMMMMMMMMMo',
+  'oMMMMnnnnnnMMMMo',
+  'oMMMnnnnnnnnMMMo',
+  'oMMMnnnMMnnnMMMo',
+  'oMMMMnnnnnnMMMMo',
+  'oMMMMMnnnnMMMMMo',
+  'oMMMMMMMMMMMMMMo',
+  '.oMMMMMMMMMMMMo.',
+  '..oMMMMMMMMMMo..',
+  '..oMMMo..oMMMo..',
+  '..oMMMo..oMMMo..',
+  '.oMMMMo..oMMMMo.',
+  '.oMMMMo..oMMMMo.',
+  '.oooooo..oooooo.',
+];
+
 // 모래벌레 — 땅속에서는 모래 언덕(16x8)만 보이고, 솟구치면 입을 벌린 몸통(16x21)이 선다
 const WORM_MOUND = [
   '......oooo......',
@@ -1452,6 +1659,49 @@ const LOOT_FRUIT = [
   'oRnRRRRo',
   '.oRRRRo.',
   '..oooo..',
+];
+// 설원 전리품 — 망령의 불티 / 설인의 가죽 / 얼음 심 / 군주의 비늘
+const LOOT_EMBER = [
+  '...oo.....',
+  '..oMMo....',
+  '.oMnnMo...',
+  'oMnnnnMo..',
+  'oMnnnnMo..',
+  '.oMnnMo...',
+  '..oMMo....',
+  '...oo.....',
+];
+const LOOT_PELT = [
+  '..oooooo..',
+  '.oMMMMMMo.',
+  'oMnMMMMnMo',
+  'oMMMMMMMMo',
+  'oMnMMMMnMo',
+  'oMMMMMMMMo',
+  '.oMMMMMMo.',
+  '..oooooo..',
+];
+const LOOT_FROSTCORE = [
+  '....oo....',
+  '...oMMo...',
+  '..oMnnMo..',
+  '.oMnnnnMo.',
+  'oMnnnnnnMo',
+  '.oMnnnnMo.',
+  '..oMnnMo..',
+  '...oMMo...',
+  '....oo....',
+];
+const LOOT_LORDSCALE = [
+  '...oooo...',
+  '..oDDDDo..',
+  '.oDRRRRDo.',
+  'oDRRddRRDo',
+  'oDRddddRDo',
+  'oDRRddRRDo',
+  '.oDRRRRDo.',
+  '..oDDDDo..',
+  '...oooo...',
 ];
 const LOOT_SCALE = [
   '...oooo...',
@@ -1669,6 +1919,11 @@ function buildSprites() {
     stinger: makeSprite('loot_stinger', LOOT_STINGER, { S: '#3a2a1a', Y: '#ffd27a' }),
     cactusFruit: makeSprite('loot_fruit', LOOT_FRUIT, { R: '#e56b7a', n: '#ffd0d8', G: '#3f9040' }),
     wormScale: makeSprite('loot_scale', LOOT_SCALE, { D: '#c9bb9c', d: '#e8dcc0' }),
+    // 설원
+    wispEmber: makeSprite('loot_ember', LOOT_EMBER, { M: '#2f86ad', n: '#bfeeff' }),
+    yetiPelt: makeSprite('loot_pelt', LOOT_PELT, { M: '#b89a74', n: '#f0e2cc' }),
+    frostCore: makeSprite('loot_frostcore', LOOT_FROSTCORE, { M: '#4aa8c4', n: '#e8fbff' }),
+    lordScale: makeSprite('loot_lordscale', LOOT_LORDSCALE, { D: '#b07a2a', R: '#ffb35c', d: '#ffe0a0' }),
   };
   SPRITES.merchant = [makeSprite('merchant', MERCHANT), makeSprite('merchant_blink', MERCHANT_BLINK)];
   SPRITES.stall = makeStall(1201);
@@ -1728,6 +1983,15 @@ function buildSprites() {
   SPRITES.scorpionLeftFlash = SPRITES.scorpionLeft.map(s => makeSilhouette(s, '#ffffff'));
   SPRITES.cactusMob = makeSprite('cactus_mob', CACTUS_MOB, Object.assign({ R: '#e56b7a' }, EC.cactus));
   SPRITES.cactusMobFlash = makeSilhouette(SPRITES.cactusMob, '#ffffff');
+  // 설원 몬스터 셋
+  SPRITES.wisp = makeSprite('wisp', WISP, EC.wisp);
+  SPRITES.wispFlash = makeSilhouette(SPRITES.wisp, '#ffffff');
+  SPRITES.yeti = makeSprite('yeti', YETI, EC.yeti);
+  SPRITES.yetiLeft = flipX(SPRITES.yeti);
+  SPRITES.yetiFlash = makeSilhouette(SPRITES.yeti, '#ffffff');
+  SPRITES.yetiLeftFlash = makeSilhouette(SPRITES.yetiLeft, '#ffffff');
+  SPRITES.golem = makeSprite('golem', GOLEM, EC.golem);
+  SPRITES.golemFlash = makeSilhouette(SPRITES.golem, '#ffffff');
   SPRITES.wormMound = makeSprite('worm_mound', WORM_MOUND, { o: '#9a8560', D: '#e0cc8a', d: '#c9b06e' });
   SPRITES.worm = makeSprite('worm', WORM_BODY, Object.assign({ R: '#8e2a2a', D: '#e0cc8a' }, EC.sandworm));
   SPRITES.wormFlash = makeSilhouette(SPRITES.worm, '#ffffff');
@@ -1773,6 +2037,13 @@ function buildSprites() {
   SPRITES.desertSand = [0, 1, 2, 3].map(i => makeDesertSandTile(8000 + i * 419));
   SPRITES.dune = [0, 1, 2].map(i => makeDuneTile(9000 + i * 383));
   SPRITES.cracked = [0, 1, 2].map(i => makeCrackedTile(9500 + i * 347));
+  // 설원 바닥
+  SPRITES.snow = [0, 1, 2, 3].map(i => makeSnowTile(2101 + i * 137));
+  SPRITES.shadeSnow = [0, 1, 2, 3].map(i => makeShadeSnowTile(2201 + i * 149));
+  SPRITES.ice = [0, 1, 2].map(i => makeIceTile(2301 + i * 163));
+  SPRITES.snowDrift = [0, 1, 2].map(i => makeSnowDriftTile(2401 + i * 179));
+  SPRITES.frostGravel = [0, 1, 2].map(i => makeFrostGravelTile(2501 + i * 181));
+  SPRITES.frozenWater = [0, 1, 2].map(i => makeFrozenWaterTile(2601 + i * 191));
 
   /* 바닥 타일 묶음 — 볕 드는 숲 바닥 / 빽빽한 숲의 그늘진 바닥 / 보스 방의 돌바닥.
      같은 "풀"이라도 어느 묶음이냐에 따라 밝은 잔디 / 그늘진 잔디 / 돌바닥이 된다. */
@@ -1782,6 +2053,9 @@ function buildSprites() {
     stone:  { grass: SPRITES.stone, dirt: SPRITES.gravel, meadow: SPRITES.stone },
     // 사막 — 풀은 오아시스 둘레에만, 흙 자리는 갈라진 땅, 꽃밭 자리는 모래언덕, 바탕은 사막 모래
     desert: { grass: SPRITES.grass, dirt: SPRITES.cracked, meadow: SPRITES.dune, sand: SPRITES.desertSand },
+    // 설원 — 바탕은 눈, 흙 자리는 맨 얼음, 꽃밭 자리는 눈더미, 물은 얼어붙은 못
+    snow:  { grass: SPRITES.snow, dirt: SPRITES.ice, meadow: SPRITES.snowDrift, sand: SPRITES.frostGravel, water: SPRITES.frozenWater },
+    snowShade: { grass: SPRITES.shadeSnow, dirt: SPRITES.ice, meadow: SPRITES.snowDrift, sand: SPRITES.frostGravel, water: SPRITES.frozenWater },
   };
 
   // 나무 — 활엽수 / 침엽수 / 고사목
@@ -1794,6 +2068,11 @@ function buildSprites() {
   SPRITES.palm = [0, 1].map(i => makePalm(1501 + i * 233));
   SPRITES.rockSpire = [0, 1, 2].map(i => makeRockSpire(1601 + i * 211));
   SPRITES.bones = [0, 1].map(i => makeBones(1701 + i * 157));
+  SPRITES.snowPine = [0, 1].map(i => makeSnowPine(2701 + i * 197));
+  SPRITES.iceSpire = [0, 1, 2].map(i => makeIceSpire(2801 + i * 199));
+  SPRITES.snowRock = [0, 1].map(i => makeSnowRock(2901 + i * 211));
+  SPRITES.frostBush = [0, 1].map(i => makeBush(3001 + i * 223, { out: '#1d3a46', dark: '#2a5a66', mid: '#4a8a9a', lit: '#9fd4e4', shade: '#16303a' }));
+
   SPRITES.dryBush = [0, 1].map(i => makeBush(1801 + i * 431, { out: '#3a2a10', dark: '#7a6a2a', mid: '#a08e3a', lit: '#c9b25a', shade: '#5a4a1a' }));
 
   // 바닥 소품

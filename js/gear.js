@@ -145,9 +145,10 @@ const Gear = {
     return id ? CONFIG.uniques[id] : null;
   },
 
-  // 몬스터가 떨구는 장비 하나 고르기 — 종류는 고르게 섞인다
+  /* 몬스터가 떨구는 장비 하나 고르기 — 종류는 고르게 섞인다.
+     **제작 전용(craftOnly)은 빠진다** — 서리심은 떨어지지 않고 빚어야만 손에 들어온다 */
   randomId() {
-    const ids = Object.keys(CONFIG.gear.items);
+    const ids = Object.keys(CONFIG.gear.items).filter(id => !CONFIG.gear.items[id].craftOnly);
     return ids[Math.floor(Math.random() * ids.length)];
   },
 
