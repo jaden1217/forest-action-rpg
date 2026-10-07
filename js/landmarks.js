@@ -51,6 +51,8 @@ const Landmarks = {
       if (!World.isFreeSpot(x, y, 30)) continue;
       // 시작 지점(상인·게시판·비석)과 동굴 입구에서는 떨어뜨린다
       if (Util.dist(x, y, World.startX, World.startY) < 120) continue;
+      // 거점 울타리 밖으로 — 폐허 기둥(±22px)이 울타리 안으로 처지지 않게 여유를 둔다
+      if (Village.inRect(x, y, World.villageZone, 30)) continue;
       if (World.caves.some(c => c && Util.dist(x, y, c.x, c.y) < 90)) continue;
       if (taken.some(s => Util.dist(x, y, s.x, s.y) < cfg.minGap)) continue;
       return { x: x, y: y };

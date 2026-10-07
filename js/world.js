@@ -56,6 +56,9 @@ const World = {
     this.stashChest = null;
 
     this.buildDanger(seed);
+    // 거점 구역 확정 — 나무·돌·장식을 심기 전에 잡아둬야 마을 안에 아무것도 안 들어간다
+    this.villageZone = (typeof Village !== 'undefined' && Village.rectFor)
+      ? Village.rectFor(this.startX, this.startY) : null;
     this.buildTiles(seed);
     this.bakeGround(Util.makeRng(seed + 5));
     this.placeTrees(Util.makeRng(seed + 17));
@@ -83,7 +86,7 @@ const World = {
     'cols', 'rows', 'w', 'h', 'ground', 'props', 'solids', 'grid',
     'tiles', 'tileBlocked', 'shade', 'colorRow', 'dangerNoise',
     'startX', 'startY', 'wetNoise', 'openNoise', 'caves', 'arenaExit', 'merchant', 'board', 'smith', 'chests',
-    'time', 'isArena', 'mapId', 'spec', 'portal', 'alchemist', 'stashChest',
+    'time', 'isArena', 'mapId', 'spec', 'portal', 'alchemist', 'stashChest', 'villageZone',
   ],
 
   snapshot() {
@@ -117,6 +120,7 @@ const World = {
     this.smith = null;
     this.alchemist = null;
     this.stashChest = null;
+    this.villageZone = null;   // 보스 방에는 마을이 없다
     this.portal = null;
     this.isArena = true;
     this.arenaCave = caveIndex || 0;
@@ -444,12 +448,17 @@ const World = {
         const i = ty * W + tx;
         const t = this.tiles[i], shaded = this.shade[i];
         const x = tx * T, y = ty * T;
+        // 거점 안 바닥에는 돌멩이를 찍지 않는다 (꽃은 둔다).
+        // 확률을 0으로만 두는 이유: rng() 호출 횟수를 그대로 둬야 마을 밖 지형이 예전과 똑같이 나온다
+        const vz = this.villageZone;
+        const inVillage = vz && x + T > vz.x0 && x < vz.x1 && y + T > vz.y0 && y < vz.y1;
+        const rockOff = inVillage ? 0 : 1;
 
         if (desert) {
           // 사막 — 오아시스 풀에만 꽃, 모래엔 아주 드문 돌멩이, 갈라진 땅엔 자갈
           if (t === TILE_GRASS && rng() < 0.14) ctx.drawImage(Util.choice(SPRITES.flower), x + Math.floor(rng() * 12), y + Math.floor(rng() * 11));
-          else if (t === TILE_DIRT && rng() < 0.03) ctx.drawImage(SPRITES.rock[0], x + Math.floor(rng() * 5), y + Math.floor(rng() * 6));
-          else if (t === TILE_SAND && rng() < 0.008) ctx.drawImage(SPRITES.rock[0], x + Math.floor(rng() * 5), y + Math.floor(rng() * 6));
+          else if (t === TILE_DIRT && rng() < 0.03 * rockOff) ctx.drawImage(SPRITES.rock[0], x + Math.floor(rng() * 5), y + Math.floor(rng() * 6));
+          else if (t === TILE_SAND && rng() < 0.008 * rockOff) ctx.drawImage(SPRITES.rock[0], x + Math.floor(rng() * 5), y + Math.floor(rng() * 6));
           continue;
         }
 
@@ -464,13 +473,13 @@ const World = {
         } else if (t === TILE_GRASS) {
           if (rng() < flowerRate) ctx.drawImage(Util.choice(SPRITES.flower), x + Math.floor(rng() * 12), y + Math.floor(rng() * 11));
           // 돌멩이는 아주 드물게 — 많으면 바닥이 자갈밭처럼 보인다
-          if (rng() < 0.012) ctx.drawImage(SPRITES.rock[0], x + Math.floor(rng() * 5), y + Math.floor(rng() * 6));
+          if (rng() < 0.012 * rockOff) ctx.drawImage(SPRITES.rock[0], x + Math.floor(rng() * 5), y + Math.floor(rng() * 6));
         } else if (t === TILE_DIRT) {
-          if (rng() < 0.022) ctx.drawImage(SPRITES.rock[0], x + Math.floor(rng() * 5), y + Math.floor(rng() * 6));
+          if (rng() < 0.022 * rockOff) ctx.drawImage(SPRITES.rock[0], x + Math.floor(rng() * 5), y + Math.floor(rng() * 6));
         } else if (t === TILE_WATER) {
           if (rng() < 0.10) ctx.drawImage(Util.choice(SPRITES.lilyPad), x + Math.floor(rng() * 6), y + Math.floor(rng() * 7));
         } else if (t === TILE_SAND) {
-          if (rng() < 0.02) ctx.drawImage(SPRITES.rock[0], x + Math.floor(rng() * 5), y + Math.floor(rng() * 6));
+          if (rng() < 0.02 * rockOff) ctx.drawImage(SPRITES.rock[0], x + Math.floor(rng() * 5), y + Math.floor(rng() * 6));
         }
       }
     }
@@ -524,6 +533,8 @@ const World = {
     const tryPlace = (x, y, force) => {
       if (x < 20 || x > this.w - 20 || y < 46 || y > this.h - 10) return;
       if (!force && Util.dist(x, y, cx, cy) < cfg.startClearTiles * CONFIG.TILE) return;
+      // 거점 안에는 나무를 심지 않는다 — 잎이 울타리 안으로 처지면 마을이 가려진다
+      if (!force && Village.inRect(x, y, this.villageZone, 8)) return;
       const t = this.tileAt(x, y);
       if (t === TILE_WATER || t === TILE_DIRT) return;
       if (!desert && t === TILE_SAND) return;   // 숲의 물가 모래엔 나무가 없다
@@ -578,6 +589,8 @@ const World = {
       for (let i = 0; i < 12; i++) {
         const x = 24 + rng() * (this.w - 48), y = 30 + rng() * (this.h - 50);
         if (Util.dist(x, y, cx, cy) < 40) continue;
+        // 거점 안에는 돌·수풀·버섯 같은 장식을 두지 않는다 — 마을 광장은 비워둔다
+        if (Village.inRect(x, y, this.villageZone, 4)) continue;
         const t = this.tileAt(x, y);
         if (needTile !== undefined && t !== needTile) continue;
         if (needTile === undefined && (t === TILE_WATER)) continue;

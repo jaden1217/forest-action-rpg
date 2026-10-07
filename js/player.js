@@ -682,6 +682,8 @@ class Player {
 
   takeDamage(amount, fromX, fromY) {
     if (this.invuln > 0 || this.dashIFrames > 0 || this.dead) return;
+    // 거점 안에서는 어떤 공격도 통하지 않는다 — 마을은 쉬는 곳이다 (보스방은 구역 밖이라 그대로 맞는다)
+    if (typeof Village !== 'undefined' && Village.isSafe && Village.isSafe(this.x, this.y)) return;
     const c = CONFIG.player;
     // 입고 있는 것이 피해를 비율로 깎고, 감전되어 있으면 더 아프다 (최소 1은 들어간다)
     amount = Math.max(1, Math.round(amount * (1 - this.damageReduction()) * Status.damageTaken(this)));

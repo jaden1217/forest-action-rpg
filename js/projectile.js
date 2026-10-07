@@ -38,9 +38,17 @@ const Projectiles = {
       p.life -= dt;
       if (p.life <= 0) { this.list.splice(i, 1); continue; }
 
+      const px = p.x, py = p.y;
       p.x += p.vx * dt;
       p.y += p.vy * dt;
       p.spin += dt * 6;
+
+      // 거점 안으로는 날아들지 못한다 — 경계에서 흩어진다 (독 묻히기도 여기서 끊긴다)
+      if (typeof Village !== 'undefined' && Village.blocksEntry && Village.blocksEntry(px, py, p.x, p.y)) {
+        this.burst(p);
+        this.list.splice(i, 1);
+        continue;
+      }
 
       // 벽에 부딪히면 터진다
       const box = { x: p.x - 2, y: p.y - 2, w: 4, h: 4 };

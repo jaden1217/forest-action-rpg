@@ -56,6 +56,17 @@ const Minimap = {
       ctx.fillStyle = '#1d1a17';
       ctx.fillRect(Math.floor(p.x / CONFIG.TILE), Math.floor(p.y / CONFIG.TILE), 1, 1);
     }
+
+    // 거점 안전구역 — 울타리 경계를 지도에도 네모로 그린다
+    try {
+      const z = (typeof Village !== 'undefined' && Village.zoneFor) ? Village.zoneFor(World.mapId) : null;
+      if (z) {
+        const T = CONFIG.TILE;
+        ctx.strokeStyle = '#e8dcc0';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(z.x0 / T, z.y0 / T, (z.x1 - z.x0) / T, (z.y1 - z.y0) / T);
+      }
+    } catch (err) { /* 지도 장식은 실패해도 된다 */ }
   },
 
   /* ── 구석 미니맵 ───────────────────────────────────────── */

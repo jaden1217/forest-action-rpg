@@ -936,6 +936,39 @@ function makeTent(seed) {
   return cv;
 }
 
+// 마을 울타리 (16x14) — 가로 판자 둘에 기둥 셋. 거점 경계를 보여준다
+function makeFence() {
+  const cv = makeCanvas(16, 14), ctx = cv.getContext('2d');
+  const OUT = '#2a1b10', DARK = '#5e3f22', MID = '#8a5f33', LIT = '#b98a52';
+  // 기둥 셋 (뒤)
+  for (const px of [1, 7, 13]) {
+    ctx.fillStyle = OUT; ctx.fillRect(px - 1, 1, 3, 12);
+    ctx.fillStyle = DARK; ctx.fillRect(px, 2, 1, 10);
+    ctx.fillStyle = LIT; ctx.fillRect(px, 2, 1, 1);
+  }
+  // 가로 판자 둘 (앞)
+  for (const py of [4, 9]) {
+    ctx.fillStyle = OUT; ctx.fillRect(0, py - 1, 16, 4);
+    ctx.fillStyle = MID; ctx.fillRect(0, py, 16, 2);
+    ctx.fillStyle = LIT; ctx.fillRect(0, py, 16, 1);
+    ctx.fillStyle = DARK; ctx.fillRect(0, py + 1, 16, 1);
+  }
+  return cv;
+}
+
+// 세로 울타리 (14x16) — 가로 울타리를 90도 돌린 것. 마을 동·서쪽 벽에 쓴다.
+// 가로 울타리(16x14)의 빈틈(충돌 7px 틈새)으로 발이 작은 것이 새어들어,
+// 방향에 맞는 울타리로 바꿔 틈을 없앤다.
+function makeFenceV() {
+  const src = makeFence();
+  const cv = makeCanvas(14, 16), ctx = cv.getContext('2d');
+  ctx.imageSmoothingEnabled = false;
+  ctx.translate(7, 8);
+  ctx.rotate(Math.PI / 2);
+  ctx.drawImage(src, -8, -7);
+  return cv;
+}
+
 // 꺼진 모닥불 (14x10) — 돌을 둘러놓고 숯이 남았다
 function makeCampfire() {
   const cv = makeCanvas(14, 10), ctx = cv.getContext('2d');
@@ -1658,6 +1691,8 @@ function buildSprites() {
   SPRITES.ruinPillar = [0, 1, 2].map(i => makeRuinPillar(1401 + i * 131));
   SPRITES.ruinBlock = [0, 1].map(i => makeRuinBlock(1501 + i * 97));
   SPRITES.tent = [0, 1].map(i => makeTent(1601 + i * 113));
+  SPRITES.fence = makeFence();
+  SPRITES.fenceV = makeFenceV();
   SPRITES.campfire = makeCampfire();
   SPRITES.shrine = [0, 1].map(i => makeShrine(1701 + i * 149));
   SPRITES.digMound = [0, 1].map(i => makeDigMound(1801 + i * 167));

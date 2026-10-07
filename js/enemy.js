@@ -56,7 +56,11 @@ class Enemy {
   }
 
   distanceTo(player) {
-    return player.dead ? Infinity : Util.dist(this.x, this.y, player.x, player.y);
+    if (player.dead) return Infinity;
+    // 마을 안에 있는 플레이어는 바깥에서 안 보인다 — 울타리에 달라붙어 기다리지 않고 물러난다
+    if (typeof Village !== 'undefined' && Village.isSafe && !Village.isSafe(this.x, this.y)
+        && Village.isSafe(player.x, player.y)) return Infinity;
+    return Util.dist(this.x, this.y, player.x, player.y);
   }
 
   /* 몸이 벽 안에 끼면 어느 쪽으로도 움직일 수 없어 영영 굳어버린다.
@@ -112,12 +116,19 @@ class Enemy {
   moveWithCollision(dx, dy) {
     const slow = Status.speedScale(this);
     dx *= slow; dy *= slow;
+    // 거점 안전구역 — 바깥에서 안으로 들어가는 발걸음은 벽처럼 막는다.
+    // 안에 있던 것은 나가는 길이라 막지 않는다 (Village.update 의 밀어내기가 여기로 나간다)
+    const safeZone = (typeof Village !== 'undefined' && Village.blocksEntry) ? Village : null;
+    const margin = this.radius || 0;   // 중심이 아니라 몸통이 선을 넘지 못하게 한다
     const step = 2;
     let remain = dx;
     while (Math.abs(remain) > 0.001) {
       const move = Util.clamp(remain, -step, step);
       const box = this.feetBox; box.x += move;
       if (World.blocked(box)) { this.dir = Math.PI - this.dir; this.onBlocked(); break; }
+      if (safeZone && safeZone.blocksEntry(this.x, this.y, this.x + move, this.y, margin)) {
+        this.dir = Math.PI - this.dir; this.onBlocked(); break;
+      }
       this.x += move;
       remain -= move;
     }
@@ -126,6 +137,9 @@ class Enemy {
       const move = Util.clamp(remain, -step, step);
       const box = this.feetBox; box.y += move;
       if (World.blocked(box)) { this.dir = -this.dir; this.onBlocked(); break; }
+      if (safeZone && safeZone.blocksEntry(this.x, this.y, this.x, this.y + move, margin)) {
+        this.dir = -this.dir; this.onBlocked(); break;
+      }
       this.y += move;
       remain -= move;
     }

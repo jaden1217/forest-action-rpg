@@ -141,6 +141,8 @@ const Game = {
       const y = Util.rand(60, World.h - 30);
       if (!World.isFreeSpot(x, y, 9)) continue;
       if (Util.dist(x, y, this.player.x, this.player.y) < cs.minDistFromPlayer) continue;
+      // 거점 안전구역 안에는 스폰하지 않는다 — 마을은 쉬는 곳이다
+      if (typeof Village !== 'undefined' && Village.isSafe && Village.isSafe(x, y)) continue;
 
       // 레벨은 그 자리의 기준 레벨에서 조금 흔들린다 (숲 1 -> 23, 사막 24 -> 40)
       const spread = World.spec.levelSpread, range = World.spec.levelRange;
@@ -311,6 +313,7 @@ const Game = {
       this.enemies = [];
       this.respawnQueue = [];
     }
+    if (typeof Village !== 'undefined' && Village.syncZone) Village.syncZone();
     Minimap.build();
     Ambient.reset();
 
@@ -454,6 +457,7 @@ const Game = {
     const carried = Items.drops.filter(d => d.kind === 'weapon');
 
     World.restore(o.world);
+    if (typeof Village !== 'undefined' && Village.syncZone) Village.syncZone();
     this.enemies = o.enemies;
     this.respawnQueue = o.respawnQueue;
     Projectiles.reset();
@@ -626,6 +630,7 @@ const Game = {
         } else {
           this.player.update(dt, this.enemies);
           this.updateEnemies(dt);
+          if (typeof Village !== 'undefined' && Village.update) Village.update(dt);
           Projectiles.update(dt, this.player);
           // F 입력을 먼저 가져갈 수 있도록 아이템 처리보다 앞에 둔다
           this.updateGates(dt);

@@ -30,6 +30,9 @@ const Status = {
     if (!target || target.dead || !spec) return;
     // 해독제 해독 상태 — 새로 안 걸린다
     if (target.wardTimer > 0) return;
+    // 거점 안의 플레이어에게는 새로 안 걸린다 — 이미 걸린 것은 그대로 tick 한다
+    if (typeof Village !== 'undefined' && Village.isSafe && typeof Game !== 'undefined'
+        && target === Game.player && Village.isSafe(target.x, target.y)) return;
     const time = spec.time;
 
     if (!target.status) target.status = {};

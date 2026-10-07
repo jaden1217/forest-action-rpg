@@ -35,6 +35,8 @@ const Village = {
 
   alchemist: null,
   stashChest: null,
+  zone: null,         // 지금 맵의 안전구역 {cx,cy,x0,y0,x1,y1}
+  zones: {},          // 맵마다 { forest: zone, desert: zone } — 오가도 남는다
 
   reset() {
     this.stash = [];
@@ -50,6 +52,55 @@ const Village = {
     this.alchemyTimer = 0;
     this.alchemist = null;
     this.stashChest = null;
+    this.zone = null;
+    this.zones = {};
+  },
+
+  /* ── 안전구역 ────────────────────────────────────────────
+     시작점을 중심으로 한 직사각형. 안에는 몬스터가 들어오지 못한다.
+     울타리가 경계를 보여주고, 입구 빈틈은 플레이어만 드나든다 (몬스터는 논리로 막는다). */
+  zoneFor(mapId) {
+    const id = mapId || World.mapId;
+    if (this.zones[id]) return this.zones[id];
+    // 불러오기 순서 등으로 zones 가 비어 있어도, 현재 맵 구역은 World 가 들고 있다
+    if (World.mapId === id && World.villageZone) return World.villageZone;
+    return null;
+  },
+
+  // 시작점에서 구역 사각형을 구한다 — World.init 이 나무·돌을 심기 전에 먼저 불러 둔다
+  rectFor(cx, cy) {
+    const rx = CONFIG.village.safeRX, ry = CONFIG.village.safeRY;
+    return { cx: cx, cy: cy, x0: cx - rx, y0: cy - ry, x1: cx + rx, y1: cy + ry };
+  },
+
+  // 점이 구역 안에 있는가 (margin 만큼 바깥까지 포함)
+  inRect(x, y, r, margin) {
+    if (!r) return false;
+    const m = margin || 0;
+    return x >= r.x0 - m && x <= r.x1 + m && y >= r.y0 - m && y <= r.y1 + m;
+  },
+
+  // 맵을 갈아끼운 뒤 (텔레포트 복원·동굴 출입) 현재 맵 구역을 다시 가리킨다
+  syncZone() {
+    this.zone = this.zones[World.mapId] || null;
+  },
+
+  // margin 만큼 구역을 바깥으로 넓혀 본다 — 몬스터는 몸통(반지름)째로 못 들어오게 한다
+  isSafe(x, y, margin) {
+    if (World.isArena) return false;
+    const z = this.zoneFor();
+    if (!z) return false;
+    const m = (margin || 0) - 2;   // 평소 2px 안쪽 여유는 그대로 둔다
+    return x >= z.x0 - m && x <= z.x1 + m && y >= z.y0 - m && y <= z.y1 + m;
+  },
+
+  // 바깥에서 안으로 들어가는 발걸음인가 (안에 있던 것은 나가는 길이라 막지 않는다).
+  // from 은 진짜 구역으로만 보고, to 는 몸통 마진까지 넓혀 본다 —
+  // 선 바깥에 붙어 있는 놈이 "안쪽"으로 분류돼 스며들 틈이 없게 한다.
+  blocksEntry(fromX, fromY, toX, toY, margin) {
+    if (World.isArena) return false;
+    if (this.isSafe(fromX, fromY)) return false;
+    return this.isSafe(toX, toY, margin);
   },
 
   /* ── 이사 조건 ─────────────────────────────────────────── */
@@ -69,28 +120,41 @@ const Village = {
 
   /* ── 마을 세우기 ─────────────────────────────────────────
      World.init 에서 상인·게시판·대장간 다음에 호출된다.
-     시작점 주위는 나무·물이 비워져 있으므로 그 안에 마을을 놓는다. */
+     시작점 주위는 나무·물이 비워져 있으므로 그 안에 마을을 놓는다.
+     울타리가 안전구역 경계를 두르고, 남·동쪽에 입구를 낸다. */
   place() {
     this.alchemist = null;
     this.stashChest = null;
     const sx = World.startX, sy = World.startY;
+
+    // 안전구역 확정 — World.init 이 먼저 잡아둔 값을 그대로 쓴다 (나무·돌 제외와 같은 값)
+    this.zone = World.villageZone
+      ? { cx: sx, cy: sy, x0: World.villageZone.x0, y0: World.villageZone.y0, x1: World.villageZone.x1, y1: World.villageZone.y1 }
+      : this.rectFor(sx, sy);
+    this.zones[World.mapId] = this.zone;
 
     // 모닥불 — 한가운데 (충돌 없음, 길잡이)
     try {
       if (SPRITES.campfire) World.addProp(SPRITES.campfire, sx + 8, sy + 12, { footHeight: 2 });
     } catch (err) { /* 장식 실패는 무시 */ }
 
-    // 집 두 채 — 텐트를 빌려 쓴다 (충돌 있음, 비를 피하는 느낌)
+    // 집 두 채 — 마을을 넓게 쓰도록 양쪽으로 벌려 세운다
     try {
       if (SPRITES.tent) {
-        World.addProp(SPRITES.tent[0], sx - 52, sy - 26, { solid: [10, 4, 6], footHeight: 3 });
-        World.addProp(SPRITES.tent[1], sx + 92, sy - 14, { solid: [10, 4, 6], footHeight: 3 });
+        World.addProp(SPRITES.tent[0], sx - 68, sy - 32, { solid: [10, 4, 6], footHeight: 3 });
+        World.addProp(SPRITES.tent[1], sx + 76, sy - 36, { solid: [10, 4, 6], footHeight: 3 });
       }
+    } catch (err) { /* 무시 */ }
+
+    // 장식 — 통나무(지나감)와 그루터기(막힘) 하나씩, 마을답게
+    try {
+      if (SPRITES.log) World.addProp(SPRITES.log[0], sx - 52, sy + 44, { footHeight: 2 });
+      if (SPRITES.stump) World.addProp(SPRITES.stump[0], sx + 58, sy - 48, { solid: [5, 3, 5], footHeight: 3 });
     } catch (err) { /* 무시 */ }
 
     // 창고 — 상인 옆, 처음부터 있다 (가판대와 겹치지 않게 북쪽으로)
     try {
-      const c = World.addProp(SPRITES.chest[0], sx + 8, sy - 24, { solid: [6, 3, 4], footHeight: 3 });
+      const c = World.addProp(SPRITES.chest[0], sx + 8, sy - 28, { solid: [6, 3, 4], footHeight: 3 });
       c.stashChest = true;
       c.landmark = 'stash';
       c.draw = (ctx, cam) => this.drawStash(ctx, cam, c);
@@ -100,17 +164,91 @@ const Village = {
 
     // 연금술사 — 조건을 채워야 이사 온다. 비어 있을 땐 빈 탁자만 둔다
     try {
-      const bench = World.addProp(SPRITES.stall || SPRITES.chest[0], sx - 24, sy + 24, { solid: [10, 3, 5], footHeight: 3 });
+      const bench = World.addProp(SPRITES.stall || SPRITES.chest[0], sx - 30, sy + 32, { solid: [10, 3, 5], footHeight: 3 });
       bench.alchemyBench = true;
       if (this.alchemistHome()) {
-        this.spawnAlchemist(sx - 36, sy + 22);
+        this.spawnAlchemist(sx - 42, sy + 30);
       } else {
         World.alchemist = null;
       }
     } catch (err) { /* 무시 */ }
 
+    // 울타리 — 경계를 두르고 남·동쪽에 입구를 낸다. 입구 옆에는 화톳불(충돌 없음)
+    try { this.buildFence(sx, sy, this.zone.x1 - sx, sy - this.zone.y0); } catch (err) { /* 무시 */ }
+
     // 대장장이가 아직 안 왔으면 모루만 둔다 — Forge.place 가 NPC를 생략한다
     this.checkMoveIns(true);
+  },
+
+  /* 울타리 — 북·서쪽은 막고, 남쪽 가운데와 동쪽 가운데는 입구로 비운다.
+     울타리 자체는 플레이어도 못 넘는다 (입구로 돌아가게). 몬스터는 입구까지 논리로 막는다.
+     동·서쪽은 세로 울타리를 쓴다 — 가로 울타리를 세우면 충돌에 7px 틈새가 생겨
+     발이 작은 것이 그 틈으로 새어든다. 세로 울타리는 14px 간격·12px 충돌로 틈이 없다. */
+  buildFence(sx, sy, rx, ry) {
+    if (!SPRITES.fence) return;
+    const cfg = CONFIG.village;
+    const fenceV = SPRITES.fenceV || SPRITES.fence;
+    const x0 = sx - rx, x1 = sx + rx, y0 = sy - ry, y1 = sy + ry;
+    const step = 16, vstep = 14;
+    // 북쪽 — 빈틈 없음
+    for (let x = x0; x < x1; x += step) {
+      World.addProp(SPRITES.fence, Math.min(x + 8, x1 - 2), y0, { solid: [8, 4, 5], footHeight: 3 }).fence = true;
+    }
+    // 남쪽 — 가운데를 입구로 비운다
+    for (let x = x0; x < x1; x += step) {
+      const cx = Math.min(x + 8, x1 - 2);
+      if (Math.abs(cx - sx) < cfg.gapSouth) continue;
+      World.addProp(SPRITES.fence, cx, y1, { solid: [8, 4, 5], footHeight: 3 }).fence = true;
+    }
+    // 서쪽 — 빈틈 없음 (세로 울타리)
+    for (let y = y0 + 6; y < y1; y += vstep) {
+      World.addProp(fenceV, x0, Math.min(y + 7, y1 - 2), { solid: [7, 7, 5], footHeight: 3 }).fence = true;
+    }
+    // 동쪽 — 가운데를 입구로 비운다 (세로 울타리)
+    for (let y = y0 + 6; y < y1; y += vstep) {
+      const cy = Math.min(y + 7, y1 - 2);
+      if (Math.abs(cy - sy) < cfg.gapEast) continue;
+      World.addProp(fenceV, x1, cy, { solid: [7, 7, 5], footHeight: 3 }).fence = true;
+    }
+    // 모서리 기둥 — 가로·세로 울타리가 만나는 네 귀퉁이의 1px 틈새를 막는다
+    for (const c of [[x0, y0], [x1, y0], [x0, y1], [x1, y1]]) {
+      World.addProp(SPRITES.fence, c[0], c[1], { solid: [8, 8, 5], footHeight: 3 }).fence = true;
+    }
+    // 입구 화톳불 — 밤에도 입구가 보이게 (충돌 없음)
+    if (SPRITES.campfire) {
+      World.addProp(SPRITES.campfire, sx - cfg.gapSouth - 8, y1, { footHeight: 2 }).fenceFire = true;
+      World.addProp(SPRITES.campfire, sx + cfg.gapSouth + 8, y1, { footHeight: 2 }).fenceFire = true;
+      World.addProp(SPRITES.campfire, x1, sy - cfg.gapEast - 8, { footHeight: 2 }).fenceFire = true;
+      World.addProp(SPRITES.campfire, x1, sy + cfg.gapEast + 8, { footHeight: 2 }).fenceFire = true;
+    }
+  },
+
+  /* 매 프레임 — 안에 들어와 있는 몬스터를 바깥으로 민다.
+     스폰 제외·이동 차단이 본방이고, 이건 넉백·분열처럼 뚫고 들어온 경우의 뒷정리다. */
+  update(dt) {
+    if (World.isArena || !this.zoneFor() || !Game.enemies) return;
+    const z = this.zoneFor();
+    const speed = CONFIG.village.pushSpeed;
+    for (const e of Game.enemies) {
+      if (!e || e.dead || !this.isSafe(e.x, e.y)) continue;
+      const dx = e.x - z.cx, dy = e.y - z.cy;
+      const d = Math.sqrt(dx * dx + dy * dy) || 1;
+      // moveWithCollision 을 타면 안쪽에서 바깥으로는 나갈 수 있다 (차단은 바깥→안쪽만 막는다)
+      e.moveWithCollision(dx / d * speed * dt, dy / d * speed * dt);
+      // 벽에 끼어 못 나가면 가장 가까운 변 밖으로 꺼낸다
+      if (this.isSafe(e.x, e.y)) {
+        const outs = [
+          { x: z.x0 - 6, y: e.y }, { x: z.x1 + 6, y: e.y },
+          { x: e.x, y: z.y0 - 6 }, { x: e.x, y: z.y1 + 6 },
+        ];
+        let best = outs[0], bd = Infinity;
+        for (const o of outs) {
+          const dd = Math.abs(o.x - e.x) + Math.abs(o.y - e.y);
+          if (dd < bd) { bd = dd; best = o; }
+        }
+        if (World.isFreeSpot(best.x, best.y, 8)) { e.x = best.x; e.y = best.y; }
+      }
+    }
   },
 
   spawnAlchemist(x, y) {
@@ -198,7 +336,7 @@ const Village = {
     }
     // 연금술사
     if (this.alchemistHome() && !World.alchemist) {
-      this.spawnAlchemist(World.startX - 36, World.startY + 22);
+      this.spawnAlchemist(World.startX - 42, World.startY + 30);
       if (!silent && !this.announced.alchemist) {
         this.announced.alchemist = true;
         FX.number(Game.player.x, Game.player.y - 30, 'ALCHEMIST MOVED IN', '#7dff8a');
@@ -561,9 +699,14 @@ const Village = {
 
   deserialize(data, player) {
     const stashOpen = this.stashOpen, alchemyOpen = this.alchemyOpen;
+    // 구역은 World.init → place() 가 이미 잡아뒀다. reset() 이 지우지 않게 들고 있는다
+    // (안 그러면 불러오기 직후부터 안전구역 판정 전체가 죽는다)
+    const keepZone = this.zone, keepZones = this.zones;
     this.reset();
     this.stashOpen = stashOpen;
     this.alchemyOpen = alchemyOpen;
+    this.zone = keepZone;
+    this.zones = keepZones || {};
     if (!data) return;
     this.lootSold = Math.max(0, data.lootSold | 0);
     this.announced = Object.assign({}, data.announced || {});
