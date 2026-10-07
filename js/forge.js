@@ -41,8 +41,11 @@ const Forge = {
   /* ── 대장간 세우기 — 상인 반대편, 게시판과 나란히 ──
      거점 10주차: 보스 하나를 잡기 전에는 모루만 있고 대장장이가 없다. */
   place() {
-    const x = World.startX + 70, y = World.startY + 20;
-    World.addProp(SPRITES.anvil, x, y, { solid: [9, 3, 5], footHeight: 3 }).anvil = true;
+    const s = Village.spot('forge'), x = s.x, y = s.y;
+    const anvil = World.addProp(SPRITES.anvil, x, y, { solid: [9, 3, 5], footHeight: 3 });
+    anvil.anvil = true;
+    anvil.sign = { text: 'FORGE', color: '#ff8a3c', dy: 24 };
+    World.anvil = anvil;
     World.smith = null;
     this.npc = null;
     // 조건을 채웠으면 바로 이사 온다 (저장 불러오기·사막 포함)
@@ -53,7 +56,7 @@ const Forge = {
   // 마을에 뒤늦게 이사 올 때 (조건을 채운 뒤)
   spawnSmith() {
     if (World.smith) return World.smith;
-    const x = World.startX + 70, y = World.startY + 20;
+    const s = Village.spot('forge'), x = s.x, y = s.y;
     const npc = World.addProp(SPRITES.smith[0], x - 16, y - 2, { footHeight: 2 });
     npc.smith = true;
     npc.landmark = 'forge';

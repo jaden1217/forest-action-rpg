@@ -516,9 +516,6 @@ const Game = {
           // 대장장이 이사 조건 — 보스 하나면 마을로 온다
           if (typeof Village !== 'undefined') Village.checkMoveIns(false);
         }
-      } else if (e.raider) {
-        // 습격대는 평소 정원과 무관하다 — 다시 채우지 않고, 남은 수만 센다
-        if (typeof Events !== 'undefined') Events.onRaiderDead(e);
       } else if (!this.inArena) {
         this.respawnQueue.push(Util.rand(CONFIG.spawn.respawnMin, CONFIG.spawn.respawnMax));
       }
@@ -767,6 +764,8 @@ const Game = {
     if (!this.showMap && !this.inArena) Minimap.drawCorner(ui, this.player, this.enemies);
     // 화면 밖 엘리트는 가장자리에 별로 — 평범한 사냥 중에 '어, 저거'가 생기는 자리
     if (!this.showMap && !this.title && !this.player.dead) Elite.drawMarkers(ui, cam, this.enemies, this.player);
+    // 마을 간판 — 안에 들어와 있을 때만 시설 이름이 뜬다
+    if (!this.showMap && !this.title && typeof Village !== 'undefined') Village.drawSigns(ui, cam, this.player);
     UI.draw(ui, this.player, this.showInventory);
     if (this.showMap) Minimap.drawFull(ui, this.player, this.enemies);
     if (this.boss && !this.boss.dead && !this.showMap) UI.drawBossBar(ui, this.boss);
@@ -795,7 +794,7 @@ const Game = {
     if (this.gateBanner > 0 && !this.showMap) UI.drawBanner(ui, 'THE OBELISK AWAKENS', '#5ff0ff', this.gateBanner);
     if (typeof Events !== 'undefined') {
       if (!this.showMap && !this.showInventory && !this.title && !Shop.open && !Quests.open) Events.drawHud(ui);
-      if (Events.raidBanner > 0 && !this.showMap) UI.drawBanner(ui, Events.raidBannerText, Events.raidBannerColor, Events.raidBanner);
+      if (Events.notice > 0 && !this.showMap) UI.drawBanner(ui, Events.noticeText, Events.noticeColor, Events.notice);
     }
     if (this.confirmNewGame) UI.drawConfirm(ui);
     if (this.soundFlash > 0) UI.drawSoundState(ui, Sound.enabled);

@@ -700,10 +700,11 @@ const World = {
      시작 지점 왼쪽(상인 반대편)에 하나. 앞에서 F 를 누르면 다른 맵의 비석 앞으로 옮겨간다.
      룬이 0.5초마다 깜빡이고 푸른 알갱이가 피어올라 멀리서도 눈에 띈다. */
   placePortal() {
-    const x = this.startX - 44, y = this.startY - 6;
+    const s = Village.spot('portal'), x = s.x, y = s.y;
     const p = this.addProp(SPRITES.obelisk[0], x, y, { solid: [7, 3, 5], footHeight: 3 });
     p.portal = true;
     p.landmark = 'portal';   // 미니맵에 하늘색으로 찍힌다
+    p.sign = { text: 'PORTAL', color: '#5ff0ff', dy: 26 };
     p.draw = (ctx, cam) => {
       const sx = Math.round(p.x - cam.x), sy = Math.round(p.y - cam.y);
       fillCircle(ctx, sx, sy + 1, 7, 'rgba(0,0,0,0.28)');

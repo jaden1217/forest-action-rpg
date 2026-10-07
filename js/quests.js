@@ -40,10 +40,11 @@ const Quests = {
   /* ── 게시판 세우기 ─────────────────────────────────────
      상인 반대편(비석 쪽이 아닌 자리)에 세운다. 시작하자마자 눈에 들어와야 한다. */
   place() {
-    const x = World.startX + 16, y = World.startY + 26;
+    const s = Village.spot('board'), x = s.x, y = s.y;
     const p = World.addProp(SPRITES.questBoard, x, y, { solid: [10, 4, 6], footHeight: 3 });
     p.board = true;
     p.landmark = 'board';   // 미니맵에 따로 찍힌다
+    p.sign = { text: 'QUESTS', color: '#e8dcc0', dy: 30 };
     this.board = p;
     World.board = p;
   },

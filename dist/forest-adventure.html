@@ -153,7 +153,7 @@ html, body {
 }
 
 </style>
-<!-- built 2026-10-07 13:37 by tools/build.js -->
+<!-- built 2026-10-07 13:57 by tools/build.js -->
 </head>
 <body>
   <div id="stage">
@@ -1323,7 +1323,10 @@ const CONFIG = {
       turnover: 1.2,
       turnoverDist: 400,   // 이보다 가까우면 건드리지 않는다 — 눈앞에서 사라지면 안 된다
       turnoverSlack: 8,    // 교대 중 정원이 이만큼까지는 비어 있어도 된다
-      villageLamp: 2.3,    // 마을 안에서는 모닥불 덕에 이 배수만큼 넓다
+      /* 마을 안은 모닥불 덕에 밝은 범위가 넓다. 다만 2.3배(202px)로 잡았더니
+         화면 전체가 밝아져서 마을에서는 밤이 아예 안 느껴졌다 — 1.7배면
+         간판과 시설은 다 읽히면서 가장자리는 어두워 밤인 줄은 안다 */
+      villageLamp: 1.7,
     },
     dusk: { tint: '#ff7a3c', alpha: 0.22 },
     dawn: { tint: '#9fc8ff', alpha: 0.30 },
@@ -1342,22 +1345,6 @@ const CONFIG = {
       eliteMult: 1.6,      // 폭풍 속에서는 엘리트가 조금 더 나온다
     },
 
-    /* 습격 — 밤이 시작될 때 굴린다. 마을 둘레에 깔리고 안전구역을 무시하고 들어온다.
-       막아내면 큰 보상, 놓치면 상인이 이틀 문을 닫는다. */
-    raid: {
-      chance: 0.45,        // 밤마다 이 확률
-      minLevel: 6,         // 너무 이른 레벨에는 오지 않는다
-      warn: 7,             // 예고 시간 (초) — 자리를 잡을 틈
-      limit: 110,          // 이 안에 다 잡아야 한다 (초)
-      count: [5, 14],      // 마릿수 (레벨 1 -> 30 사이에서 늘어난다)
-      levelBelow: 1,       // 내 레벨 ±1
-      ring: [26, 86],      // 울타리에서 이만큼 바깥에 선다 (px)
-      eliteChance: 0.22,   // 습격대 중 엘리트 비율
-      rewardGold: 40,      // 한 마리당 골드
-      rewardPotions: 3,
-      rewardRarity: 2,     // 장비 한 점, RARE 이상
-      shopCloseDays: 2,    // 놓치면 상인이 이만큼 문을 닫는다
-    },
   },
 
   village: {
@@ -1375,6 +1362,8 @@ const CONFIG = {
     gapSouth: 26,    // 남쪽 입구 반폭 (px) — 게시판·연금술사 쪽
     gapEast: 20,     // 동쪽 입구 반폭 (px) — 대장간 쪽
     pushSpeed: 90,   // 이미 안에 들어와 있는 몬스터를 바깥으로 미는 속도 (px/초)
+    signMargin: 30,  // 간판이 보이는 범위 — 구역 바깥 이만큼까지 (울타리 앞에서도 읽힌다)
+    signMinY: 22,    // 간판이 올라갈 수 있는 한계 — 날짜 시계(y 4~12) 아래로 내려 붙인다
   },
 
   /* ── 연금술 (로드맵 10주차) ─────────────────────────────
@@ -4676,10 +4665,11 @@ const World = {
      시작 지점 왼쪽(상인 반대편)에 하나. 앞에서 F 를 누르면 다른 맵의 비석 앞으로 옮겨간다.
      룬이 0.5초마다 깜빡이고 푸른 알갱이가 피어올라 멀리서도 눈에 띈다. */
   placePortal() {
-    const x = this.startX - 44, y = this.startY - 6;
+    const s = Village.spot('portal'), x = s.x, y = s.y;
     const p = this.addProp(SPRITES.obelisk[0], x, y, { solid: [7, 3, 5], footHeight: 3 });
     p.portal = true;
     p.landmark = 'portal';   // 미니맵에 하늘색으로 찍힌다
+    p.sign = { text: 'PORTAL', color: '#5ff0ff', dy: 26 };
     p.draw = (ctx, cam) => {
       const sx = Math.round(p.x - cam.x), sy = Math.round(p.y - cam.y);
       fillCircle(ctx, sx, sy + 1, 7, 'rgba(0,0,0,0.28)');
@@ -6442,7 +6432,6 @@ class Enemy {
 
     this.status = {};          // 걸려 있는 상태이상 (Status 가 다룬다)
     this.elite = null;         // 엘리트 접두사 id — 붙이고 다루는 일은 Elite 가 한다
-    this.raider = false;       // 습격대인가 — 마을 안전구역을 무시하고 들어온다 (Events)
     this.nightBorn = false;    // 밤에 태어났는가 — 더 세고 이름표에 달이 붙는다
     this.dir = Math.random() * Math.PI * 2;
     this.contactTimer = 0;
@@ -6474,8 +6463,7 @@ class Enemy {
   distanceTo(player) {
     if (player.dead) return Infinity;
     // 마을 안에 있는 플레이어는 바깥에서 안 보인다 — 울타리에 달라붙어 기다리지 않고 물러난다
-    // (습격대는 예외다. 마을을 치러 온 것이므로 울타리 너머가 보인다)
-    if (!this.raider && typeof Village !== 'undefined' && Village.isSafe && !Village.isSafe(this.x, this.y)
+    if (typeof Village !== 'undefined' && Village.isSafe && !Village.isSafe(this.x, this.y)
         && Village.isSafe(player.x, player.y)) return Infinity;
     return Util.dist(this.x, this.y, player.x, player.y);
   }
@@ -6535,7 +6523,7 @@ class Enemy {
     dx *= slow; dy *= slow;
     // 거점 안전구역 — 바깥에서 안으로 들어가는 발걸음은 벽처럼 막는다.
     // 안에 있던 것은 나가는 길이라 막지 않는다 (Village.update 의 밀어내기가 여기로 나간다)
-    const safeZone = (!this.raider && typeof Village !== 'undefined' && Village.blocksEntry) ? Village : null;
+    const safeZone = (typeof Village !== 'undefined' && Village.blocksEntry) ? Village : null;
     const margin = this.radius || 0;   // 중심이 아니라 몸통이 선을 넘지 못하게 한다
     const step = 2;
     let remain = dx;
@@ -9403,12 +9391,14 @@ const Shop = {
      시작 지점 근처는 나무·물·장식이 모두 비워져 있으므로 그 안에 가판대를 세운다.
      플레이어가 시작 지점에서 눈을 뜨면 바로 오른쪽에 상인이 보인다. */
   place() {
-    const x = World.startX + 44, y = World.startY - 8;
+    // 북동쪽 울타리 안쪽 (마을 배치는 Village.SPOTS 가 한곳에서 정한다)
+    const s = Village.spot('shop'), x = s.x, y = s.y;
     // 가판대는 뒤에, 상인은 그 앞에. 판매대가 막고 있어 상인 뒤로 돌아갈 수는 없다
     World.addProp(SPRITES.stall, x, y - 10, { solid: [16, 3, 6], footHeight: 3 }).stall = true;
     const npc = World.addProp(SPRITES.merchant[0], x, y + 6, { footHeight: 2 });
     npc.merchant = true;
     npc.landmark = 'shop';        // 미니맵에 따로 찍힌다
+    npc.sign = { text: 'SHOP', color: '#ffe066', dy: 42 };   // 가판대 차양 위로 (마을 안에서만 뜬다)
     npc.draw = (ctx, cam) => this.drawNpc(ctx, cam, npc);
     this.npc = npc;
     World.merchant = npc;
@@ -9428,9 +9418,7 @@ const Shop = {
     if (!this.npc) return;
     const sx = Math.round(this.npc.x - cam.x), sy = Math.round(this.npc.y - cam.y);
     if (Math.floor(World.time * 3) % 2 === 0) return;
-    const closed = (typeof Events !== 'undefined' && Events.shopClosed());
-    if (closed) UI.drawText(ctx, 'CLOSED', sx, sy - 24, '#c05a5a', true);
-    else UI.drawText(ctx, 'F  SHOP', sx, sy - 24, '#ffe066', true);
+    UI.drawText(ctx, 'F  SHOP', sx, sy - 24, '#ffe066', true);
   },
 
   /* ── 목록 ──────────────────────────────────────────────
@@ -9520,13 +9508,6 @@ const Shop = {
   },
 
   openShop() {
-    // 습격을 놓치면 상인이 며칠 문을 닫는다 (Events)
-    if (typeof Events !== 'undefined' && Events.shopClosed()) {
-      const n = this.npc || World.merchant;
-      if (n) FX.number(n.x, n.y - 26, 'CLOSED ' + Events.shopClosedDays() + 'D', '#c05a5a', true);
-      Sound.play('error');
-      return;
-    }
     this.open = true;
     this.cursor = 0;
     this.message = '';
@@ -9623,10 +9604,11 @@ const Quests = {
   /* ── 게시판 세우기 ─────────────────────────────────────
      상인 반대편(비석 쪽이 아닌 자리)에 세운다. 시작하자마자 눈에 들어와야 한다. */
   place() {
-    const x = World.startX + 16, y = World.startY + 26;
+    const s = Village.spot('board'), x = s.x, y = s.y;
     const p = World.addProp(SPRITES.questBoard, x, y, { solid: [10, 4, 6], footHeight: 3 });
     p.board = true;
     p.landmark = 'board';   // 미니맵에 따로 찍힌다
+    p.sign = { text: 'QUESTS', color: '#e8dcc0', dy: 30 };
     this.board = p;
     World.board = p;
   },
@@ -10434,8 +10416,11 @@ const Forge = {
   /* ── 대장간 세우기 — 상인 반대편, 게시판과 나란히 ──
      거점 10주차: 보스 하나를 잡기 전에는 모루만 있고 대장장이가 없다. */
   place() {
-    const x = World.startX + 70, y = World.startY + 20;
-    World.addProp(SPRITES.anvil, x, y, { solid: [9, 3, 5], footHeight: 3 }).anvil = true;
+    const s = Village.spot('forge'), x = s.x, y = s.y;
+    const anvil = World.addProp(SPRITES.anvil, x, y, { solid: [9, 3, 5], footHeight: 3 });
+    anvil.anvil = true;
+    anvil.sign = { text: 'FORGE', color: '#ff8a3c', dy: 24 };
+    World.anvil = anvil;
     World.smith = null;
     this.npc = null;
     // 조건을 채웠으면 바로 이사 온다 (저장 불러오기·사막 포함)
@@ -10446,7 +10431,7 @@ const Forge = {
   // 마을에 뒤늦게 이사 올 때 (조건을 채운 뒤)
   spawnSmith() {
     if (World.smith) return World.smith;
-    const x = World.startX + 70, y = World.startY + 20;
+    const s = Village.spot('forge'), x = s.x, y = s.y;
     const npc = World.addProp(SPRITES.smith[0], x - 16, y - 2, { footHeight: 2 });
     npc.smith = true;
     npc.landmark = 'forge';
@@ -10934,6 +10919,38 @@ const Elite = {
    조건을 채운 뒤 마을에 가면 새 집과 함께 알림이 뜬다. */
 
 const Village = {
+  /* ── 마을 자리표 ─────────────────────────────────────────
+     **마을의 모든 좌표는 여기 한 곳에서 정한다.** 상인·게시판·대장간·비석은
+     각자 파일에서 세우지만 자리는 이 표를 읽어 간다 (Village.spot).
+
+     안전구역은 시작점에서 가로 ±96 · 세로 ±64 다. 예전에는 창고·게시판·비석이
+     한가운데 몰려 있어서 들어서자마자 간판과 이름표가 겹쳐 읽기 어려웠다.
+     그래서 **쓰는 것은 전부 울타리 안쪽(14~20px)에 붙이고 가운데를 비웠다.**
+     들어서면 모닥불 하나만 있는 빈 마당이고, 볼일은 가장자리를 한 바퀴 도는 길에 있다.
+
+     입구를 막지 않도록 비워 둔 자리
+       남문  |x| < 26  (y = +64)  — 들어서는 길
+       동문  |y| < 20  (x = +96)  — 대장간 쪽 쪽문 */
+  SPOTS: {
+    stash:     { x: -34, y: -46 },   // 북 (좌)
+    board:     { x:  14, y: -46 },   // 북 (우)
+    shop:      { x:  64, y: -32 },   // 북동 — 가판대는 이 자리 16px 뒤에 선다
+    forge:     { x:  78, y:  40 },   // 동 (남쪽) — 대장장이는 16px 왼쪽
+    alchemy:   { x: -40, y:  48 },   // 남 (좌) — 연금술사는 14px 왼쪽
+    portal:    { x: -80, y:   4 },   // 서
+    houseA:    { x: -78, y: -44 },   // 북서 모서리
+    houseB:    { x: -80, y:  44 },   // 남서 모서리
+    campfire:  { x:   0, y:  16 },   // 가운데 마당 — 길잡이이자 밤의 불빛
+    log:       { x:  44, y:  50 },   // 장식 (지나갈 수 있다)
+    stump:     { x:  86, y: -50 },   // 장식 (막힌다)
+  },
+
+  // 자리표의 상대 좌표를 그 맵의 실제 좌표로
+  spot(key) {
+    const s = this.SPOTS[key] || { x: 0, y: 0 };
+    return { x: World.startX + s.x, y: World.startY + s.y };
+  },
+
   // 창고 내용물 — 기어/무기/전리품을 그대로 둔다 (포션 주머니는 못 맡긴다)
   stash: [],
   // 지금까지 판 전리품 개수 (값이 아니라 개수 — 연금술사 이사 조건)
@@ -10955,6 +10972,7 @@ const Village = {
 
   alchemist: null,
   stashChest: null,
+  bench: null,        // 연금 탁자 (간판을 띄우려고 들고 있는다)
   zone: null,         // 지금 맵의 안전구역 {cx,cy,x0,y0,x1,y1}
   zones: {},          // 맵마다 { forest: zone, desert: zone } — 오가도 남는다
 
@@ -10972,6 +10990,7 @@ const Village = {
     this.alchemyTimer = 0;
     this.alchemist = null;
     this.stashChest = null;
+    this.bench = null;
     this.zone = null;
     this.zones = {};
   },
@@ -11045,6 +11064,7 @@ const Village = {
   place() {
     this.alchemist = null;
     this.stashChest = null;
+    this.bench = null;
     const sx = World.startX, sy = World.startY;
 
     // 안전구역 확정 — World.init 이 먼저 잡아둔 값을 그대로 쓴다 (나무·돌 제외와 같은 값)
@@ -11053,41 +11073,49 @@ const Village = {
       : this.rectFor(sx, sy);
     this.zones[World.mapId] = this.zone;
 
-    // 모닥불 — 한가운데 (충돌 없음, 길잡이)
+    // 모닥불 — 빈 마당 한가운데 (충돌 없음, 길잡이이자 밤의 불빛)
     try {
-      if (SPRITES.campfire) World.addProp(SPRITES.campfire, sx + 8, sy + 12, { footHeight: 2 });
+      const f = this.spot('campfire');
+      if (SPRITES.campfire) World.addProp(SPRITES.campfire, f.x, f.y, { footHeight: 2 });
     } catch (err) { /* 장식 실패는 무시 */ }
 
-    // 집 두 채 — 마을을 넓게 쓰도록 양쪽으로 벌려 세운다
+    // 집 두 채 — 서쪽 두 모서리에 붙여 마당을 비운다
     try {
       if (SPRITES.tent) {
-        World.addProp(SPRITES.tent[0], sx - 68, sy - 32, { solid: [10, 4, 6], footHeight: 3 });
-        World.addProp(SPRITES.tent[1], sx + 76, sy - 36, { solid: [10, 4, 6], footHeight: 3 });
+        const a = this.spot('houseA'), b = this.spot('houseB');
+        World.addProp(SPRITES.tent[0], a.x, a.y, { solid: [10, 4, 6], footHeight: 3 });
+        World.addProp(SPRITES.tent[1], b.x, b.y, { solid: [10, 4, 6], footHeight: 3 });
       }
     } catch (err) { /* 무시 */ }
 
     // 장식 — 통나무(지나감)와 그루터기(막힘) 하나씩, 마을답게
     try {
-      if (SPRITES.log) World.addProp(SPRITES.log[0], sx - 52, sy + 44, { footHeight: 2 });
-      if (SPRITES.stump) World.addProp(SPRITES.stump[0], sx + 58, sy - 48, { solid: [5, 3, 5], footHeight: 3 });
+      const l = this.spot('log'), s2 = this.spot('stump');
+      if (SPRITES.log) World.addProp(SPRITES.log[0], l.x, l.y, { footHeight: 2 });
+      if (SPRITES.stump) World.addProp(SPRITES.stump[0], s2.x, s2.y, { solid: [5, 3, 5], footHeight: 3 });
     } catch (err) { /* 무시 */ }
 
-    // 창고 — 상인 옆, 처음부터 있다 (가판대와 겹치지 않게 북쪽으로)
+    // 창고 — 북쪽 울타리 안쪽, 처음부터 있다
     try {
-      const c = World.addProp(SPRITES.chest[0], sx + 8, sy - 28, { solid: [6, 3, 4], footHeight: 3 });
+      const s3 = this.spot('stash');
+      const c = World.addProp(SPRITES.chest[0], s3.x, s3.y, { solid: [6, 3, 4], footHeight: 3 });
       c.stashChest = true;
       c.landmark = 'stash';
+      c.sign = { text: 'STASH', color: '#9fe8ff', dy: 22 };
       c.draw = (ctx, cam) => this.drawStash(ctx, cam, c);
       this.stashChest = c;
       World.stashChest = c;
     } catch (err) { /* 무시 */ }
 
-    // 연금술사 — 조건을 채워야 이사 온다. 비어 있을 땐 빈 탁자만 둔다
+    // 연금술사 — 남쪽 울타리 안쪽. 조건을 채워야 이사 오고, 비어 있을 땐 빈 탁자만 둔다
     try {
-      const bench = World.addProp(SPRITES.stall || SPRITES.chest[0], sx - 30, sy + 32, { solid: [10, 3, 5], footHeight: 3 });
+      const s4 = this.spot('alchemy');
+      const bench = World.addProp(SPRITES.stall || SPRITES.chest[0], s4.x, s4.y, { solid: [10, 3, 5], footHeight: 3 });
       bench.alchemyBench = true;
+      bench.sign = { text: 'ALCHEMY', color: '#c79ce8', dy: 36 };   // 탁자 차양 위로
+      this.bench = bench;
       if (this.alchemistHome()) {
-        this.spawnAlchemist(sx - 42, sy + 30);
+        this.spawnAlchemist(s4.x - 14, s4.y - 2);
       } else {
         World.alchemist = null;
       }
@@ -11143,6 +11171,27 @@ const Village = {
     }
   },
 
+  /* 간판 — **마을 안에 있을 때만** 각 시설 위에 이름이 뜬다.
+
+     여섯 개가 울타리를 따라 흩어져 있으니, 들어서는 순간 어디가 무엇인지 한눈에 보여야 한다.
+     바깥에서는 안 보인다 (숲 한복판에 글자가 떠다니면 그게 더 어지럽다).
+     가까이 가서 F 안내가 뜨는 거리에서는 간판을 감춘다 — 같은 자리에 둘이 겹치지 않게. */
+  drawSigns(ctx, cam, player) {
+    if (World.isArena || !player || player.dead) return;
+    if (!this.isSafe(player.x, player.y, CONFIG.village.signMargin)) return;
+    const near = CONFIG.village.interactRange + 8;
+    for (const p of World.props) {
+      if (!p.sign) continue;
+      if (Util.dist(player.x, player.y, p.x, p.y) < near) continue;   // F 안내가 뜰 거리면 비켜준다
+      const sx = Math.round(p.x - cam.x), sy = Math.round(p.y - cam.y);
+      if (sx < -40 || sx > CONFIG.VIEW_W + 40 || sy < -40 || sy > CONFIG.VIEW_H + 40) continue;
+      /* 북쪽 시설은 화면 위에 바짝 붙을 때가 있다 — 그대로 두면 날짜·의뢰 칸과 겹쳐
+         둘 다 못 읽는다. 가로 자리는 그대로 두고 높이만 HUD 아래로 내려 붙인다 */
+      const y = Math.max(CONFIG.village.signMinY, sy - (p.sign.dy || 26));
+      UI.drawText(ctx, p.sign.text, sx, y, p.sign.color, true);
+    }
+  },
+
   /* 매 프레임 — 안에 들어와 있는 몬스터를 바깥으로 민다.
      스폰 제외·이동 차단이 본방이고, 이건 넉백·분열처럼 뚫고 들어온 경우의 뒷정리다. */
   update(dt) {
@@ -11150,7 +11199,7 @@ const Village = {
     const z = this.zoneFor();
     const speed = CONFIG.village.pushSpeed;
     for (const e of Game.enemies) {
-      if (!e || e.dead || e.raider || !this.isSafe(e.x, e.y)) continue;   // 습격대는 들어오라고 둔다
+      if (!e || e.dead || !this.isSafe(e.x, e.y)) continue;
       const dx = e.x - z.cx, dy = e.y - z.cy;
       const d = Math.sqrt(dx * dx + dy * dy) || 1;
       // moveWithCollision 을 타면 안쪽에서 바깥으로는 나갈 수 있다 (차단은 바깥→안쪽만 막는다)
@@ -11256,7 +11305,8 @@ const Village = {
     }
     // 연금술사
     if (this.alchemistHome() && !World.alchemist) {
-      this.spawnAlchemist(World.startX - 42, World.startY + 30);
+      const a = this.spot('alchemy');
+      this.spawnAlchemist(a.x - 14, a.y - 2);
       if (!silent && !this.announced.alchemist) {
         this.announced.alchemist = true;
         FX.number(Game.player.x, Game.player.y - 30, 'ALCHEMIST MOVED IN', '#7dff8a');
@@ -11658,8 +11708,6 @@ const Village = {
              그 개체는 날이 밝아도 그대로다 — 이름표에 달 표시가 남는다
      모래폭풍 사막에만. 앞이 안 보이고 바람이 밀고, 바깥에 있으면 조금씩 깎인다.
              마을 안은 안전하다 — "폭풍이 오면 들어간다"가 생긴다
-     습격     밤에 가끔. 마을 둘레에 몬스터가 깔리고 **안전구역을 무시하고** 들어온다.
-             막아내면 큰 보상, 놓치면 상인이 며칠 문을 닫는다
 
    세 가지 모두 **스폰할 때 한 번** 또는 **그릴 때만** 개입한다.
    몬스터 종류별 파일과 전투 규칙에는 손대지 않았다. */
@@ -11674,12 +11722,9 @@ const Events = {
   stormTick: 0,
   grains: [],
 
-  raid: null,         // { state:'warn'|'fight', timer, left, total, mapId }
-  raidBanner: 0,
-  raidBannerText: '',
-  raidBannerColor: '#ff6b6b',
-  raidedToday: false,
-  shopClosedDay: 0,   // 이 날짜(day)가 될 때까지 상인은 문을 닫는다
+  notice: 0,          // 화면 가운데 알림이 남는 시간 (해가 지고, 폭풍이 오고 갈 때)
+  noticeText: '',
+  noticeColor: '#ffe066',
   howlTimer: 0,
 
   reset() {
@@ -11691,10 +11736,7 @@ const Events = {
     this.stormCooldown = cfg.storm.minGap;
     this.stormTick = 0;
     this.grains.length = 0;
-    this.raid = null;
-    this.raidBanner = 0;
-    this.raidedToday = false;
-    this.shopClosedDay = 0;
+    this.notice = 0;
     this.howlTimer = 8;
     this.turnTimer = 0;
   },
@@ -11726,15 +11768,14 @@ const Events = {
     const was = this.phase;
 
     this.time += dt / cfg.dayLength;
-    while (this.time >= 1) { this.time -= 1; this.day++; this.raidedToday = false; }
+    while (this.time >= 1) { this.time -= 1; this.day++; }
     this.phase = this.phaseAt(this.time);
 
     if (was !== this.phase) this.onPhaseChange(was, this.phase);
 
     this.turnover(dt);
     this.updateStorm(dt);
-    this.updateRaid(dt);
-    this.raidBanner = Math.max(0, this.raidBanner - dt);
+    this.notice = Math.max(0, this.notice - dt);
 
     // 밤에는 멀리서 늑대가 운다 — 소리만으로도 시간이 흐르는 게 느껴진다
     if (this.isNight() && !World.isArena) {
@@ -11750,16 +11791,15 @@ const Events = {
     if (World.isArena) return;
     if (to === 'night') {
       this.banner('NIGHT FALLS', '#8fa8e0');
-      this.maybeStartRaid();
     } else if (to === 'day') {
       this.banner('DAY ' + this.day, '#ffe066');
     }
   },
 
   banner(text, color) {
-    this.raidBannerText = text;
-    this.raidBannerColor = color;
-    this.raidBanner = 3.0;
+    this.noticeText = text;
+    this.noticeColor = color;
+    this.notice = 3.0;
     Sound.play('banner');
   },
 
@@ -11797,7 +11837,7 @@ const Events = {
     if (!p || Game.enemies.length < CONFIG.spawn.maxAlive - cfg.turnoverSlack) return;
     for (let i = 0; i < 24; i++) {
       const e = Game.enemies[Math.floor(Math.random() * Game.enemies.length)];
-      if (!e || e.dead || e.nightBorn || e.elite || e.raider || e.isBoss) continue;
+      if (!e || e.dead || e.nightBorn || e.elite || e.isBoss) continue;
       if (Util.dist(e.x, e.y, p.x, p.y) < cfg.turnoverDist) continue;   // 보이는 데서 바뀌면 안 된다
       e.dead = true;
       e.noDrop = true;      // 잡은 것이 아니라 밤에 자리를 내준 것이다
@@ -11890,133 +11930,6 @@ const Events = {
     p.sinceCombat = 0;
     FX.number(p.x + Util.rand(-6, 6), p.y - 12, '-' + hit, '#d9b779');
   },
-
-  /* ── 습격 ──────────────────────────────────────────────
-     밤이 시작될 때 굴린다. 마을이 있는 맵에 있어야 하고, 너무 이른 레벨에는 오지 않는다. */
-  maybeStartRaid() {
-    const cfg = CONFIG.events.raid;
-    if (this.raid || this.raidedToday) return;
-    if (World.isArena || !Game.player || Game.player.level < cfg.minLevel) return;
-    if (typeof Village === 'undefined' || !Village.zoneFor()) return;
-    if (Math.random() >= cfg.chance) return;
-    this.raidedToday = true;
-    this.raid = { state: 'warn', timer: cfg.warn, left: 0, total: 0, mapId: World.mapId };
-    this.banner('RAID INCOMING', '#ff6b6b');
-    Sound.play('roar');
-    FX.addShake(5);
-  },
-
-  updateRaid(dt) {
-    const r = this.raid;
-    if (!r) return;
-    // 보스 방에 들어가거나 다른 맵으로 가면 마을을 버린 것이다
-    if (World.isArena || World.mapId !== r.mapId) { this.endRaid(false); return; }
-
-    r.timer -= dt;
-    if (r.state === 'warn') {
-      if (r.timer <= 0) this.spawnRaiders();
-      return;
-    }
-    if (r.left <= 0) { this.endRaid(true); return; }
-    if (r.timer <= 0) this.endRaid(false);
-  },
-
-  spawnRaiders() {
-    const cfg = CONFIG.events.raid, r = this.raid;
-    const z = Village.zoneFor();
-    if (!z) { this.endRaid(false); return; }
-
-    const p = Game.player;
-    const span = CONFIG.spawn ? World.spec.levelRange : [1, 23];
-    const n = Util.clamp(Math.round(cfg.count[0] + (p.level / 30) * (cfg.count[1] - cfg.count[0])),
-                         cfg.count[0], cfg.count[1]);
-    // 종류는 그 맵의 중간 구간 분포 — 시작 부근의 약한 슬라임만 오면 습격이 아니다
-    const weights = World.spec.typeWeights[1];
-    const names = Object.keys(weights);
-
-    r.state = 'fight';
-    r.timer = cfg.limit;
-    r.total = 0;
-    r.left = 0;
-
-    for (let i = 0; i < n; i++) {
-      const a = (i / n) * Math.PI * 2 + Math.random() * 0.4;
-      // 울타리 바깥 고리에서 걸어 들어온다
-      let x = 0, y = 0, ok = false;
-      for (let ring = cfg.ring[0]; ring <= cfg.ring[1]; ring += 10) {
-        x = z.cx + Math.cos(a) * (CONFIG.village.safeRX + ring);
-        y = z.cy + Math.sin(a) * (CONFIG.village.safeRY + ring);
-        if (x < 20 || y < 20 || x > World.w - 20 || y > World.h - 20) continue;
-        if (!World.isFreeSpot(x, y, 9)) continue;
-        ok = true;
-        break;
-      }
-      if (!ok) continue;
-
-      const type = names[Util.weightedIndex(names.map(k => weights[k]))];
-      const make = Game.ENEMY_TYPES[type] || Game.ENEMY_TYPES.slime;
-      const level = Util.clamp(p.level + Util.randInt(-cfg.levelBelow, cfg.levelBelow), span[0], span[1]);
-      const e = make(x, y, level);
-      this.applySpawn(e);
-      e.raider = true;                       // 안전구역을 무시하고 들어온다
-      if (Math.random() < cfg.eliteChance) Elite.make(e, Elite.rollPrefix());
-      Game.enemies.push(e);
-      FX.burst(x, y, 10, ['#ff6b6b', '#ffffff'], { speed: 50, life: 0.5 });
-      r.total++;
-      r.left++;
-    }
-
-    if (r.left <= 0) { this.endRaid(false); return; }
-    this.banner('DEFEND THE VILLAGE', '#ff6b6b');
-    Sound.play('howl');
-  },
-
-  // 습격대 한 마리가 죽었다 (Game.updateEnemies 가 부른다)
-  onRaiderDead() {
-    const r = this.raid;
-    if (!r || r.state !== 'fight') return;
-    r.left = Math.max(0, r.left - 1);
-  },
-
-  endRaid(win) {
-    const cfg = CONFIG.events.raid, r = this.raid;
-    this.raid = null;
-    if (!r) return;
-
-    // 남은 습격대는 물러간다 (아침까지 마을 앞에 서 있으면 곤란하다)
-    for (const e of Game.enemies) {
-      if (!e || e.dead || !e.raider) continue;
-      e.raider = false;
-      if (win) continue;
-      FX.burst(e.x, e.y, 8, ['#6b5a3f', '#ffffff'], { speed: 40, life: 0.4 });
-      e.dead = true;
-      e.noDrop = true;    // 도망간 것이지 잡은 것이 아니다
-    }
-
-    if (win) {
-      const p = Game.player;
-      const gold = cfg.rewardGold * r.total;
-      p.addGold(gold, p.x, p.y);
-      for (let i = 0; i < cfg.rewardPotions; i++) Items.spawn(p.x, p.y, 1);
-      const id = Gear.randomId();
-      const rarity = Math.max(cfg.rewardRarity, Gear.rollRarity());
-      Items.spawnGear(p.x, p.y, id, p.level, { item: Gear.roll(id, p.level, rarity) });
-      FX.burst(p.x, p.y - 4, 30, ['#ffe066', '#ffffff'], { speed: 90, life: 0.8, gravity: 20 });
-      this.banner('VILLAGE DEFENDED', '#9be564');
-      Sound.play('bossDead');
-      return;
-    }
-
-    // 놓쳤다 — 상인이 며칠 문을 닫는다
-    this.shopClosedDay = this.day + cfg.shopCloseDays;
-    if (typeof Shop !== 'undefined' && Shop.open) Shop.close();
-    this.banner('THE VILLAGE WAS SACKED', '#c05a5a');
-    Sound.play('caveIn');
-  },
-
-  // 상인이 문을 닫았는가 (닫혀 있으면 며칠 남았는지도 알려준다)
-  shopClosed() { return this.day < this.shopClosedDay; },
-  shopClosedDays() { return Math.max(0, this.shopClosedDay - this.day); },
 
   /* ── 그리기 ────────────────────────────────────────────── */
 
@@ -12111,19 +12024,12 @@ const Events = {
       const s = 'SANDSTORM ' + Math.ceil(this.storm);
       UI.drawText(ctx, s, CONFIG.VIEW_W / 2, y + 7, '#d9b779', true);
     }
-    const r = this.raid;
-    if (r) {
-      const text = r.state === 'warn'
-        ? 'RAID IN ' + Math.ceil(r.timer)
-        : 'RAID  ' + (r.total - r.left) + '/' + r.total + '   ' + Math.ceil(r.timer);
-      UI.drawText(ctx, text, CONFIG.VIEW_W / 2, y + (this.storm > 0 ? 15 : 7), '#ff6b6b', true);
-    }
   },
 
   /* ── 저장 ──────────────────────────────────────────────── */
 
   serialize() {
-    return { time: this.time, day: this.day, shopClosedDay: this.shopClosedDay, raidedToday: this.raidedToday };
+    return { time: this.time, day: this.day };
   },
 
   deserialize(data) {
@@ -12131,8 +12037,6 @@ const Events = {
     if (!data) return;
     this.time = Util.clamp(+data.time || 0, 0, 0.999);
     this.day = Math.max(1, data.day | 0);
-    this.shopClosedDay = Math.max(0, data.shopClosedDay | 0);
-    this.raidedToday = !!data.raidedToday;
     this.phase = this.phaseAt(this.time);
   },
 };
@@ -12695,6 +12599,17 @@ const UI = {
    새 작업을 올릴 때 PATCH_NOTES 맨 앞에 한 항목을 추가하면 된다. */
 
 const PATCH_NOTES = [
+  {
+    date: '2026-10-17',
+    notes: [
+      '마을 습격을 뺐다 — 쉬러 들어온 자리에서 싸움이 붙으니 돌아오는 맛이 사라졌다',
+      '상인이 문을 닫는 일도 함께 없앴다 (습격을 놓쳤을 때만 있던 벌칙이었다)',
+      '거점 배치를 다시 잡았다 — 쓰는 것은 전부 울타리 안쪽에 붙이고 가운데를 비웠다',
+      '창고·의뢰는 북쪽, 상점은 북동, 대장간은 동쪽, 연금술사는 남쪽, 비석은 서쪽',
+      '마을 안에서는 시설마다 머리 위에 간판이 뜬다 (가까이 가면 F 안내로 바뀐다)',
+      '마을의 밤 불빛을 조금 좁혔다 — 간판은 다 읽히면서 밤인 줄은 알게',
+    ],
+  },
   {
     date: '2026-10-16',
     notes: [
@@ -13476,9 +13391,6 @@ const Game = {
           // 대장장이 이사 조건 — 보스 하나면 마을로 온다
           if (typeof Village !== 'undefined') Village.checkMoveIns(false);
         }
-      } else if (e.raider) {
-        // 습격대는 평소 정원과 무관하다 — 다시 채우지 않고, 남은 수만 센다
-        if (typeof Events !== 'undefined') Events.onRaiderDead(e);
       } else if (!this.inArena) {
         this.respawnQueue.push(Util.rand(CONFIG.spawn.respawnMin, CONFIG.spawn.respawnMax));
       }
@@ -13727,6 +13639,8 @@ const Game = {
     if (!this.showMap && !this.inArena) Minimap.drawCorner(ui, this.player, this.enemies);
     // 화면 밖 엘리트는 가장자리에 별로 — 평범한 사냥 중에 '어, 저거'가 생기는 자리
     if (!this.showMap && !this.title && !this.player.dead) Elite.drawMarkers(ui, cam, this.enemies, this.player);
+    // 마을 간판 — 안에 들어와 있을 때만 시설 이름이 뜬다
+    if (!this.showMap && !this.title && typeof Village !== 'undefined') Village.drawSigns(ui, cam, this.player);
     UI.draw(ui, this.player, this.showInventory);
     if (this.showMap) Minimap.drawFull(ui, this.player, this.enemies);
     if (this.boss && !this.boss.dead && !this.showMap) UI.drawBossBar(ui, this.boss);
@@ -13755,7 +13669,7 @@ const Game = {
     if (this.gateBanner > 0 && !this.showMap) UI.drawBanner(ui, 'THE OBELISK AWAKENS', '#5ff0ff', this.gateBanner);
     if (typeof Events !== 'undefined') {
       if (!this.showMap && !this.showInventory && !this.title && !Shop.open && !Quests.open) Events.drawHud(ui);
-      if (Events.raidBanner > 0 && !this.showMap) UI.drawBanner(ui, Events.raidBannerText, Events.raidBannerColor, Events.raidBanner);
+      if (Events.notice > 0 && !this.showMap) UI.drawBanner(ui, Events.noticeText, Events.noticeColor, Events.notice);
     }
     if (this.confirmNewGame) UI.drawConfirm(ui);
     if (this.soundFlash > 0) UI.drawSoundState(ui, Sound.enabled);

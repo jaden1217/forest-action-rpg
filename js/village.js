@@ -14,6 +14,38 @@
    조건을 채운 뒤 마을에 가면 새 집과 함께 알림이 뜬다. */
 
 const Village = {
+  /* ── 마을 자리표 ─────────────────────────────────────────
+     **마을의 모든 좌표는 여기 한 곳에서 정한다.** 상인·게시판·대장간·비석은
+     각자 파일에서 세우지만 자리는 이 표를 읽어 간다 (Village.spot).
+
+     안전구역은 시작점에서 가로 ±96 · 세로 ±64 다. 예전에는 창고·게시판·비석이
+     한가운데 몰려 있어서 들어서자마자 간판과 이름표가 겹쳐 읽기 어려웠다.
+     그래서 **쓰는 것은 전부 울타리 안쪽(14~20px)에 붙이고 가운데를 비웠다.**
+     들어서면 모닥불 하나만 있는 빈 마당이고, 볼일은 가장자리를 한 바퀴 도는 길에 있다.
+
+     입구를 막지 않도록 비워 둔 자리
+       남문  |x| < 26  (y = +64)  — 들어서는 길
+       동문  |y| < 20  (x = +96)  — 대장간 쪽 쪽문 */
+  SPOTS: {
+    stash:     { x: -34, y: -46 },   // 북 (좌)
+    board:     { x:  14, y: -46 },   // 북 (우)
+    shop:      { x:  64, y: -32 },   // 북동 — 가판대는 이 자리 16px 뒤에 선다
+    forge:     { x:  78, y:  40 },   // 동 (남쪽) — 대장장이는 16px 왼쪽
+    alchemy:   { x: -40, y:  48 },   // 남 (좌) — 연금술사는 14px 왼쪽
+    portal:    { x: -80, y:   4 },   // 서
+    houseA:    { x: -78, y: -44 },   // 북서 모서리
+    houseB:    { x: -80, y:  44 },   // 남서 모서리
+    campfire:  { x:   0, y:  16 },   // 가운데 마당 — 길잡이이자 밤의 불빛
+    log:       { x:  44, y:  50 },   // 장식 (지나갈 수 있다)
+    stump:     { x:  86, y: -50 },   // 장식 (막힌다)
+  },
+
+  // 자리표의 상대 좌표를 그 맵의 실제 좌표로
+  spot(key) {
+    const s = this.SPOTS[key] || { x: 0, y: 0 };
+    return { x: World.startX + s.x, y: World.startY + s.y };
+  },
+
   // 창고 내용물 — 기어/무기/전리품을 그대로 둔다 (포션 주머니는 못 맡긴다)
   stash: [],
   // 지금까지 판 전리품 개수 (값이 아니라 개수 — 연금술사 이사 조건)
@@ -35,6 +67,7 @@ const Village = {
 
   alchemist: null,
   stashChest: null,
+  bench: null,        // 연금 탁자 (간판을 띄우려고 들고 있는다)
   zone: null,         // 지금 맵의 안전구역 {cx,cy,x0,y0,x1,y1}
   zones: {},          // 맵마다 { forest: zone, desert: zone } — 오가도 남는다
 
@@ -52,6 +85,7 @@ const Village = {
     this.alchemyTimer = 0;
     this.alchemist = null;
     this.stashChest = null;
+    this.bench = null;
     this.zone = null;
     this.zones = {};
   },
@@ -125,6 +159,7 @@ const Village = {
   place() {
     this.alchemist = null;
     this.stashChest = null;
+    this.bench = null;
     const sx = World.startX, sy = World.startY;
 
     // 안전구역 확정 — World.init 이 먼저 잡아둔 값을 그대로 쓴다 (나무·돌 제외와 같은 값)
@@ -133,41 +168,49 @@ const Village = {
       : this.rectFor(sx, sy);
     this.zones[World.mapId] = this.zone;
 
-    // 모닥불 — 한가운데 (충돌 없음, 길잡이)
+    // 모닥불 — 빈 마당 한가운데 (충돌 없음, 길잡이이자 밤의 불빛)
     try {
-      if (SPRITES.campfire) World.addProp(SPRITES.campfire, sx + 8, sy + 12, { footHeight: 2 });
+      const f = this.spot('campfire');
+      if (SPRITES.campfire) World.addProp(SPRITES.campfire, f.x, f.y, { footHeight: 2 });
     } catch (err) { /* 장식 실패는 무시 */ }
 
-    // 집 두 채 — 마을을 넓게 쓰도록 양쪽으로 벌려 세운다
+    // 집 두 채 — 서쪽 두 모서리에 붙여 마당을 비운다
     try {
       if (SPRITES.tent) {
-        World.addProp(SPRITES.tent[0], sx - 68, sy - 32, { solid: [10, 4, 6], footHeight: 3 });
-        World.addProp(SPRITES.tent[1], sx + 76, sy - 36, { solid: [10, 4, 6], footHeight: 3 });
+        const a = this.spot('houseA'), b = this.spot('houseB');
+        World.addProp(SPRITES.tent[0], a.x, a.y, { solid: [10, 4, 6], footHeight: 3 });
+        World.addProp(SPRITES.tent[1], b.x, b.y, { solid: [10, 4, 6], footHeight: 3 });
       }
     } catch (err) { /* 무시 */ }
 
     // 장식 — 통나무(지나감)와 그루터기(막힘) 하나씩, 마을답게
     try {
-      if (SPRITES.log) World.addProp(SPRITES.log[0], sx - 52, sy + 44, { footHeight: 2 });
-      if (SPRITES.stump) World.addProp(SPRITES.stump[0], sx + 58, sy - 48, { solid: [5, 3, 5], footHeight: 3 });
+      const l = this.spot('log'), s2 = this.spot('stump');
+      if (SPRITES.log) World.addProp(SPRITES.log[0], l.x, l.y, { footHeight: 2 });
+      if (SPRITES.stump) World.addProp(SPRITES.stump[0], s2.x, s2.y, { solid: [5, 3, 5], footHeight: 3 });
     } catch (err) { /* 무시 */ }
 
-    // 창고 — 상인 옆, 처음부터 있다 (가판대와 겹치지 않게 북쪽으로)
+    // 창고 — 북쪽 울타리 안쪽, 처음부터 있다
     try {
-      const c = World.addProp(SPRITES.chest[0], sx + 8, sy - 28, { solid: [6, 3, 4], footHeight: 3 });
+      const s3 = this.spot('stash');
+      const c = World.addProp(SPRITES.chest[0], s3.x, s3.y, { solid: [6, 3, 4], footHeight: 3 });
       c.stashChest = true;
       c.landmark = 'stash';
+      c.sign = { text: 'STASH', color: '#9fe8ff', dy: 22 };
       c.draw = (ctx, cam) => this.drawStash(ctx, cam, c);
       this.stashChest = c;
       World.stashChest = c;
     } catch (err) { /* 무시 */ }
 
-    // 연금술사 — 조건을 채워야 이사 온다. 비어 있을 땐 빈 탁자만 둔다
+    // 연금술사 — 남쪽 울타리 안쪽. 조건을 채워야 이사 오고, 비어 있을 땐 빈 탁자만 둔다
     try {
-      const bench = World.addProp(SPRITES.stall || SPRITES.chest[0], sx - 30, sy + 32, { solid: [10, 3, 5], footHeight: 3 });
+      const s4 = this.spot('alchemy');
+      const bench = World.addProp(SPRITES.stall || SPRITES.chest[0], s4.x, s4.y, { solid: [10, 3, 5], footHeight: 3 });
       bench.alchemyBench = true;
+      bench.sign = { text: 'ALCHEMY', color: '#c79ce8', dy: 36 };   // 탁자 차양 위로
+      this.bench = bench;
       if (this.alchemistHome()) {
-        this.spawnAlchemist(sx - 42, sy + 30);
+        this.spawnAlchemist(s4.x - 14, s4.y - 2);
       } else {
         World.alchemist = null;
       }
@@ -223,6 +266,27 @@ const Village = {
     }
   },
 
+  /* 간판 — **마을 안에 있을 때만** 각 시설 위에 이름이 뜬다.
+
+     여섯 개가 울타리를 따라 흩어져 있으니, 들어서는 순간 어디가 무엇인지 한눈에 보여야 한다.
+     바깥에서는 안 보인다 (숲 한복판에 글자가 떠다니면 그게 더 어지럽다).
+     가까이 가서 F 안내가 뜨는 거리에서는 간판을 감춘다 — 같은 자리에 둘이 겹치지 않게. */
+  drawSigns(ctx, cam, player) {
+    if (World.isArena || !player || player.dead) return;
+    if (!this.isSafe(player.x, player.y, CONFIG.village.signMargin)) return;
+    const near = CONFIG.village.interactRange + 8;
+    for (const p of World.props) {
+      if (!p.sign) continue;
+      if (Util.dist(player.x, player.y, p.x, p.y) < near) continue;   // F 안내가 뜰 거리면 비켜준다
+      const sx = Math.round(p.x - cam.x), sy = Math.round(p.y - cam.y);
+      if (sx < -40 || sx > CONFIG.VIEW_W + 40 || sy < -40 || sy > CONFIG.VIEW_H + 40) continue;
+      /* 북쪽 시설은 화면 위에 바짝 붙을 때가 있다 — 그대로 두면 날짜·의뢰 칸과 겹쳐
+         둘 다 못 읽는다. 가로 자리는 그대로 두고 높이만 HUD 아래로 내려 붙인다 */
+      const y = Math.max(CONFIG.village.signMinY, sy - (p.sign.dy || 26));
+      UI.drawText(ctx, p.sign.text, sx, y, p.sign.color, true);
+    }
+  },
+
   /* 매 프레임 — 안에 들어와 있는 몬스터를 바깥으로 민다.
      스폰 제외·이동 차단이 본방이고, 이건 넉백·분열처럼 뚫고 들어온 경우의 뒷정리다. */
   update(dt) {
@@ -230,7 +294,7 @@ const Village = {
     const z = this.zoneFor();
     const speed = CONFIG.village.pushSpeed;
     for (const e of Game.enemies) {
-      if (!e || e.dead || e.raider || !this.isSafe(e.x, e.y)) continue;   // 습격대는 들어오라고 둔다
+      if (!e || e.dead || !this.isSafe(e.x, e.y)) continue;
       const dx = e.x - z.cx, dy = e.y - z.cy;
       const d = Math.sqrt(dx * dx + dy * dy) || 1;
       // moveWithCollision 을 타면 안쪽에서 바깥으로는 나갈 수 있다 (차단은 바깥→안쪽만 막는다)
@@ -336,7 +400,8 @@ const Village = {
     }
     // 연금술사
     if (this.alchemistHome() && !World.alchemist) {
-      this.spawnAlchemist(World.startX - 42, World.startY + 30);
+      const a = this.spot('alchemy');
+      this.spawnAlchemist(a.x - 14, a.y - 2);
       if (!silent && !this.announced.alchemist) {
         this.announced.alchemist = true;
         FX.number(Game.player.x, Game.player.y - 30, 'ALCHEMIST MOVED IN', '#7dff8a');

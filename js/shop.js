@@ -29,12 +29,14 @@ const Shop = {
      시작 지점 근처는 나무·물·장식이 모두 비워져 있으므로 그 안에 가판대를 세운다.
      플레이어가 시작 지점에서 눈을 뜨면 바로 오른쪽에 상인이 보인다. */
   place() {
-    const x = World.startX + 44, y = World.startY - 8;
+    // 북동쪽 울타리 안쪽 (마을 배치는 Village.SPOTS 가 한곳에서 정한다)
+    const s = Village.spot('shop'), x = s.x, y = s.y;
     // 가판대는 뒤에, 상인은 그 앞에. 판매대가 막고 있어 상인 뒤로 돌아갈 수는 없다
     World.addProp(SPRITES.stall, x, y - 10, { solid: [16, 3, 6], footHeight: 3 }).stall = true;
     const npc = World.addProp(SPRITES.merchant[0], x, y + 6, { footHeight: 2 });
     npc.merchant = true;
     npc.landmark = 'shop';        // 미니맵에 따로 찍힌다
+    npc.sign = { text: 'SHOP', color: '#ffe066', dy: 42 };   // 가판대 차양 위로 (마을 안에서만 뜬다)
     npc.draw = (ctx, cam) => this.drawNpc(ctx, cam, npc);
     this.npc = npc;
     World.merchant = npc;
@@ -54,9 +56,7 @@ const Shop = {
     if (!this.npc) return;
     const sx = Math.round(this.npc.x - cam.x), sy = Math.round(this.npc.y - cam.y);
     if (Math.floor(World.time * 3) % 2 === 0) return;
-    const closed = (typeof Events !== 'undefined' && Events.shopClosed());
-    if (closed) UI.drawText(ctx, 'CLOSED', sx, sy - 24, '#c05a5a', true);
-    else UI.drawText(ctx, 'F  SHOP', sx, sy - 24, '#ffe066', true);
+    UI.drawText(ctx, 'F  SHOP', sx, sy - 24, '#ffe066', true);
   },
 
   /* ── 목록 ──────────────────────────────────────────────
@@ -146,13 +146,6 @@ const Shop = {
   },
 
   openShop() {
-    // 습격을 놓치면 상인이 며칠 문을 닫는다 (Events)
-    if (typeof Events !== 'undefined' && Events.shopClosed()) {
-      const n = this.npc || World.merchant;
-      if (n) FX.number(n.x, n.y - 26, 'CLOSED ' + Events.shopClosedDays() + 'D', '#c05a5a', true);
-      Sound.play('error');
-      return;
-    }
     this.open = true;
     this.cursor = 0;
     this.message = '';

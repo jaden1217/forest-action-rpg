@@ -28,7 +28,6 @@ class Enemy {
 
     this.status = {};          // 걸려 있는 상태이상 (Status 가 다룬다)
     this.elite = null;         // 엘리트 접두사 id — 붙이고 다루는 일은 Elite 가 한다
-    this.raider = false;       // 습격대인가 — 마을 안전구역을 무시하고 들어온다 (Events)
     this.nightBorn = false;    // 밤에 태어났는가 — 더 세고 이름표에 달이 붙는다
     this.dir = Math.random() * Math.PI * 2;
     this.contactTimer = 0;
@@ -60,8 +59,7 @@ class Enemy {
   distanceTo(player) {
     if (player.dead) return Infinity;
     // 마을 안에 있는 플레이어는 바깥에서 안 보인다 — 울타리에 달라붙어 기다리지 않고 물러난다
-    // (습격대는 예외다. 마을을 치러 온 것이므로 울타리 너머가 보인다)
-    if (!this.raider && typeof Village !== 'undefined' && Village.isSafe && !Village.isSafe(this.x, this.y)
+    if (typeof Village !== 'undefined' && Village.isSafe && !Village.isSafe(this.x, this.y)
         && Village.isSafe(player.x, player.y)) return Infinity;
     return Util.dist(this.x, this.y, player.x, player.y);
   }
@@ -121,7 +119,7 @@ class Enemy {
     dx *= slow; dy *= slow;
     // 거점 안전구역 — 바깥에서 안으로 들어가는 발걸음은 벽처럼 막는다.
     // 안에 있던 것은 나가는 길이라 막지 않는다 (Village.update 의 밀어내기가 여기로 나간다)
-    const safeZone = (!this.raider && typeof Village !== 'undefined' && Village.blocksEntry) ? Village : null;
+    const safeZone = (typeof Village !== 'undefined' && Village.blocksEntry) ? Village : null;
     const margin = this.radius || 0;   // 중심이 아니라 몸통이 선을 넘지 못하게 한다
     const step = 2;
     let remain = dx;

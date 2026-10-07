@@ -11,8 +11,6 @@
              그 개체는 날이 밝아도 그대로다 — 이름표에 달 표시가 남는다
      모래폭풍 사막에만. 앞이 안 보이고 바람이 밀고, 바깥에 있으면 조금씩 깎인다.
              마을 안은 안전하다 — "폭풍이 오면 들어간다"가 생긴다
-     습격     밤에 가끔. 마을 둘레에 몬스터가 깔리고 **안전구역을 무시하고** 들어온다.
-             막아내면 큰 보상, 놓치면 상인이 며칠 문을 닫는다
 
    세 가지 모두 **스폰할 때 한 번** 또는 **그릴 때만** 개입한다.
    몬스터 종류별 파일과 전투 규칙에는 손대지 않았다. */
@@ -27,12 +25,9 @@ const Events = {
   stormTick: 0,
   grains: [],
 
-  raid: null,         // { state:'warn'|'fight', timer, left, total, mapId }
-  raidBanner: 0,
-  raidBannerText: '',
-  raidBannerColor: '#ff6b6b',
-  raidedToday: false,
-  shopClosedDay: 0,   // 이 날짜(day)가 될 때까지 상인은 문을 닫는다
+  notice: 0,          // 화면 가운데 알림이 남는 시간 (해가 지고, 폭풍이 오고 갈 때)
+  noticeText: '',
+  noticeColor: '#ffe066',
   howlTimer: 0,
 
   reset() {
@@ -44,10 +39,7 @@ const Events = {
     this.stormCooldown = cfg.storm.minGap;
     this.stormTick = 0;
     this.grains.length = 0;
-    this.raid = null;
-    this.raidBanner = 0;
-    this.raidedToday = false;
-    this.shopClosedDay = 0;
+    this.notice = 0;
     this.howlTimer = 8;
     this.turnTimer = 0;
   },
@@ -79,15 +71,14 @@ const Events = {
     const was = this.phase;
 
     this.time += dt / cfg.dayLength;
-    while (this.time >= 1) { this.time -= 1; this.day++; this.raidedToday = false; }
+    while (this.time >= 1) { this.time -= 1; this.day++; }
     this.phase = this.phaseAt(this.time);
 
     if (was !== this.phase) this.onPhaseChange(was, this.phase);
 
     this.turnover(dt);
     this.updateStorm(dt);
-    this.updateRaid(dt);
-    this.raidBanner = Math.max(0, this.raidBanner - dt);
+    this.notice = Math.max(0, this.notice - dt);
 
     // 밤에는 멀리서 늑대가 운다 — 소리만으로도 시간이 흐르는 게 느껴진다
     if (this.isNight() && !World.isArena) {
@@ -103,16 +94,15 @@ const Events = {
     if (World.isArena) return;
     if (to === 'night') {
       this.banner('NIGHT FALLS', '#8fa8e0');
-      this.maybeStartRaid();
     } else if (to === 'day') {
       this.banner('DAY ' + this.day, '#ffe066');
     }
   },
 
   banner(text, color) {
-    this.raidBannerText = text;
-    this.raidBannerColor = color;
-    this.raidBanner = 3.0;
+    this.noticeText = text;
+    this.noticeColor = color;
+    this.notice = 3.0;
     Sound.play('banner');
   },
 
@@ -150,7 +140,7 @@ const Events = {
     if (!p || Game.enemies.length < CONFIG.spawn.maxAlive - cfg.turnoverSlack) return;
     for (let i = 0; i < 24; i++) {
       const e = Game.enemies[Math.floor(Math.random() * Game.enemies.length)];
-      if (!e || e.dead || e.nightBorn || e.elite || e.raider || e.isBoss) continue;
+      if (!e || e.dead || e.nightBorn || e.elite || e.isBoss) continue;
       if (Util.dist(e.x, e.y, p.x, p.y) < cfg.turnoverDist) continue;   // 보이는 데서 바뀌면 안 된다
       e.dead = true;
       e.noDrop = true;      // 잡은 것이 아니라 밤에 자리를 내준 것이다
@@ -243,133 +233,6 @@ const Events = {
     p.sinceCombat = 0;
     FX.number(p.x + Util.rand(-6, 6), p.y - 12, '-' + hit, '#d9b779');
   },
-
-  /* ── 습격 ──────────────────────────────────────────────
-     밤이 시작될 때 굴린다. 마을이 있는 맵에 있어야 하고, 너무 이른 레벨에는 오지 않는다. */
-  maybeStartRaid() {
-    const cfg = CONFIG.events.raid;
-    if (this.raid || this.raidedToday) return;
-    if (World.isArena || !Game.player || Game.player.level < cfg.minLevel) return;
-    if (typeof Village === 'undefined' || !Village.zoneFor()) return;
-    if (Math.random() >= cfg.chance) return;
-    this.raidedToday = true;
-    this.raid = { state: 'warn', timer: cfg.warn, left: 0, total: 0, mapId: World.mapId };
-    this.banner('RAID INCOMING', '#ff6b6b');
-    Sound.play('roar');
-    FX.addShake(5);
-  },
-
-  updateRaid(dt) {
-    const r = this.raid;
-    if (!r) return;
-    // 보스 방에 들어가거나 다른 맵으로 가면 마을을 버린 것이다
-    if (World.isArena || World.mapId !== r.mapId) { this.endRaid(false); return; }
-
-    r.timer -= dt;
-    if (r.state === 'warn') {
-      if (r.timer <= 0) this.spawnRaiders();
-      return;
-    }
-    if (r.left <= 0) { this.endRaid(true); return; }
-    if (r.timer <= 0) this.endRaid(false);
-  },
-
-  spawnRaiders() {
-    const cfg = CONFIG.events.raid, r = this.raid;
-    const z = Village.zoneFor();
-    if (!z) { this.endRaid(false); return; }
-
-    const p = Game.player;
-    const span = CONFIG.spawn ? World.spec.levelRange : [1, 23];
-    const n = Util.clamp(Math.round(cfg.count[0] + (p.level / 30) * (cfg.count[1] - cfg.count[0])),
-                         cfg.count[0], cfg.count[1]);
-    // 종류는 그 맵의 중간 구간 분포 — 시작 부근의 약한 슬라임만 오면 습격이 아니다
-    const weights = World.spec.typeWeights[1];
-    const names = Object.keys(weights);
-
-    r.state = 'fight';
-    r.timer = cfg.limit;
-    r.total = 0;
-    r.left = 0;
-
-    for (let i = 0; i < n; i++) {
-      const a = (i / n) * Math.PI * 2 + Math.random() * 0.4;
-      // 울타리 바깥 고리에서 걸어 들어온다
-      let x = 0, y = 0, ok = false;
-      for (let ring = cfg.ring[0]; ring <= cfg.ring[1]; ring += 10) {
-        x = z.cx + Math.cos(a) * (CONFIG.village.safeRX + ring);
-        y = z.cy + Math.sin(a) * (CONFIG.village.safeRY + ring);
-        if (x < 20 || y < 20 || x > World.w - 20 || y > World.h - 20) continue;
-        if (!World.isFreeSpot(x, y, 9)) continue;
-        ok = true;
-        break;
-      }
-      if (!ok) continue;
-
-      const type = names[Util.weightedIndex(names.map(k => weights[k]))];
-      const make = Game.ENEMY_TYPES[type] || Game.ENEMY_TYPES.slime;
-      const level = Util.clamp(p.level + Util.randInt(-cfg.levelBelow, cfg.levelBelow), span[0], span[1]);
-      const e = make(x, y, level);
-      this.applySpawn(e);
-      e.raider = true;                       // 안전구역을 무시하고 들어온다
-      if (Math.random() < cfg.eliteChance) Elite.make(e, Elite.rollPrefix());
-      Game.enemies.push(e);
-      FX.burst(x, y, 10, ['#ff6b6b', '#ffffff'], { speed: 50, life: 0.5 });
-      r.total++;
-      r.left++;
-    }
-
-    if (r.left <= 0) { this.endRaid(false); return; }
-    this.banner('DEFEND THE VILLAGE', '#ff6b6b');
-    Sound.play('howl');
-  },
-
-  // 습격대 한 마리가 죽었다 (Game.updateEnemies 가 부른다)
-  onRaiderDead() {
-    const r = this.raid;
-    if (!r || r.state !== 'fight') return;
-    r.left = Math.max(0, r.left - 1);
-  },
-
-  endRaid(win) {
-    const cfg = CONFIG.events.raid, r = this.raid;
-    this.raid = null;
-    if (!r) return;
-
-    // 남은 습격대는 물러간다 (아침까지 마을 앞에 서 있으면 곤란하다)
-    for (const e of Game.enemies) {
-      if (!e || e.dead || !e.raider) continue;
-      e.raider = false;
-      if (win) continue;
-      FX.burst(e.x, e.y, 8, ['#6b5a3f', '#ffffff'], { speed: 40, life: 0.4 });
-      e.dead = true;
-      e.noDrop = true;    // 도망간 것이지 잡은 것이 아니다
-    }
-
-    if (win) {
-      const p = Game.player;
-      const gold = cfg.rewardGold * r.total;
-      p.addGold(gold, p.x, p.y);
-      for (let i = 0; i < cfg.rewardPotions; i++) Items.spawn(p.x, p.y, 1);
-      const id = Gear.randomId();
-      const rarity = Math.max(cfg.rewardRarity, Gear.rollRarity());
-      Items.spawnGear(p.x, p.y, id, p.level, { item: Gear.roll(id, p.level, rarity) });
-      FX.burst(p.x, p.y - 4, 30, ['#ffe066', '#ffffff'], { speed: 90, life: 0.8, gravity: 20 });
-      this.banner('VILLAGE DEFENDED', '#9be564');
-      Sound.play('bossDead');
-      return;
-    }
-
-    // 놓쳤다 — 상인이 며칠 문을 닫는다
-    this.shopClosedDay = this.day + cfg.shopCloseDays;
-    if (typeof Shop !== 'undefined' && Shop.open) Shop.close();
-    this.banner('THE VILLAGE WAS SACKED', '#c05a5a');
-    Sound.play('caveIn');
-  },
-
-  // 상인이 문을 닫았는가 (닫혀 있으면 며칠 남았는지도 알려준다)
-  shopClosed() { return this.day < this.shopClosedDay; },
-  shopClosedDays() { return Math.max(0, this.shopClosedDay - this.day); },
 
   /* ── 그리기 ────────────────────────────────────────────── */
 
@@ -464,19 +327,12 @@ const Events = {
       const s = 'SANDSTORM ' + Math.ceil(this.storm);
       UI.drawText(ctx, s, CONFIG.VIEW_W / 2, y + 7, '#d9b779', true);
     }
-    const r = this.raid;
-    if (r) {
-      const text = r.state === 'warn'
-        ? 'RAID IN ' + Math.ceil(r.timer)
-        : 'RAID  ' + (r.total - r.left) + '/' + r.total + '   ' + Math.ceil(r.timer);
-      UI.drawText(ctx, text, CONFIG.VIEW_W / 2, y + (this.storm > 0 ? 15 : 7), '#ff6b6b', true);
-    }
   },
 
   /* ── 저장 ──────────────────────────────────────────────── */
 
   serialize() {
-    return { time: this.time, day: this.day, shopClosedDay: this.shopClosedDay, raidedToday: this.raidedToday };
+    return { time: this.time, day: this.day };
   },
 
   deserialize(data) {
@@ -484,8 +340,6 @@ const Events = {
     if (!data) return;
     this.time = Util.clamp(+data.time || 0, 0, 0.999);
     this.day = Math.max(1, data.day | 0);
-    this.shopClosedDay = Math.max(0, data.shopClosedDay | 0);
-    this.raidedToday = !!data.raidedToday;
     this.phase = this.phaseAt(this.time);
   },
 };
