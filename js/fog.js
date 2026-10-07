@@ -6,8 +6,6 @@
    "어디를 가봤는지"를 기록하지 않으니, 지도가 **내가 만든 기록이 아니라 그냥 설명서**였다.
 
    이제 타일 하나하나에 '가봤는가'를 적어 두고, 미니맵·전체 지도에서 안 가본 곳을 덮는다.
-   맵을 스무 칸짜리 구역으로 나눠서, **처음 들어간 구역마다 경험치 한 덩이**를 준다 —
-   멀리 나가는 것 자체가 보상이 되게.
 
    저장은 타일 하나당 1비트로 눌러 담아 base64 로 적는다 (맵 하나에 2.4KB → 3.2KB 글자).
    맵 모양은 시드에서 다시 나오므로 '가봤는가'만 남기면 된다. */
@@ -28,7 +26,6 @@ const Fog = {
     m = {
       w: W, h: H,
       bits: new Uint8Array(W * H),
-      regions: new Uint8Array(cfg.regionCols * cfg.regionRows),
       seen: 0,
       canvas: makeCanvas(W, H),
     };
@@ -80,24 +77,6 @@ const Fog = {
         ctx.clearRect(x, y, 1, 1);
       }
     }
-
-    this.checkRegion(m, tx, ty, player);
-  },
-
-  // 처음 들어간 구역이면 경험치 한 덩이 — 멀수록 크게 준다
-  checkRegion(m, tx, ty, player) {
-    const cfg = CONFIG.fog;
-    const rx = Math.min(cfg.regionCols - 1, Math.floor(tx / (m.w / cfg.regionCols)));
-    const ry = Math.min(cfg.regionRows - 1, Math.floor(ty / (m.h / cfg.regionRows)));
-    const i = ry * cfg.regionCols + rx;
-    if (m.regions[i]) return;
-    m.regions[i] = 1;
-
-    const t = World.dangerAt(player.x, player.y);
-    const xp = Math.max(1, Math.round(CONFIG.levelUp.xpNeed(player.level) * (cfg.xpNear + (cfg.xpFar - cfg.xpNear) * t)));
-    player.gainXp(xp);
-    FX.number(player.x, player.y - 34, 'NEW AREA +' + xp + 'XP', '#5ff0ff');
-    Sound.play('banner');
   },
 
   // 미니맵·전체 지도 위에 덮는다 (잘라낸 자리와 배율을 그대로 받는다)
@@ -116,7 +95,7 @@ const Fog = {
       for (let i = 0; i < m.bits.length; i++) if (m.bits[i]) bytes[i >> 3] |= 1 << (i & 7);
       let s = '';
       for (let i = 0; i < bytes.length; i++) s += String.fromCharCode(bytes[i]);
-      out[id] = { b: btoa(s), r: Array.from(m.regions).join('') };
+      out[id] = { b: btoa(s) };
     }
     return out;
   },
@@ -137,9 +116,6 @@ const Fog = {
         m.bits[i] = 1;
         m.seen++;
         ctx.clearRect(i % m.w, Math.floor(i / m.w), 1, 1);
-      }
-      if (typeof d.r === 'string') {
-        for (let i = 0; i < m.regions.length && i < d.r.length; i++) m.regions[i] = d.r[i] === '1' ? 1 : 0;
       }
     }
   },
