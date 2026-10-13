@@ -125,21 +125,18 @@ class Sandworm extends Enemy {
       // 모래 언덕 — 예고 때는 좌우로 들썩이고 조금 부푼다
       const jitter = this.state === 'rise' ? Math.round(Math.sin(World.time * 40) * this.shake) : 0;
       const grow = this.state === 'rise' ? 1 + (1 - this.timer / cfg.windup) * 0.3 : (this.state === 'burrow' ? 0.8 : 1);
-      const sp = SPRITES.wormMound;
-      const w = Math.round(sp.width * this.scale * grow), h = Math.round(sp.height * this.scale * grow);
-      ctx.drawImage(sp, sx - Math.round(w / 2) + jitter, Math.round(sy + 7 - h), w, h);
-      const topY = Math.round(sy + 7 - h);
-      if (this.state === 'rise') this.drawWarning(ctx, sx, topY, 1 - this.timer / cfg.windup);
-      UI.drawText(ctx, 'L' + this.level, sx - 4, topY - 5, this.labelColor, false);
+      const cv = Creatures.wormMound(Math.round(16 * this.scale * grow));
+      const top = Creatures.blit(ctx, cv, sx + jitter, sy);
+      if (this.state === 'rise') this.drawWarning(ctx, sx, top, 1 - this.timer / cfg.windup);
+      UI.drawText(ctx, 'L' + this.level, sx - 4, top - 5, this.labelColor, false);
       return;
     }
     // 밖에 나온 몸통 — 막 솟았을 땐 위로 늘어났다가 자리를 잡는다
-    const age = Math.max(0, cfg.surfaced - this.timer);   // 음수가 되면 몸이 화면만큼 늘어난다
+    const age = Math.max(0, cfg.surfaced - this.timer);
     const stretch = age < 0.25 ? 1 + (0.25 - age) * 1.2 : 1;
-    const sprite = this.hurtFlash > 0 ? SPRITES.wormFlash : SPRITES.worm;
-    const w = Math.round(sprite.width * this.scale), h = Math.round(sprite.height * this.scale * stretch);
+    const W = Math.round(14 * this.scale * this.hitSX), H = Math.round(21 * this.scale * stretch * this.hitSY);
     this.drawShadow(ctx, sx, sy, 6 * this.scale);
-    ctx.drawImage(sprite, sx - Math.round(w / 2), Math.round(sy + 7 - h), w, h);
-    this.drawLabel(ctx, sx, Math.round(sy + 7 - h + 2));
+    const top = Creatures.blit(ctx, Creatures.worm(W, H, this.hurtFlash > 0), sx, sy);
+    this.drawLabel(ctx, sx, top + 2);
   }
 }

@@ -370,7 +370,7 @@ const Items = {
       const color = CONFIG.weapons.levelColor[levelTier(d.level)] || '#ffffff';
       const set = SPRITES.weapons && SPRITES.weapons[d.weapon];
       const sp = set && set[levelTier(d.level)];
-      fillCircle(ctx, sx, sy + 5, 5, 'rgba(0,0,0,0.28)');
+      fillEllipse(ctx, sx + 1, sy + 5, 5, 2.1, 'rgba(10,12,20,0.3)');
       if (d.growing) this.drawAura(ctx, sx, sy, d.age);
       if (sp) ctx.drawImage(sp, sx - Math.floor(sp.width / 2), sy - 8 + bob);
       // 어떤 무기가 몇 레벨인지 바닥에서도 바로 보인다
@@ -387,7 +387,7 @@ const Items = {
 
     if (d.kind === 'gear') {
       const sp = Gear.sprite(d.item), color = Gear.color(d.item);
-      fillCircle(ctx, sx, sy + 5, 5, 'rgba(0,0,0,0.28)');
+      fillEllipse(ctx, sx + 1, sy + 5, 5, 2.1, 'rgba(10,12,20,0.3)');
       // 희귀한 것은 바닥에 옅은 색 원판이 숨쉰다
       if (d.item.rarity >= 2) {
         const pulse = 1 + Math.sin(d.age * 3) * 0.5;
@@ -403,7 +403,7 @@ const Items = {
 
     if (d.kind === 'loot') {
       const ls = CONFIG.loot.items[d.id], sp = SPRITES.loot[d.id];
-      fillCircle(ctx, sx, sy + 5, 4, 'rgba(0,0,0,0.28)');
+      fillEllipse(ctx, sx + 1, sy + 5, 4, 1.7, 'rgba(10,12,20,0.3)');
       ctx.drawImage(sp, sx - Math.floor(sp.width / 2), sy - 6 + bob);
       if (Math.floor(d.age * 3) % 2 === 0) { ctx.fillStyle = '#ffffff'; ctx.fillRect(sx + 3, sy - 8 + bob, 1, 1); }
       if (ls.trophy) UI.drawText(ctx, ls.name, sx, sy + 8, ls.color, true);   // 보스 전리품은 이름이 보인다
@@ -411,7 +411,7 @@ const Items = {
       return;
     }
 
-    fillCircle(ctx, sx, sy + 5, 4, 'rgba(0,0,0,0.28)');
+    fillEllipse(ctx, sx + 1, sy + 5, 4, 1.7, 'rgba(10,12,20,0.3)');
     const sp = SPRITES.potion;
     ctx.drawImage(sp, sx - Math.floor(sp.width / 2), sy - 6 + bob);
     // 반짝임 — 아직 안 주운 드랍이 눈에 띄게

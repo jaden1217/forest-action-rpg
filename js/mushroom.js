@@ -80,15 +80,10 @@ class Mushroom extends Enemy {
     if (this.windup > 0) grow = 1 + (1 - this.windup / cfg.windup) * 0.16;
     else if (this.puff > 0) grow = 1 - (this.puff / 0.18) * 0.12;
 
-    const w = Math.round(16 * this.scale * grow);
-    const h = Math.round(16 * this.scale * grow);
-
     this.drawShadow(ctx, sx, sy, 5.5 * this.scale);
-    const set = this.hurtFlash > 0 ? SPRITES.mushroomEnemyFlash : SPRITES.mushroomEnemy;
-    ctx.drawImage(set, sx - Math.round(w / 2), Math.round(sy + 7 - h), w, h);
-
-    const topY = Math.round(sy + 7 - h + 4);
-    if (this.windup > 0) this.drawWarning(ctx, sx, topY, 1 - this.windup / cfg.windup);
-    this.drawLabel(ctx, sx, topY);
+    const cv = Creatures.mushroom(Math.round(15 * this.scale * this.hitSX), grow, this.hurtFlash > 0);
+    const top = Creatures.blit(ctx, cv, sx, sy);
+    if (this.windup > 0) this.drawWarning(ctx, sx, top + 2, 1 - this.windup / cfg.windup);
+    this.drawLabel(ctx, sx, top + 2);
   }
 }

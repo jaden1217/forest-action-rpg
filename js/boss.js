@@ -214,15 +214,12 @@ class GiantSlime extends Boss {
       ctx.drawImage(ring, sx - Math.floor(ring.width / 2), sy + 8 - Math.floor(ring.height / 2));
     }
 
-    // 몸 — squash 로 눌리고 늘어난다 (예고 동작이 전부 여기서 보인다)
-    const sprite = this.hurtFlash > 0 ? SPRITES.giantSlimeFlash : SPRITES.giantSlime;
+    // 몸 — squash 로 눌리고 늘어난다 (예고 동작이 전부 여기서 보인다). 그 크기로 새로 그린다
     const bounce = this.state === 'idle' ? Math.sin(this.hopTimer * 4) * 0.05 : 0;
     const sq = this.squash + bounce;
-    const w = Math.round(sprite.width * (1 - sq * 0.5));
-    const h = Math.round(sprite.height * (1 + sq * 0.5));
-    ctx.drawImage(sprite, sx - Math.round(w / 2), Math.round(y + 12 - h), w, h);
-
-    const topY = Math.round(y + 12 - h);
+    const cv = Creatures.slime(Math.round(42 * (1 - sq * 0.5)), Math.round(34 * (1 + sq * 0.5)), this.hurtFlash > 0, true);
+    const topY = Math.round(y + 13 - cv.height);
+    ctx.drawImage(cv, sx - (cv.width >> 1), topY);
     if (this.warn > 0) this.drawWarning(ctx, sx, topY, 1 - this.warn / 0.6);
   }
 }

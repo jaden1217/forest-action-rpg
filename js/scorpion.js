@@ -94,26 +94,22 @@ class Scorpion extends Enemy {
   drawBody(ctx, sx, sy) {
     const cfg = CONFIG.scorpion;
     const moving = this.state === 'wander' || this.state === 'chase' || this.state === 'sting';
-    const frame = moving ? (Math.floor(this.stepTime * 6) % 2) : 0;
-    const flash = this.hurtFlash > 0;
-    const set = this.facing >= 0
-      ? (flash ? SPRITES.scorpionFlash : SPRITES.scorpion)
-      : (flash ? SPRITES.scorpionLeftFlash : SPRITES.scorpionLeft);
-    const sprite = set[frame];
+    const frame = moving ? Math.floor(this.stepTime * 8) % 4 : 0;
+    const pose = this.state === 'windup' ? 'windup' : (this.state === 'sting' ? 'sting' : 'walk');
 
-    // 예고 때는 뒤로 움츠리고, 찌를 때는 앞으로 길어진다
+    // 예고 때는 뒤로 움츠리고, 찌를 때는 앞으로 길어진다 — 크기를 바꿔 새로 그린다
     let sxScale = 1, syScale = 1;
-    if (this.state === 'windup') { sxScale = 0.9; syScale = 1.1; }
-    else if (this.state === 'sting') { sxScale = 1.15; syScale = 0.92; }
+    if (this.state === 'windup') { sxScale = 0.92; syScale = 1.06; }
+    else if (this.state === 'sting') { sxScale = 1.12; syScale = 0.94; }
 
-    const draw = this.scale * 0.85;
-    const w = Math.round(sprite.width * draw * sxScale);
-    const h = Math.round(sprite.height * draw * syScale);
+    const W = Math.round(24 * 0.85 * this.scale * sxScale * this.hitSX);
+    const H = Math.round(17 * 0.85 * this.scale * syScale * this.hitSY);
+    let cv = Creatures.scorpion(W, H, frame, pose, this.hurtFlash > 0);
+    if (this.facing < 0) cv = Creatures.flip(cv);
+
     this.drawShadow(ctx, sx, sy, 7 * this.scale);
-    ctx.drawImage(sprite, sx - Math.round(w / 2), Math.round(sy + 7 - h), w, h);
-
-    const topY = Math.round(sy + 7 - h + 2);
-    if (this.state === 'windup') this.drawWarning(ctx, sx, topY, 1 - this.timer / cfg.windup);
-    this.drawLabel(ctx, sx, topY);
+    const top = Creatures.blit(ctx, cv, sx, sy) + 2;
+    if (this.state === 'windup') this.drawWarning(ctx, sx, top, 1 - this.timer / cfg.windup);
+    this.drawLabel(ctx, sx, top);
   }
 }

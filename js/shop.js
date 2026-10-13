@@ -45,7 +45,7 @@ const Shop = {
   // 상인 그리기 — 가끔 눈을 깜빡이고, 가까이 오면 머리 위에 안내가 뜬다
   drawNpc(ctx, cam, npc) {
     const sx = Math.round(npc.x - cam.x), sy = Math.round(npc.y - cam.y);
-    fillCircle(ctx, sx, sy + 1, 5, 'rgba(0,0,0,0.28)');
+    fillEllipse(ctx, sx + 1, sy + 1, 5, 2.1, 'rgba(10,12,20,0.3)');
     // 4초마다 0.15초 동안 눈을 감는다
     const t = World.time % 4;
     const sp = (t > 3.7 && t < 3.85) ? SPRITES.merchant[1] : SPRITES.merchant[0];

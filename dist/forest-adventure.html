@@ -30,12 +30,13 @@ html, body {
   box-shadow: 0 12px 40px rgba(0, 0, 0, .6);
 }
 
+/* 크기는 Game.fitScreen 이 정한다 — 창에 들어가는 **가장 큰 정수 배율**을 기기 픽셀 기준으로 고른다.
+   예전처럼 max-width 로 줄이면 2.6배 같은 비정수 배율이 되어 도트가 들쭉날쭉해지고,
+   가로·세로가 따로 줄면 도트가 직사각형이 된다 (pixel-art 지침의 CRITICAL 항목) */
 #game, #ui {
   display: block;
-  width: 1152px;   /* 384 * 3 */
+  width: 1152px;   /* 384 * 3 — 스크립트가 덮어쓰기 전 기본값 */
   height: 648px;   /* 216 * 3 */
-  max-width: calc(100vw - 24px);
-  max-height: calc(100vh - 90px);
   image-rendering: pixelated;
   image-rendering: crisp-edges;
   cursor: none;   /* 조준점은 게임이 캔버스 안에 직접 그린다 */
@@ -153,7 +154,7 @@ html, body {
 }
 
 </style>
-<!-- built 2026-10-07 14:30 by tools/build.js -->
+<!-- built 2026-10-13 15:04 by tools/build.js -->
 </head>
 <body>
   <div id="stage">
@@ -1653,6 +1654,1797 @@ const Util = {
 
 </script>
   <script>
+// ── js/art.js
+'use strict';
+
+/* 도트 그림 도구 — 그래픽 전면 개편의 바탕 (pixel-art-sprites 지침을 따른다).
+
+   예전 그림이 거칠어 보였던 이유는 크게 넷이었다.
+     1. 몬스터를 비정수 배율(0.78배, 2.55배 …)로 늘려 그려서 **도트 크기가 들쭉날쭉**했다
+     2. 바닥·나무를 **무작위 점 노이즈**로 칠해서 지글지글한 모래폭풍처럼 보였다
+     3. 그림자를 **같은 색을 어둡게만** 칠해서 납작했다 (빛의 방향이 없었다)
+     4. 외곽선이 그림마다 달랐다 (검정 / 없음 / 두 칸)
+
+   그래서 이 파일은 그 넷을 한 번에 막는 도구만 둔다.
+     - Art.ramp     색상을 옮겨가는 명암 단계 (어두울수록 푸르게, 밝을수록 노랗게)
+     - Art.Pix      정수 좌표에만 찍는 픽셀 버퍼 — 늘리지 않고 **그 크기 그대로** 다시 그린다
+     - shade*       왼쪽 위에서 오는 빛 하나로 입체를 칠한다 (베개 음영 금지)
+     - outline      투명한 칸 중 그림에 붙은 칸에 **1px 색 외곽선**을 두른다 (모든 그림이 같은 규칙)
+     - Art.cached   한 번 그린 것은 크기·프레임별로 기억해 둔다 (몬스터를 원본 해상도로 그리려면 필요) */
+
+const Art = {
+  /* ── 색 ──────────────────────────────────────────────── */
+
+  hsl(h, s, l) {
+    h = ((h % 360) + 360) % 360; s = Util.clamp(s, 0, 100) / 100; l = Util.clamp(l, 0, 100) / 100;
+    const k = (n) => (n + h / 30) % 12;
+    const a = s * Math.min(l, 1 - l);
+    const f = (n) => l - a * Math.max(-1, Math.min(k(n) - 3, Math.min(9 - k(n), 1)));
+    const hex = (v) => Math.round(v * 255).toString(16).padStart(2, '0');
+    return '#' + hex(f(0)) + hex(f(8)) + hex(f(4));
+  },
+
+  // 색상을 목표 색상 쪽으로 가까운 길로 돌린다 (amount 0~1)
+  towardHue(h, target, amount) {
+    let d = ((target - h + 540) % 360) - 180;
+    return h + d * amount;
+  },
+
+  /* 명암 단계 — 어두운 것부터 밝은 것까지 steps 개.
+     **그림자는 그냥 어두운 같은 색이 아니다** — 푸른 보라(250) 쪽으로, 밝은 쪽은 따뜻한 노랑(55) 쪽으로
+     색상을 옮긴다(hue shifting). 이것만으로 그림이 납작한 '색칠'에서 '빛을 받은 물체'가 된다.
+     채도는 가운데가 가장 높고 양 끝에서 조금 빠진다. */
+  ramp(h, s, steps, lo, hi, shift) {
+    lo = lo === undefined ? 14 : lo; hi = hi === undefined ? 82 : hi;
+    shift = shift === undefined ? 0.22 : shift;
+    const out = [];
+    for (let i = 0; i < steps; i++) {
+      const t = steps === 1 ? 0.5 : i / (steps - 1);
+      const hue = t < 0.5 ? this.towardHue(h, 250, (0.5 - t) * 2 * shift)
+                          : this.towardHue(h, 55, (t - 0.5) * 2 * shift);
+      const sat = s * (1 - Math.abs(t - 0.5) * 0.45);
+      out.push(this.hsl(hue, sat, lo + t * (hi - lo)));
+    }
+    return out;
+  },
+
+  // '#rrggbb' -> [색상 0~360, 채도 0~100, 밝기 0~100]
+  toHsl(hex) {
+    const [r, g, b] = this.rgb(hex).map(v => v / 255);
+    const mx = Math.max(r, g, b), mn = Math.min(r, g, b), l = (mx + mn) / 2;
+    let h = 0, s = 0;
+    if (mx !== mn) {
+      const d = mx - mn;
+      s = l > 0.5 ? d / (2 - mx - mn) : d / (mx + mn);
+      h = mx === r ? (g - b) / d + (g < b ? 6 : 0) : (mx === g ? (b - r) / d + 2 : (r - g) / d + 4);
+      h *= 60;
+    }
+    return [h, s * 100, l * 100];
+  },
+
+  rgb(hex) { return [parseInt(hex.slice(1, 3), 16), parseInt(hex.slice(3, 5), 16), parseInt(hex.slice(5, 7), 16)]; },
+
+  // 어떤 색이든 외곽선용으로 — 푸른 쪽으로 돌리며 크게 어둡게
+  outlineOf(hex, amount) {
+    const [r, g, b] = this.rgb(hex);
+    const k = amount === undefined ? 0.32 : amount;
+    // 어둡게 + 아주 조금 푸르게 (검정 외곽선보다 배경에 덜 튄다)
+    const R = Math.round(r * k * 0.9), G = Math.round(g * k * 0.95), B = Math.round(Math.min(255, b * k * 1.15 + 6));
+    return '#' + [R, G, B].map(v => Util.clamp(v, 0, 255).toString(16).padStart(2, '0')).join('');
+  },
+
+  mix(a, b, t) {
+    const A = this.rgb(a), B = this.rgb(b);
+    return '#' + [0, 1, 2].map(i => Math.round(A[i] + (B[i] - A[i]) * t).toString(16).padStart(2, '0')).join('');
+  },
+
+  /* ── 빛 ────────────────────────────────────────────────
+     빛은 하나, **왼쪽 위 앞**에서 온다. 모든 그림이 같은 빛을 받아야 한 세상처럼 보인다. */
+  LIGHT: (() => { const v = [-0.55, -0.68, 0.48]; const n = Math.hypot(v[0], v[1], v[2]); return [v[0] / n, v[1] / n, v[2] / n]; })(),
+
+  // 2x2 순서 디더 문턱값 — 무작위 점 대신 바둑판 무늬로만 섞는다
+  BAYER2: [[0.25, 0.75], [1.0, 0.5]],
+  BAYER4: [
+    [0.03, 0.53, 0.16, 0.66],
+    [0.78, 0.28, 0.91, 0.41],
+    [0.22, 0.72, 0.09, 0.59],
+    [0.97, 0.47, 0.84, 0.34],
+  ],
+
+  /* 옛 도트를 새 규칙으로 — **검정 외곽선만** 재질 색 외곽선으로 바꾼다.
+     상인·상자·천막처럼 손으로 찍은 도트는 모양이 좋아서 다시 그릴 까닭이 없다 (지침: 뜯지 말고 고친다).
+     다만 외곽선이 검정이라 새로 그린 나무·몬스터 옆에 서면 혼자 굵고 튀었다.
+     투명한 칸에 닿은 아주 어두운 칸만 골라, 안쪽 이웃 색을 크게 어둡게 한 색으로 바꾼다.
+     눈·입처럼 안쪽에 있는 어두운 칸은 투명에 닿지 않으므로 그대로 남는다. */
+  recolorOutline(cv) {
+    if (!cv || !cv.width) return cv;
+    const p = Pix.from(cv);
+    const dark = (c) => { const v = this.rgb(c); return v[0] * 0.3 + v[1] * 0.59 + v[2] * 0.11 < 40; };
+    const swap = [];
+    for (let y = 0; y < p.h; y++) {
+      for (let x = 0; x < p.w; x++) {
+        const c = p.get(x, y);
+        if (!c || !dark(c)) continue;
+        if (p.has(x - 1, y) && p.has(x + 1, y) && p.has(x, y - 1) && p.has(x, y + 1)) continue;   // 안쪽 칸
+        // 안쪽(어둡지 않은) 이웃 하나의 색을 따른다
+        let n = null;
+        for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [-1, 1], [1, -1], [-1, -1]]) {
+          const q = p.get(x + dx, y + dy);
+          if (q && !dark(q)) { n = q; break; }
+        }
+        if (n) swap.push([x, y, this.outlineOf(n)]);
+      }
+    }
+    for (const [x, y, c] of swap) p.set(x, y, c);
+    return p.canvas();
+  },
+
+  /* ── 기억 ─────────────────────────────────────────────── */
+  _cache: new Map(),
+  cached(key, make) {
+    let v = this._cache.get(key);
+    if (!v) { v = make(); this._cache.set(key, v); }
+    return v;
+  },
+};
+
+/* 픽셀 버퍼 — 정수 좌표에만 찍는다. 다 그리고 나서 캔버스 하나로 굳힌다. */
+class Pix {
+  constructor(w, h) {
+    this.w = Math.max(1, Math.round(w));
+    this.h = Math.max(1, Math.round(h));
+    this.c = new Array(this.w * this.h).fill(null);   // 칸마다 '#rrggbb' 또는 null
+  }
+
+  inside(x, y) { return x >= 0 && y >= 0 && x < this.w && y < this.h; }
+  set(x, y, col) { x |= 0; y |= 0; if (col && this.inside(x, y)) this.c[y * this.w + x] = col; }
+  get(x, y) { x |= 0; y |= 0; return this.inside(x, y) ? this.c[y * this.w + x] : null; }
+  has(x, y) { return !!this.get(x, y); }
+  clear(x, y) { x |= 0; y |= 0; if (this.inside(x, y)) this.c[y * this.w + x] = null; }
+
+  rect(x, y, w, h, col) {
+    for (let j = 0; j < h; j++) for (let i = 0; i < w; i++) this.set(x + i, y + j, col);
+  }
+
+  // 이미 칠한 칸만 바꾼다 (그림 안쪽 무늬를 넣을 때)
+  over(x, y, col) { if (this.has(x, y)) this.set(x, y, col); }
+
+  /* 타원 하나를 빛 받은 입체로 칠한다.
+     ramp 는 어두운 것 → 밝은 것. 칸마다 구의 법선을 만들어 왼쪽 위 빛과 내적한다.
+     opts.dither  단계 경계에 바둑판 디더 (작은 그림엔 끈다 — 디테일이 뭉개진다)
+     opts.ambient 바닥 밝기 (그늘에서도 이만큼은 보인다)
+     opts.flat    위에서 내려다본 납작한 정도 — 클수록 위쪽 면이 넓게 밝다 */
+  blob(cx, cy, rx, ry, ramp, opts) {
+    opts = opts || {};
+    const amb = opts.ambient === undefined ? 0.16 : opts.ambient;
+    const L = Art.LIGHT;
+    const x0 = Math.floor(cx - rx - 1), x1 = Math.ceil(cx + rx + 1);
+    const y0 = Math.floor(cy - ry - 1), y1 = Math.ceil(cy + ry + 1);
+    for (let y = y0; y <= y1; y++) {
+      for (let x = x0; x <= x1; x++) {
+        const nx = (x + 0.5 - cx) / rx, ny = (y + 0.5 - cy) / ry;
+        const d = nx * nx + ny * ny;
+        if (d > 1) continue;
+        if (opts.mask && !opts.mask(x, y)) continue;
+        const nz = Math.sqrt(1 - d) + (opts.flat || 0);
+        const len = Math.hypot(nx, ny, nz);
+        let lit = (nx * L[0] + ny * L[1] + nz * L[2]) / len;
+        lit = amb + (1 - amb) * Math.max(0, lit) + (opts.bias || 0);
+        this.set(x, y, Pix.pick(ramp, lit, x, y, opts.dither));
+      }
+    }
+  }
+
+  /* 임의의 모양(마스크)을 빛 받은 입체로 칠한다 — 모양의 중심과 반지름으로 법선을 어림한다 */
+  shadeMask(mask, cx, cy, rx, ry, ramp, opts) {
+    opts = opts || {};
+    const amb = opts.ambient === undefined ? 0.16 : opts.ambient;
+    const L = Art.LIGHT;
+    for (let y = 0; y < this.h; y++) {
+      for (let x = 0; x < this.w; x++) {
+        if (!mask(x, y)) continue;
+        let nx = (x + 0.5 - cx) / rx, ny = (y + 0.5 - cy) / ry;
+        const d = Math.min(1, nx * nx + ny * ny);
+        const nz = Math.sqrt(1 - d) + (opts.flat || 0);
+        const len = Math.hypot(nx, ny, nz) || 1;
+        let lit = (nx * L[0] + ny * L[1] + nz * L[2]) / len;
+        lit = amb + (1 - amb) * Math.max(0, lit) + (opts.bias || 0);
+        this.set(x, y, Pix.pick(ramp, lit, x, y, opts.dither));
+      }
+    }
+  }
+
+  /* 1px 외곽선 — 투명한 칸 가운데 그림에 상하좌우로 닿은 칸을 칠한다.
+     색은 닿은 그림 칸의 색을 크게 어둡게 한 것이라 **재질마다 외곽선 색이 자연스럽게 다르다**
+     (검정 외곽선보다 배경에서 덜 튀고, 한 그림 안에서도 규칙이 같다).
+     fixed 를 주면 그 색 하나로 두른다. */
+  outline(fixed, amount) {
+    const add = [];
+    for (let y = -1; y <= this.h; y++) {
+      for (let x = -1; x <= this.w; x++) {
+        if (this.has(x, y)) continue;
+        const n = this.get(x, y - 1) || this.get(x - 1, y) || this.get(x + 1, y) || this.get(x, y + 1);
+        if (!n) continue;
+        add.push([x, y, fixed || Art.outlineOf(n, amount)]);
+      }
+    }
+    // 그림이 버퍼 끝에 닿으면 외곽선이 잘리므로, 외곽선은 버퍼 안쪽 칸에만 찍힌다
+    for (const [x, y, c] of add) this.set(x, y, c);
+    return this;
+  }
+
+  // 안쪽 외곽선 — 그림 가장자리 칸 자체를 어둡게 (작은 그림에서 외곽선 칸을 아낄 때)
+  innerEdge(amount) {
+    const edge = [];
+    for (let y = 0; y < this.h; y++) {
+      for (let x = 0; x < this.w; x++) {
+        const c = this.get(x, y);
+        if (!c) continue;
+        if (!this.has(x, y - 1) || !this.has(x - 1, y) || !this.has(x + 1, y) || !this.has(x, y + 1)) {
+          edge.push([x, y, Art.outlineOf(c, amount)]);
+        }
+      }
+    }
+    for (const [x, y, c] of edge) this.set(x, y, c);
+    return this;
+  }
+
+  // 외곽선 가운데 아래·오른쪽(빛 반대편)만 남기고 위·왼쪽은 한 단 밝게 — 선택적 외곽선
+  softenLitOutline(amount) {
+    for (let y = 0; y < this.h; y++) {
+      for (let x = 0; x < this.w; x++) {
+        const c = this.get(x, y);
+        if (!c) continue;
+        // 오른쪽·아래에 그림이 있고 왼쪽·위가 비었으면 빛 쪽 외곽선이다
+        const litSide = (!this.has(x - 1, y) || !this.has(x, y - 1)) && (this.has(x + 1, y) || this.has(x, y + 1));
+        if (litSide) this.set(x, y, Art.mix(c, this.get(x + 1, y) || this.get(x, y + 1) || c, amount || 0.35));
+      }
+    }
+    return this;
+  }
+
+  flipX() {
+    const p = new Pix(this.w, this.h);
+    for (let y = 0; y < this.h; y++) for (let x = 0; x < this.w; x++) p.c[y * this.w + (this.w - 1 - x)] = this.c[y * this.w + x];
+    return p;
+  }
+
+  // 같은 모양을 한 색으로 (맞을 때 번쩍이는 흰 실루엣)
+  silhouette(col) {
+    const p = new Pix(this.w, this.h);
+    for (let i = 0; i < this.c.length; i++) if (this.c[i]) p.c[i] = col;
+    return p;
+  }
+
+  canvas() {
+    const cv = makeCanvas(this.w, this.h), ctx = cv.getContext('2d');
+    const img = ctx.createImageData(this.w, this.h);
+    for (let i = 0; i < this.c.length; i++) {
+      const col = this.c[i];
+      if (!col) continue;
+      const v = Art.rgb(col);
+      img.data[i * 4] = v[0]; img.data[i * 4 + 1] = v[1]; img.data[i * 4 + 2] = v[2]; img.data[i * 4 + 3] = 255;
+    }
+    ctx.putImageData(img, 0, 0);
+    return cv;
+  }
+
+  /* 명암 값(0~1)을 단계 하나로. dither 면 두 단계 사이를 바둑판으로 섞는다 */
+  static pick(ramp, lit, x, y, dither) {
+    const f = Util.clamp(lit, 0, 1) * (ramp.length - 1);
+    let i = Math.floor(f);
+    const frac = f - i;
+    /* 디더는 두 단계의 **딱 경계에서만** 바둑판으로 섞는다.
+       전 구간을 디더하면 바둑판이 넓게 깔려 오히려 지저분하다 (단계 사이 띠를 좁게) */
+    if (dither && frac > 0.32 && frac < 0.68) {
+      if (((x + y) & 1) === 0) i++;
+    } else if (frac > 0.5) i++;
+    return ramp[Util.clamp(i, 0, ramp.length - 1)];
+  }
+
+  // 캔버스를 다시 픽셀 버퍼로 (옛 문자열 도트를 새 규칙으로 다듬을 때)
+  static from(cv) {
+    const p = new Pix(cv.width, cv.height);
+    const d = cv.getContext('2d').getImageData(0, 0, cv.width, cv.height).data;
+    for (let i = 0; i < p.c.length; i++) {
+      if (d[i * 4 + 3] < 128) continue;
+      p.c[i] = '#' + [d[i * 4], d[i * 4 + 1], d[i * 4 + 2]].map(v => v.toString(16).padStart(2, '0')).join('');
+    }
+    return p;
+  }
+}
+
+</script>
+  <script>
+// ── js/art_terrain.js
+'use strict';
+
+/* 지형 — 바닥 타일과 바닥 굽기 (그래픽 전면 개편).
+
+   예전 바닥은 바탕색 위에 **무작위 점**을 스무 개씩 흩뿌린 것이었다. 1배로 보면 모래알 같지만
+   화면 가득 깔리면 지글거리는 잡음이 된다 (pixel-art 지침이 이름까지 붙여 금지하는 것).
+
+   새 바닥은 세 가지로 만든다.
+     1. 타일마다 **설계된 무늬** — 풀잎 다발, 빛 받은 조약돌, 물결, 바람결, 갈라진 금.
+        자리만 시드로 정하고, 모양은 늘 같은 규칙(왼쪽 위에서 오는 빛)으로 그린다
+     2. 타일 경계를 **부드럽게 휜다** — 칸 단위로 뚝뚝 끊기던 풀·흙 경계를
+        픽셀마다 조금씩(±3px) 비틀어 읽어서 둥글고 자연스러운 경계로 만든다
+     3. 경계에 **재질 규칙**을 둔다 — 물가는 흰 거품 + 젖은 흙, 풀과 길 사이는 풀 그늘,
+        나머지는 바둑판 디더 두 줄로 섞는다 (무작위 섞기 대신)
+
+   타일 그림은 SPRITES.groundSets 그대로 들어가므로 보스 방 바닥처럼 타일을 직접 찍는 쪽도 함께 좋아진다. */
+
+const Terrain = {
+  R: null,   // 재질별 명암 단계
+
+  initRamps() {
+    const r = (h, s, n, lo, hi, shift) => Art.ramp(h, s, n, lo, hi, shift);
+    this.R = {
+      grass:      r(100, 44, 6, 18, 62),
+      shadeGrass: r(132, 36, 6, 11, 42),
+      dirt:       r(30, 34, 6, 17, 60),
+      shore:      r(40, 40, 6, 40, 80),
+      water:      r(205, 56, 6, 16, 66),
+      stone:      r(228, 9, 6, 16, 66, 0.12),
+      gravel:     r(30, 8, 6, 14, 60, 0.1),
+      dsand:      r(41, 56, 6, 42, 86),
+      cracked:    r(24, 42, 6, 18, 58),
+      snow:       r(206, 34, 6, 58, 97, 0.12),
+      shadeSnow:  r(214, 30, 6, 46, 84, 0.12),
+      ice:        r(197, 50, 6, 30, 86, 0.14),
+      frost:      r(210, 20, 6, 40, 84, 0.12),
+      frozen:     r(212, 52, 6, 12, 50, 0.14),
+    };
+  },
+
+  /* ── 무늬 붓 ─────────────────────────────────────────────
+     모든 무늬는 타일 끝에서 한 칸 안쪽에만 놓는다 — 그래야 같은 재질끼리 이어 붙여도 이음매가 안 보인다. */
+
+  // 부드러운 얼룩 — 큰 단위의 명암 변화. 가장자리는 바둑판으로 풀어준다 (무작위가 아니라 순서 디더)
+  patch(p, cx, cy, rx, ry, col) {
+    for (let y = Math.floor(cy - ry); y <= Math.ceil(cy + ry); y++) {
+      for (let x = Math.floor(cx - rx); x <= Math.ceil(cx + rx); x++) {
+        const d = ((x + 0.5 - cx) / rx) ** 2 + ((y + 0.5 - cy) / ry) ** 2;
+        if (d > 1) continue;
+        const wx = (x + 16) % 16, wy = (y + 16) % 16;   // 무늬는 감싸서 이어진다
+        if (d > 0.55 && ((wx + wy) & 1)) continue;      // 바깥 고리는 한 칸 건너 하나
+        p.set(wx, wy, col);
+      }
+    }
+  },
+
+  // 풀잎 다발 — 잎 두세 장, 뿌리는 어둡고 끝은 빛을 받는다
+  blades(p, x, y, R, base) {
+    const n = 2 + ((x * 7 + y * 3) % 2);
+    for (let k = 0; k < n; k++) {
+      const bx = x + k * 2 - (n === 3 ? 1 : 0), h = (k === 1 ? 3 : 2);   // 가운데 잎이 가장 길다
+      p.set(bx, y, R[base - 1]);                                         // 뿌리 — 그늘
+      for (let j = 1; j < h; j++) p.set(bx, y - j, j === h - 1 ? R[base + 1] : R[base]);   // 끝은 빛을 받는다
+    }
+  },
+
+  // 조약돌 — 왼쪽 위가 밝고 오른쪽 아래가 어둡다 (빛 하나)
+  pebble(p, x, y, R, big) {
+    if (big) {
+      p.set(x, y, R[4]); p.set(x + 1, y, R[3]);
+      p.set(x, y + 1, R[3]); p.set(x + 1, y + 1, R[1]);
+      p.set(x + 2, y + 1, R[0]);
+    } else {
+      p.set(x, y, R[4]); p.set(x + 1, y, R[1]);
+    }
+  },
+
+  // 물결·바람결 — 가로 한 줄 어둡고, 바로 위 한 줄은 빛 받은 등성이
+  ripple(p, x, y, len, dark, lit) {
+    for (let i = 0; i < len; i++) {
+      p.set(x + i, y, dark);
+      if (i > 0 && i < len - 1) p.set(x + i, y - 1, lit);
+    }
+  },
+
+  // 갈라진 금 — 지그재그. 금 왼쪽 위 칸은 밝게(깨진 가장자리가 빛을 받는다)
+  crack(p, x, y, len, rng, dark, lit) {
+    for (let i = 0; i < len; i++) {
+      p.set(x, y, dark);
+      if (lit && !p.get(x - 1, y - 1)) p.set(x - 1, y - 1, lit);
+      if (rng() < 0.55) x++; else y++;
+      if (rng() < 0.25) y--;
+      if (x > 14 || y > 14 || y < 1) break;
+    }
+  },
+
+  /* ── 타일 ────────────────────────────────────────────── */
+
+  // 바탕을 채운 16x16 버퍼
+  base(col) {
+    const p = new Pix(16, 16);
+    p.rect(0, 0, 16, 16, col);
+    return p;
+  },
+
+  grass(seed, R, opts) {
+    opts = opts || {};
+    const rng = Util.makeRng(seed);
+    const b = opts.base || 3;
+    const p = this.base(R[b]);
+    // 큰 얼룩 둘 — 바닥이 한 색으로 판판하지 않게
+    this.patch(p, rng() * 16, rng() * 16, 3 + rng() * 2, 2 + rng() * 1.5, Art.mix(R[b - 1], R[b], 0.45));
+    if (rng() < 0.6) this.patch(p, rng() * 16, rng() * 16, 2.5, 1.6, Art.mix(R[b], R[b + 1], 0.5));
+    // 풀잎 다발 — 서너 무리
+    const n = opts.blades === undefined ? 3 + Math.floor(rng() * 2) : opts.blades;
+    for (let i = 0; i < n; i++) this.blades(p, 2 + Math.floor(rng() * 11), 4 + Math.floor(rng() * 10), R, b);
+    // 햇빛 반짝임 하나 — 의도한 점은 무늬다 (잡음이 아니다)
+    if (!opts.dull && rng() < 0.7) p.set(2 + Math.floor(rng() * 12), 2 + Math.floor(rng() * 12), R[b + 2] || R[R.length - 1]);
+    return p.canvas();
+  },
+
+  dirt(seed, R) {
+    const rng = Util.makeRng(seed);
+    const p = this.base(R[2]);
+    // 얼룩은 한 단 어두운 색이 아니라 **반 단** — 한 단이면 표범 무늬처럼 점이 튄다
+    if (rng() < 0.7) this.patch(p, rng() * 16, rng() * 16, 3.5, 2.2, Art.mix(R[1], R[2], 0.5));
+    if (rng() < 0.5) this.patch(p, rng() * 16, rng() * 16, 2.5, 1.6, Art.mix(R[2], R[3], 0.5));
+    const n = 1 + Math.floor(rng() * 2);
+    for (let i = 0; i < n; i++) this.pebble(p, 1 + Math.floor(rng() * 12), 1 + Math.floor(rng() * 12), R, rng() < 0.4);
+    return p.canvas();
+  },
+
+  sand(seed, R) {
+    const rng = Util.makeRng(seed);
+    const p = this.base(R[3]);
+    this.patch(p, rng() * 16, rng() * 16, 3, 1.8, Art.mix(R[2], R[3], 0.5));
+    if (rng() < 0.55) this.ripple(p, 1 + Math.floor(rng() * 9), 3 + Math.floor(rng() * 11), 3 + Math.floor(rng() * 3), Art.mix(R[2], R[3], 0.4), R[4]);
+    if (rng() < 0.4) p.set(2 + Math.floor(rng() * 12), 2 + Math.floor(rng() * 12), R[5]);
+    return p.canvas();
+  },
+
+  water(seed, R) {
+    const rng = Util.makeRng(seed);
+    const p = this.base(R[2]);
+    this.patch(p, rng() * 16, rng() * 16, 4, 2.5, R[1]);   // 깊은 곳
+    // 물결 머리 — 짧은 밝은 줄과 그 아래 그늘
+    for (let i = 0; i < 2; i++) {
+      const x = 1 + Math.floor(rng() * 10), y = 2 + Math.floor(rng() * 12), len = 2 + Math.floor(rng() * 3);
+      for (let k = 0; k < len; k++) { p.set(x + k, y, R[4]); p.set(x + k + 1, y + 1, R[1]); }
+    }
+    return p.canvas();
+  },
+
+  // 보스 방 돌바닥 — 판석. 줄눈은 타일 위·왼쪽 끝에만 있어서 이어 붙이면 판석 격자가 된다
+  stone(seed, R) {
+    const rng = Util.makeRng(seed);
+    const p = this.base(R[2]);
+    const split = 5 + Math.floor(rng() * 6);           // 판석 하나를 둘로 나누는 자리
+    for (let i = 0; i < 16; i++) { p.set(i, 0, R[0]); p.set(0, i, R[0]); }
+    for (let i = 1; i < 16; i++) p.set(split, i, R[0]);
+    // 판석마다 왼쪽 위 모서리에 빛 — 돌이 살짝 솟아 보인다
+    for (let i = 1; i < 16; i++) { p.set(i, 1, R[3]); if (i !== split && i !== split + 1) p.set(1, i, R[3]); p.set(split + 1, i, R[3]); }
+    for (let i = 2; i < 16; i++) { if (i !== split) p.set(i, 15, R[1]); }
+    this.patch(p, 4 + rng() * 8, 5 + rng() * 8, 2.5, 1.6, R[1]);
+    if (rng() < 0.5) this.pebble(p, 3 + Math.floor(rng() * 9), 4 + Math.floor(rng() * 9), R, false);
+    return p.canvas();
+  },
+
+  gravel(seed, R) {
+    const rng = Util.makeRng(seed);
+    const p = this.base(R[1]);
+    for (let i = 0; i < 6; i++) this.pebble(p, 1 + Math.floor(rng() * 12), 1 + Math.floor(rng() * 12), R, rng() < 0.5);
+    return p.canvas();
+  },
+
+  desertSand(seed, R) {
+    const rng = Util.makeRng(seed);
+    const p = this.base(R[3]);
+    this.patch(p, rng() * 16, rng() * 16, 3.5, 2, Art.mix(R[2], R[3], 0.5));
+    // 바람결 — 길고 완만하게. 한 칸씩 계단을 내려 비스듬한 물결이 된다 (타일 절반에만)
+    const waves = rng() < 0.5 ? 1 : 0;
+    for (let i = 0; i < waves; i++) {
+      let x = 1 + Math.floor(rng() * 4), y = 3 + Math.floor(rng() * 10);
+      const len = 6 + Math.floor(rng() * 5);
+      for (let k = 0; k < len && x < 15; k++, x++) {
+        p.set(x, y, R[2]); p.set(x, y - 1, R[4]);
+        if (k % 4 === 3) y += rng() < 0.5 ? 1 : -1;
+        y = Util.clamp(y, 2, 14);
+      }
+    }
+    return p.canvas();
+  },
+
+  dune(seed, R) {
+    const rng = Util.makeRng(seed);
+    const p = this.base(R[4]);
+    const n = rng() < 0.5 ? 1 : 2;
+    for (let i = 0; i < n; i++) this.ripple(p, 1 + Math.floor(rng() * 8), 3 + Math.floor(rng() * 11), 4 + Math.floor(rng() * 4), R[3], R[5]);
+    return p.canvas();
+  },
+
+  cracked(seed, R) {
+    const rng = Util.makeRng(seed);
+    const p = this.base(R[2]);
+    this.patch(p, rng() * 16, rng() * 16, 3, 2, R[3]);
+    const cracks = rng() < 0.35 ? 0 : (rng() < 0.6 ? 1 : 2);   // 금은 드물게 — 많으면 발자국처럼 보인다
+    for (let i = 0; i < cracks; i++) this.crack(p, 1 + Math.floor(rng() * 10), 2 + Math.floor(rng() * 10), 4 + Math.floor(rng() * 3), rng, R[0], R[3]);
+    return p.canvas();
+  },
+
+  snow(seed, R, shaded) {
+    const rng = Util.makeRng(seed);
+    const p = this.base(R[4]);
+    // 눈은 거의 흰색이라 잡티가 바로 드러난다 — 푸른 그늘 얼룩과 바람결만 둔다
+    this.patch(p, rng() * 16, rng() * 16, 3.5, 2, Art.mix(R[3], R[4], 0.5));
+    if (rng() < 0.4) this.ripple(p, 1 + Math.floor(rng() * 8), 4 + Math.floor(rng() * 10), 4 + Math.floor(rng() * 3), Art.mix(R[3], R[4], 0.4), R[5]);
+    if (!shaded && rng() < 0.5) p.set(2 + Math.floor(rng() * 12), 2 + Math.floor(rng() * 12), R[5]);   // 반짝이는 결정
+    return p.canvas();
+  },
+
+  ice(seed, R) {
+    const rng = Util.makeRng(seed);
+    const p = this.base(R[3]);
+    // 비스듬한 반사 — 얼음이 반들거린다 (타일마다 있으면 빗줄기처럼 보이므로 셋에 하나)
+    if (rng() < 0.35) {
+      const d = Math.floor(rng() * 16);
+      for (let i = 0; i < 16; i++) { const x = (d + i) % 16, y = i; if ((i % 8) < 3) p.set(x, y, R[4]); }
+    }
+    const cracks = rng() < 0.5 ? 1 : 0;
+    for (let i = 0; i < cracks; i++) this.crack(p, 1 + Math.floor(rng() * 10), 2 + Math.floor(rng() * 10), 4 + Math.floor(rng() * 3), rng, R[1], R[5]);
+    return p.canvas();
+  },
+
+  drift(seed, R) {
+    const rng = Util.makeRng(seed);
+    const p = this.base(R[5]);
+    const n = rng() < 0.5 ? 1 : 0;
+    for (let i = 0; i < n; i++) this.ripple(p, 1 + Math.floor(rng() * 8), 4 + Math.floor(rng() * 10), 4 + Math.floor(rng() * 4), R[4], R[5]);
+    return p.canvas();
+  },
+
+  frozen(seed, R) {
+    const rng = Util.makeRng(seed);
+    const p = this.base(R[1]);
+    this.patch(p, rng() * 16, rng() * 16, 4, 2.5, R[0]);
+    const lines = rng() < 0.5 ? 1 : 0;
+    for (let i = 0; i < lines; i++) {   // 얼음 결 — 길고 가는 밝은 선
+      const x = 1 + Math.floor(rng() * 8), y = 2 + Math.floor(rng() * 12), len = 3 + Math.floor(rng() * 4);
+      for (let k = 0; k < len; k++) p.set(x + k, y - (k > len / 2 ? 1 : 0), R[3]);
+    }
+    return p.canvas();
+  },
+
+  /* ── 바닥 굽기 ───────────────────────────────────────────
+     타일마다 drawImage 로 붙이던 것을 **픽셀마다** 다시 읽는다.
+     칸 좌표를 부드러운 노이즈로 ±3px 비틀어 읽어서 경계가 둥글어지고,
+     재질이 바뀌는 자리에 규칙대로 테두리를 넣는다. 2560x1920 한 장이 300ms 안쪽이다. */
+
+  texCache: new Map(),
+
+  // 캔버스 → 픽셀 배열 (Uint32, 0xAABBGGRR)
+  pixels(cv) {
+    let v = this.texCache.get(cv);
+    if (!v) {
+      const d = cv.getContext('2d').getImageData(0, 0, 16, 16).data;
+      v = new Uint32Array(d.buffer.slice(0));
+      this.texCache.set(cv, v);
+    }
+    return v;
+  },
+
+  bake(world, rng) {
+    const T = 16, W = world.cols, H = world.rows, w = world.w, h = world.h;
+    const tiles = world.tiles, shade = world.shade;
+
+    /* 칸마다 쓸 무늬 타일을 미리 정해 둔다 — 픽셀마다 재질을 다시 찾으면 490만 번 찾게 된다.
+       재질 열쇠 = 타일 종류 x 그늘, 변종은 칸 좌표를 섞어 고른다 (같은 칸은 늘 같은 변종) */
+    const sets = new Map();
+    const tileTex = new Array(W * H), tileKey = new Uint8Array(W * H);
+    for (let ty = 0; ty < H; ty++) for (let tx = 0; tx < W; tx++) {
+      const i = ty * W + tx, k = tiles[i] * 2 + (shade[i] ? 1 : 0);
+      let s = sets.get(k);
+      if (!s) { s = world.groundSet(tiles[i], world.groundSetName(k & 1)).map(cv => this.pixels(cv)); sets.set(k, s); }
+      tileTex[i] = s[((Math.imul(tx, 73856093) ^ Math.imul(ty, 19349663)) >>> 0) % s.length];
+      tileKey[i] = k;
+    }
+
+    /* 휨 — 8px 격자에 [-A, A] 값을 뿌리고 그 사이를 부드럽게 이어 읽는다 (점마다 무작위가 아니다).
+       물은 충돌이 칸 단위라 너무 휘면 물 위를 걷는 것처럼 보이므로 3px 로 묶는다.
+       세로 보간은 줄마다 한 번, 가로 보간만 픽셀마다 한다 */
+    const A = 3, G = 8;
+    const gw = Math.ceil(w / G) + 2, gh = Math.ceil(h / G) + 2;
+    const nx = new Float32Array(gw * gh), ny = new Float32Array(gw * gh);
+    for (let i = 0; i < nx.length; i++) { nx[i] = (rng() * 2 - 1) * A; ny[i] = (rng() * 2 - 1) * A; }
+    const S8 = new Float32Array(G);
+    for (let i = 0; i < G; i++) { const f = i / G; S8[i] = f * f * (3 - 2 * f); }
+    const rowX = new Float32Array(gw), rowY = new Float32Array(gw);
+
+    const canvas = makeCanvas(w, h);
+    const ctx = canvas.getContext('2d');
+    const img = ctx.createImageData(w, h);
+    const out = new Uint32Array(img.data.buffer);
+    const mat = new Uint8Array(w * h);      // 픽셀마다 재질 열쇠 (경계 처리용)
+    const kind = new Uint8Array(w * h);     // 픽셀마다 타일 종류
+
+    for (let py = 0; py < h; py++) {
+      const y0 = py >> 3, fy = S8[py & 7];
+      for (let gx = 0; gx < gw; gx++) {
+        const a = y0 * gw + gx, c = a + gw;
+        rowX[gx] = nx[a] + (nx[c] - nx[a]) * fy;
+        rowY[gx] = ny[a] + (ny[c] - ny[a]) * fy;
+      }
+      const tyRow = py & 15;
+      for (let px = 0; px < w; px++) {
+        const x0 = px >> 3, fx = S8[px & 7];
+        const sx = px + rowX[x0] + (rowX[x0 + 1] - rowX[x0]) * fx;
+        const sy = py + rowY[x0] + (rowY[x0 + 1] - rowY[x0]) * fx;
+        let tx = (sx / T) | 0, ty = (sy / T) | 0;
+        if (sx < 0) tx = 0; else if (tx >= W) tx = W - 1;
+        if (sy < 0) ty = 0; else if (ty >= H) ty = H - 1;
+        const ti = ty * W + tx, o = py * w + px;
+        out[o] = tileTex[ti][tyRow * 16 + (px & 15)];
+        mat[o] = tileKey[ti];
+        kind[o] = tiles[ti];
+      }
+    }
+
+    this.edges(out, mat, kind, w, h, world.spec.theme);
+    ctx.putImageData(img, 0, 0);
+    return canvas;
+  },
+
+  /* 경계 — 재질이 바뀌는 픽셀 쌍마다 규칙 하나.
+       물 ↔ 땅    물 쪽 1px 흰 거품, 땅 쪽 1px 젖은 그늘 (물가가 또렷하게 읽힌다)
+       풀 ↔ 길    길 쪽 1px 풀 그늘 (풀이 길보다 조금 높아 보인다)
+       그 밖       휜 경계를 그대로 둔다 (양쪽을 섞으면 지퍼 같은 톱니가 진다 — 단단한 경계가 낫다) */
+  edges(out, mat, kind, w, h, theme) {
+    const WATER = TILE_WATER, GRASS = TILE_GRASS, MEADOW = TILE_MEADOW;
+    const mul = (c, f) => {
+      const r = Math.round((c & 255) * f), g = Math.round(((c >> 8) & 255) * f), b = Math.round(((c >> 16) & 255) * Math.min(1.1, f + 0.08));
+      return (0xff << 24) | (Math.min(255, b) << 16) | (Math.min(255, g) << 8) | Math.min(255, r);
+    };
+    const lift = (c, t) => {
+      const r = c & 255, g = (c >> 8) & 255, b = (c >> 16) & 255;
+      return (0xff << 24) | (Math.round(b + (255 - b) * t) << 16) | (Math.round(g + (255 - g) * t) << 8) | Math.round(r + (255 - r) * t);
+    };
+    // 픽셀마다 많아야 한 번만 바꾸므로(done) 바꾸기 전의 out 이 곧 원래 색이다 — 2천만 칸짜리 복사본이 필요 없다
+    const src = out;
+    const raised = (k) => k === GRASS || k === MEADOW;
+    const done = new Uint8Array(w * h);
+
+    const apply = (a, b) => {
+      if (mat[a] === mat[b]) return;
+      const ka = kind[a], kb = kind[b];
+      if (ka === WATER || kb === WATER) {
+        if (ka === WATER && kb === WATER) return;   // 물끼리(그늘만 다르다)는 그대로
+        const wtr = ka === WATER ? a : b, land = ka === WATER ? b : a;
+        if (!done[wtr]) { out[wtr] = lift(src[wtr], theme === 'snow' ? 0.35 : 0.55); done[wtr] = 1; }
+        if (!done[land]) { out[land] = mul(src[land], 0.7); done[land] = 1; }
+        return;
+      }
+      if (raised(ka) !== raised(kb) && theme !== 'desert') {
+        const low = raised(ka) ? b : a;
+        if (!done[low]) { out[low] = mul(src[low], 0.78); done[low] = 1; }
+      }
+      // 그 밖의 경계(그늘 ↔ 볕, 모래 ↔ 흙)는 휜 경계 그대로 둔다 — 섞으면 톱니가 진다
+    };
+
+    for (let y = 0; y < h; y++) {
+      const row = y * w, last = y + 1 < h;
+      for (let x = 0; x < w; x++) {
+        const o = row + x, m = mat[o];
+        if (x + 1 < w && mat[o + 1] !== m) apply(o, o + 1);
+        if (last && mat[o + w] !== m) apply(o, o + w);
+      }
+    }
+  },
+};
+
+</script>
+  <script>
+// ── js/art_props.js
+'use strict';
+
+/* 소품 — 나무·바위·수풀·선인장·얼음 (그래픽 전면 개편).
+
+   예전 나무는 둥근 덩어리 여섯 개를 '어두운 테두리 → 밝은 가운데' 순으로 겹친 뒤
+   잎 질감이라며 무작위 점을 130개 뿌린 것이었다. 지침이 말하는 **베개 음영**
+   (가장자리만 고르게 어둡게)에 **잡음**까지 얹힌 셈이라, 화면 가득 서 있으면 녹색 솜뭉치로 보였다.
+
+   새 소품은 모두 같은 규칙으로 그린다.
+     - 빛은 하나, 왼쪽 위. 잎 덩어리·바위 면·줄기 모두 그 빛을 받는다 (Pix.blob / shadeMask)
+     - 색은 Art.ramp — 그림자는 푸르게, 빛은 따뜻하게 옮겨간다
+     - 외곽선은 자동 1px, 재질마다 그 재질의 가장 어두운 색 (Pix.outline)
+     - 질감은 점이 아니라 **형태**로 — 잎 덩어리, 나무껍질 홈, 바위 면, 선인장 골
+     - 바닥 그림자는 그림 안에 넣지 않고 **바닥에 굽는다** (빛 반대편, 오른쪽 아래로)
+
+   크기는 예전과 같다 — 배치·충돌·발 위치가 하나도 안 바뀐다. */
+
+const Props = {
+  R: null,
+
+  initRamps() {
+    const r = (h, s, n, lo, hi, sh) => Art.ramp(h, s, n, lo, hi, sh);
+    this.R = {
+      leaf:    [r(104, 46, 6, 12, 60), r(96, 48, 6, 13, 62), r(112, 44, 6, 11, 58), r(88, 50, 6, 14, 63)],
+      pine:    r(150, 38, 6, 9, 48),
+      bark:    r(24, 36, 5, 12, 46),
+      deadBark: r(30, 16, 5, 14, 56),
+      blossom: r(340, 62, 4, 52, 88),
+      fruit:   r(2, 70, 4, 30, 62),
+      stone:   r(226, 10, 6, 16, 72, 0.14),
+      moss:    r(98, 40, 4, 22, 50),
+      bush:    r(110, 44, 5, 14, 56),
+      berry:   r(350, 66, 3, 30, 60),
+      cactus:  r(118, 40, 6, 12, 58),
+      sandRock: r(22, 40, 6, 20, 70),
+      palmLeaf: r(96, 50, 5, 14, 54),
+      palmBark: r(30, 40, 5, 22, 58),
+      snow:    r(206, 30, 4, 70, 98, 0.1),
+      snowPine: r(165, 30, 5, 10, 40),
+      ice:     r(196, 56, 6, 22, 92, 0.16),
+      frostLeaf: r(190, 34, 5, 16, 60),
+      dryLeaf: r(52, 40, 5, 18, 58),
+    };
+  },
+
+  /* ── 공용 붓 ──────────────────────────────────────────── */
+
+  // 줄기 — 왼쪽이 밝고 오른쪽이 어둡다. 홈은 세로로, 뿌리는 아래에서 벌어진다
+  trunk(p, cx, top, bottom, w, R, grooves) {
+    for (let y = top; y <= bottom; y++) {
+      const flare = y >= bottom - 1 ? (y === bottom ? 2 : 1) : 0;   // 뿌리
+      const x0 = cx - Math.floor(w / 2) - flare, x1 = cx + Math.ceil(w / 2) - 1 + flare;
+      for (let x = x0; x <= x1; x++) {
+        const t = (x - x0) / Math.max(1, x1 - x0);           // 0 왼쪽(빛) → 1 오른쪽(그늘)
+        const idx = t < 0.25 ? 3 : (t < 0.6 ? 2 : (t < 0.85 ? 1 : 0));
+        p.set(x, y, R[idx]);
+      }
+    }
+    // 나무껍질 홈 — 끊어진 세로줄
+    if (grooves) {
+      for (const gx of grooves) {
+        for (let y = top + 2; y < bottom - 1; y++) if (((y + gx) % 5) !== 0) p.set(cx + gx, y, R[0]);
+      }
+    }
+  },
+
+  // 잎 덩어리 무리 — 덩어리마다 따로 빛을 받는다. 아래쪽 덩어리일수록 그늘에 든다
+  canopy(p, clumps, R, cy) {
+    for (const c of clumps) {
+      const low = (c[1] - cy) / 14;                           // 아래로 갈수록 어둡다
+      p.blob(c[0], c[1], c[2], c[2] * 0.9, R, { dither: true, ambient: 0.22, bias: -Math.max(0, low) * 0.18 });
+    }
+  },
+
+  // 실루엣 가장자리에 잎 끝 몇 개를 삐죽 내어 동그란 덩어리 윤곽을 깬다
+  leafEdge(p, R, rng, n) {
+    const edge = [];
+    for (let y = 1; y < p.h - 1; y++) {
+      for (let x = 1; x < p.w - 1; x++) {
+        if (p.has(x, y)) continue;
+        const below = p.get(x, y + 1), right = p.get(x + 1, y), left = p.get(x - 1, y);
+        if (below && R.indexOf(below) >= 0) edge.push([x, y, R.indexOf(below) >= 3 ? R[4] : R[2]]);
+        else if ((right || left) && R.indexOf(right || left) >= 0 && rng() < 0.4) edge.push([x, y, R[1]]);
+      }
+    }
+    for (let i = 0; i < n && edge.length; i++) {
+      const e = edge.splice(Math.floor(rng() * edge.length), 1)[0];
+      p.set(e[0], e[1], e[2]);
+    }
+  },
+
+  // 잎 덩어리 아래 그늘 — 줄기 윗부분이 잎에 가려 어둡다
+  underShade(p, x0, x1, y, rows, R) {
+    for (let j = 0; j < rows; j++) for (let x = x0; x <= x1; x++) {
+      const c = p.get(x, y + j);
+      if (c && R.indexOf(c) > 0) p.set(x, y + j, R[Math.max(0, R.indexOf(c) - (rows - j))]);
+    }
+  },
+
+  /* ── 나무 ─────────────────────────────────────────────── */
+
+  /* 활엽수 (34x46). kind: round / oval / wide / blossom / fruit
+     덩어리 배치가 실루엣을 정한다 — 실루엣만 칠해 봐도 '나무'로 읽혀야 한다 */
+  tree(seed, kind, li) {
+    const rng = Util.makeRng(seed);
+    const R = this.R.leaf[li % this.R.leaf.length], B = this.R.bark;
+    const p = new Pix(34, 46);
+    this.trunk(p, 17, 24, 43, 6, B, [-1, 1]);
+    this.underShade(p, 13, 21, 24, 3, B);
+
+    const j = () => (rng() - 0.5) * 2;
+    let clumps;
+    if (kind === 'oval') {
+      clumps = [[17, 9, 7], [12, 15, 7], [22, 15, 7], [17, 19, 8], [11, 23, 6], [23, 23, 6], [17, 26, 6]];
+    } else if (kind === 'wide') {
+      clumps = [[17, 12, 8], [9, 17, 7], [25, 17, 7], [5, 22, 5], [29, 22, 5], [13, 24, 7], [21, 24, 7]];
+    } else {
+      clumps = [[17, 10, 8], [10, 15, 7], [24, 15, 7], [7, 22, 6], [27, 22, 6], [12, 25, 7], [22, 25, 7], [17, 21, 8]];
+    }
+    clumps = clumps.map(c => [c[0] + j(), c[1] + j() * 0.6, c[2] + (rng() < 0.3 ? -1 : 0)]);
+    // 위쪽 덩어리부터 그리고 아래 덩어리를 겹친다 (아래가 앞이다)
+    clumps.sort((a, b) => a[1] - b[1]);
+    this.canopy(p, clumps, R, 16);
+    this.leafEdge(p, R, rng, 14);
+
+    // 꽃·열매 — 빛 받는 쪽(위·왼쪽) 잎 위에만 얹는다
+    if (kind === 'blossom' || kind === 'fruit') {
+      const A = kind === 'blossom' ? this.R.blossom : this.R.fruit;
+      for (let i = 0; i < 14; i++) {
+        const x = 5 + Math.floor(rng() * 24), y = 4 + Math.floor(rng() * 22);
+        const c = p.get(x, y);
+        if (!c || R.indexOf(c) < 1) continue;
+        if (kind === 'blossom') { p.set(x, y, A[3]); if (rng() < 0.6) p.set(x + 1, y + 1, A[1]); }
+        else { p.set(x, y, A[2]); p.set(x + 1, y, A[1]); p.set(x, y + 1, A[1]); p.set(x - 0, y - 0, A[3]); }
+      }
+    }
+    return p.outline().canvas();
+  },
+
+  /* 침엽수 (30x46) — 삼각 단을 쌓는다. 단마다 아래 끝이 들쭉날쭉(가지 끝)하고,
+     왼쪽은 빛, 오른쪽은 그늘. 위 단이 아래 단에 그늘을 드리운다 */
+  pine(seed, snowy) {
+    const rng = Util.makeRng(seed);
+    const R = snowy ? this.R.snowPine : this.R.pine, B = this.R.bark, S = this.R.snow;
+    const W = snowy ? 20 : 30, H = snowy ? 36 : 46, cx = Math.floor(W / 2);
+    const p = new Pix(W, H);
+    this.trunk(p, cx, H - 11, H - 3, snowy ? 3 : 4, B, null);
+
+    const tiers = snowy ? [[2, 9, 5], [9, 10, 7], [17, 11, 9]] : [[1, 11, 6], [9, 12, 9], [18, 13, 12], [27, 13, 14]];
+    for (const [top, h, half] of tiers) {
+      for (let y = 0; y < h; y++) {
+        const k = y / (h - 1);
+        let w = Math.round(half * k);
+        // 가지 끝 — 아래 두 줄은 들쭉날쭉
+        if (y >= h - 2) w -= ((cx + y) % 3 === 0) ? 1 : 0;
+        for (let x = cx - w; x <= cx + w; x++) {
+          const t = (x - (cx - w)) / Math.max(1, 2 * w);      // 0 왼쪽 → 1 오른쪽
+          let idx = t < 0.3 ? 4 : (t < 0.55 ? 3 : (t < 0.8 ? 2 : 1));
+          if (y < 2) idx = Math.min(idx + 1, 4);              // 단 꼭대기는 빛이 닿는다
+          if (y >= h - 2) idx = Math.max(idx - 1, 0);         // 단 아래 끝은 그늘
+          // 단 사이 겹침 — 위 단 그늘이 진다
+          if (y < 3 && top > 2) idx = Math.max(0, idx - 1);
+          p.set(x, top + y, R[idx]);
+        }
+      }
+      // 잔가지 무늬 — 단 안에 아래로 내려가는 짧은 어두운 줄
+      for (let i = 0; i < half; i++) {
+        const x = cx - half + 2 + Math.floor(rng() * (half * 2 - 3)), y = top + 3 + Math.floor(rng() * (h - 5));
+        if (p.has(x, y) && p.has(x, y + 1)) { p.set(x, y, R[1]); p.set(x + 1, y + 1, R[0]); }
+      }
+      // 눈 — 단 윗면(빛 받는 쪽)에 얹힌다. 단마다 두 줄, 오른쪽으로 갈수록 그늘진 눈
+      if (snowy) {
+        for (let y = 0; y < 3; y++) {
+          const w = Math.round(half * (y / (h - 1)));
+          for (let x = cx - w; x <= cx + w; x++) {
+            if (y === 2 && (x + top) % 3 === 0) continue;     // 눈 아래 끝도 들쭉날쭉
+            const t = (x - (cx - w)) / Math.max(1, 2 * w);
+            p.set(x, top + y, t < 0.6 ? S[3] : (t < 0.85 ? S[2] : S[1]));
+          }
+        }
+      }
+    }
+    return p.outline().canvas();
+  },
+
+  /* 고사목 (26x40) — 잎 없이 가지만. 줄기와 가지 모두 왼쪽이 밝다 */
+  deadTree(seed) {
+    const rng = Util.makeRng(seed);
+    const B = this.R.deadBark;
+    const p = new Pix(26, 40);
+    this.trunk(p, 13, 12, 37, 4, B, [0]);
+    // 가지 — 줄기에서 비스듬히 위로. 끝으로 갈수록 가늘다
+    const branch = (x, y, dx, len, thick) => {
+      for (let i = 0; i < len; i++) {
+        p.set(x, y, B[dx < 0 ? 3 : 1]);
+        if (thick && i < len / 2) p.set(x, y + 1, B[dx < 0 ? 2 : 0]);
+        x += dx; if (i % 2 === 0) y--;
+        if (rng() < 0.25 && i > 2) { const sx = x, sy = y; for (let k = 0; k < 3; k++) p.set(sx - dx * 0 + (k), sy - k, B[2]); }
+      }
+    };
+    branch(12, 20, -1, 9, true);
+    branch(14, 16, 1, 10, true);
+    branch(12, 13, -1, 6, false);
+    branch(14, 12, 1, 6, false);
+    // 꼭대기 — 부러진 끝
+    for (let y = 5; y < 12; y++) { p.set(13, y, B[2]); p.set(12, y, B[3]); }
+    p.set(14, 6, B[1]); p.set(11, 7, B[3]);
+    return p.outline().canvas();
+  },
+
+  /* 얼음 기둥 (14x30) — 깎인 수정. 왼쪽 면은 빛을 받아 거의 희고, 오른쪽 면은 깊은 푸른색.
+     가운데 모서리 선이 면을 나눈다 */
+  iceSpire(seed) {
+    const rng = Util.makeRng(seed);
+    const R = this.R.ice;
+    const p = new Pix(14, 30);
+    const top = 1 + Math.floor(rng() * 4), ridge = 6 + Math.floor(rng() * 2);
+    for (let y = top; y < 30; y++) {
+      const k = (y - top) / (30 - top);
+      const half = Math.max(1, Math.round(1 + k * 5.2));
+      for (let x = 7 - half; x <= 7 + half - 1; x++) {
+        const left = x < ridge - (k < 0.2 ? 1 : 0);
+        let idx = left ? (x <= 7 - half + 1 ? 5 : 4) : (x >= 7 + half - 2 ? 1 : 2);
+        if (y > 25) idx = Math.max(0, idx - 1);               // 밑동은 눈에 묻혀 어둡다
+        p.set(x, y, R[idx]);
+      }
+    }
+    // 면 위 반사 줄 — 빛 받는 면에 비스듬히
+    for (let i = 0; i < 6; i++) { const y = top + 6 + i * 2; p.over(5 + (i % 2), y, R[5]); }
+    // 옆에 작은 결정 하나
+    const sx = rng() < 0.5 ? 2 : 10;
+    for (let y = 22; y < 29; y++) { const w = y < 25 ? 0 : 1; for (let x = sx - w; x <= sx + w; x++) p.set(x, y, x < sx ? R[4] : R[2]); }
+    return p.outline().canvas();
+  },
+
+  /* ── 수풀·바위·나무토막 ──────────────────────────────── */
+
+  /* 수풀 (18x15) — 덩어리 서넛. kind: plain / berry / flower */
+  bush(seed, R, kind) {
+    const rng = Util.makeRng(seed);
+    const p = new Pix(18, 15);
+    const cl = [[6, 9, 4.6], [12, 9, 4.6], [9, 6.5, 4.8]].map(c => [c[0] + (rng() - 0.5), c[1] + (rng() - 0.5) * 0.6, c[2]]);
+    if (rng() < 0.5) cl.push([9, 10.5, 3.6]);
+    cl.sort((a, b) => a[1] - b[1]);
+    for (const c of cl) p.blob(c[0], c[1], c[2], c[2] * 0.86, R, { dither: true, ambient: 0.2 });
+    this.leafEdge(p, R, rng, 5);
+    if (kind === 'berry' || kind === 'flower') {
+      const A = kind === 'berry' ? this.R.berry : this.R.blossom;
+      for (let i = 0; i < 6; i++) {
+        const x = 3 + Math.floor(rng() * 12), y = 3 + Math.floor(rng() * 8);
+        if (!p.has(x, y) || !p.has(x + 1, y + 1)) continue;
+        p.set(x, y, A[A.length - 1]); p.set(x + 1, y + 1, A[1]);
+      }
+    }
+    return p.outline().canvas();
+  },
+
+  /* 바위 — 면이 있는 덩어리. 윗면은 빛(거의 평평), 왼쪽 옆면 중간, 오른쪽 아래 면은 그늘.
+     둥근 공처럼 칠하면 베개가 되므로 **면을 나눠** 칠한다 */
+  rock(seed, w, h, R, opts) {
+    opts = opts || {};
+    const rng = Util.makeRng(seed);
+    const p = new Pix(w, h);
+    const cx = w / 2, cy = h / 2 + 0.5, rx = w / 2 - 1, ry = h / 2 - 1;
+    // 울퉁불퉁한 외곽 — 각도마다 반지름을 조금씩 흔든다 (8방향 값을 이어서)
+    const bumps = Array.from({ length: 8 }, () => 0.86 + rng() * 0.16);
+    const rad = (a) => { const f = (a / (Math.PI * 2)) * 8; const i = Math.floor(f) % 8, j = (i + 1) % 8, u = f - Math.floor(f); return bumps[i] * (1 - u) + bumps[j] * u; };
+    const inside = (x, y) => {
+      const dx = (x + 0.5 - cx) / rx, dy = (y + 0.5 - cy) / ry;
+      const a = Math.atan2(dy, dx) + Math.PI;
+      return dx * dx + dy * dy <= rad(a) * rad(a) && y >= 1;
+    };
+    const top = cy - ry * 0.35;                               // 윗면이 끝나는 높이
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+      if (!inside(x, y)) continue;
+      const dx = (x + 0.5 - cx) / rx;
+      let idx;
+      if (y < top) idx = dx < 0.2 ? 5 : 4;                    // 윗면 — 빛
+      else if (dx < -0.25) idx = 3;                           // 왼쪽 옆면
+      else if (dx < 0.35) idx = 2;                            // 앞면
+      else idx = 1;                                           // 오른쪽 — 그늘
+      if (y >= h - 2) idx = Math.max(0, idx - 1);             // 바닥에 닿는 줄
+      p.set(x, y, R[idx]);
+    }
+    // 윗면과 옆면 사이 모서리 — 한 줄 밝게 (면이 꺾이는 자리가 빛을 잡는다)
+    for (let x = 0; x < w; x++) { const y = Math.floor(top); if (p.has(x, y) && p.has(x, y + 1)) p.set(x, y, R[5]); }
+    // 금 하나
+    if (w > 10) { let x = Math.floor(cx + rx * 0.2), y = Math.floor(top) + 1; for (let k = 0; k < 3; k++) { p.over(x, y, R[0]); x += rng() < 0.5 ? 1 : 0; y++; } }
+    // 이끼·눈 — 윗면에만
+    if (opts.cap) {
+      for (let x = 0; x < w; x++) for (let y = 0; y < top + 1; y++) {
+        if (!p.has(x, y)) continue;
+        if (opts.cap === 'moss' && rng() < 0.45) p.set(x, y, this.R.moss[(x + y) % 2 ? 2 : 3]);
+        if (opts.cap === 'snow') p.set(x, y, this.R.snow[(x / w) < 0.6 ? 3 : 2]);
+      }
+    }
+    return p.outline().canvas();
+  },
+
+  /* 그루터기 (15x13) — 윗면에 나이테, 옆면은 나무껍질 (왼쪽 빛) */
+  stump(seed) {
+    const B = this.R.bark, p = new Pix(15, 13);
+    this.trunk(p, 7, 4, 11, 9, B, [-2, 2]);
+    // 윗면 — 밝은 속살 타원과 나이테
+    const W = Art.ramp(34, 40, 4, 40, 74);
+    for (let y = 1; y <= 5; y++) for (let x = 2; x <= 12; x++) {
+      const q = ((x - 7) / 5.2) ** 2 + ((y - 3) / 2.3) ** 2;
+      if (q > 1) continue;
+      p.set(x, y, q > 0.7 ? W[1] : (q > 0.35 ? W[3] : W[2]));
+    }
+    p.set(7, 3, W[0]); p.set(8, 3, W[1]);
+    return p.outline().canvas();
+  },
+
+  /* 쓰러진 통나무 (22x11) — 위가 밝고 아래가 그늘. 왼쪽 끝에 나이테 단면 */
+  log(seed) {
+    const rng = Util.makeRng(seed);
+    const B = this.R.bark, W = Art.ramp(34, 40, 4, 40, 74), p = new Pix(22, 11);
+    for (let y = 2; y <= 9; y++) for (let x = 3; x <= 20; x++) {
+      const t = (y - 2) / 7;
+      p.set(x, y, B[t < 0.2 ? 3 : (t < 0.5 ? 2 : (t < 0.8 ? 1 : 0))]);
+      if (y === 5 && (x % 4) === 1) p.set(x, y, B[0]);      // 껍질 홈
+    }
+    for (let y = 2; y <= 9; y++) for (let x = 1; x <= 4; x++) {
+      const q = ((x - 2.5) / 2) ** 2 + ((y - 5.5) / 4) ** 2;
+      if (q <= 1) p.set(x, y, q > 0.55 ? W[1] : W[3]);
+    }
+    p.set(2, 5, W[0]);
+    if (rng() < 0.6) { p.set(12, 1, this.R.moss[2]); p.set(13, 1, this.R.moss[3]); p.set(13, 2, this.R.moss[1]); }
+    return p.outline().canvas();
+  },
+
+  /* 꽃 (5x6) — 꽃잎 넷, 가운데 꽃술, 줄기와 잎 하나 */
+  flower(hue) {
+    const A = Art.ramp(hue, 70, 3, 40, 84), G = this.R.leaf[0];
+    const p = new Pix(5, 6);
+    p.set(2, 3, G[2]); p.set(2, 4, G[2]); p.set(2, 5, G[1]); p.set(3, 4, G[3]);
+    p.set(2, 0, A[2]); p.set(1, 1, A[2]); p.set(3, 1, A[1]); p.set(2, 2, A[1]);
+    p.set(2, 1, '#ffe9a8');
+    return p.canvas();
+  },
+
+  /* 흔들리는 풀포기 (13x13) — 잎 일곱. 뿌리는 그늘, 끝은 빛. lean 만큼 끝이 기운다 */
+  tuft(seed, lean, R) {
+    const rng = Util.makeRng(seed);
+    const p = new Pix(13, 13);
+    for (let i = 0; i < 7; i++) {
+      const bx = 2 + Math.floor(rng() * 9), h = 5 + Math.floor(rng() * 6);
+      const shade = bx > 7 ? -1 : 0;                         // 오른쪽 잎은 그늘에
+      for (let k = 0; k < h; k++) {
+        const t = k / h;
+        const x = bx + Math.round(lean * t * t * 2);
+        const idx = k < 2 ? 1 : (k > h - 3 ? 4 : 3);
+        p.set(x, 12 - k, R[Math.max(0, idx + shade)]);
+      }
+    }
+    return p.canvas();
+  },
+
+  /* ── 사막 ─────────────────────────────────────────────── */
+
+  /* 기둥 선인장 (22x40) — 세로 골이 진다. 골마다 왼쪽은 빛, 오른쪽은 그늘 */
+  cactus(seed) {
+    const rng = Util.makeRng(seed);
+    const R = this.R.cactus, p = new Pix(22, 40);
+    const column = (x0, y0, y1, w) => {
+      for (let y = y0; y <= y1; y++) for (let x = x0; x < x0 + w; x++) {
+        if (y === y0 && (x === x0 || x === x0 + w - 1)) continue;   // 위가 둥글다
+        const t = (x - x0) / (w - 1);
+        let idx = t < 0.2 ? 4 : (t < 0.45 ? 3 : (t < 0.75 ? 2 : 1));
+        if (((x - x0) % 2) === 1 && w > 4) idx = Math.max(0, idx - 1);   // 골
+        p.set(x, y, R[idx]);
+      }
+    };
+    column(8, 3, 37, 6);
+    const armL = 13 + Math.floor(rng() * 6), armR = 10 + Math.floor(rng() * 7);
+    column(3, armL - 8, armL, 4); for (let x = 5; x < 9; x++) { p.set(x, armL, R[2]); p.set(x, armL + 1, R[1]); }
+    column(15, armR - 7, armR, 4); for (let x = 13; x < 16; x++) { p.set(x, armR, R[2]); p.set(x, armR + 1, R[1]); }
+    // 가시 — 빛 받는 쪽에 작은 흰 점 (의도한 무늬)
+    for (let i = 0; i < 8; i++) { const y = 6 + i * 4; p.over(8, y, '#f2ecd0'); }
+    if (rng() < 0.4) { p.set(10, 2, '#ff8fa0'); p.set(11, 2, '#e56b7a'); }   // 꽃
+    return p.outline().canvas();
+  },
+
+  /* 공 선인장 (14x13) — 둥근 몸에 세로 골, 꼭대기에 꽃 */
+  barrelCactus(seed) {
+    const R = this.R.cactus, p = new Pix(14, 13);
+    p.blob(7, 7.5, 5.5, 5, R, { ambient: 0.25 });
+    for (let x = 3; x < 12; x += 2) for (let y = 3; y < 12; y++) { const c = p.get(x, y); if (c) p.set(x, y, R[Math.max(0, R.indexOf(c) - 1)]); }
+    p.set(6, 2, '#ff8fa0'); p.set(7, 2, '#ffd0d8'); p.set(8, 2, '#e56b7a'); p.set(7, 1, '#ff8fa0');
+    return p.outline().canvas();
+  },
+
+  /* 야자수 (30x44) — 휘어진 마디 줄기, 꼭대기에서 잎이 사방으로 늘어진다 */
+  palm(seed) {
+    const rng = Util.makeRng(seed);
+    const B = this.R.palmBark, L = this.R.palmLeaf, p = new Pix(30, 44);
+    const lean = rng() < 0.5 ? -1 : 1;
+    let x = 15;
+    for (let y = 41; y >= 12; y--) {
+      const k = (41 - y) / 29;
+      const cx = Math.round(15 + lean * Math.sin(k * 1.6) * 4);
+      for (let i = -1; i <= 1; i++) p.set(cx + i, y, B[i < 0 ? 3 : (i === 0 ? 2 : 1)]);
+      if (y % 3 === 0) { p.set(cx - 1, y, B[1]); p.set(cx, y, B[1]); }   // 마디
+      x = cx;
+    }
+    // 잎 — 꼭대기에서 일곱 갈래, 끝으로 갈수록 늘어진다
+    const top = 12;
+    for (let i = 0; i < 7; i++) {
+      const a = -Math.PI + (i / 6) * Math.PI + (rng() - 0.5) * 0.2;
+      for (let k = 0; k < 11; k++) {
+        const px = Math.round(x + Math.cos(a) * k * 1.25), py = Math.round(top + Math.sin(a) * k * 0.7 + k * k * 0.06);
+        const idx = Math.cos(a) < 0 ? 3 : 1;
+        p.set(px, py, L[k > 8 ? idx - 1 : idx]); p.set(px, py + 1, L[Math.max(0, idx - 1)]);
+      }
+    }
+    p.blob(x, top, 2.5, 2, L, {});
+    p.set(x - 1, top + 2, '#6b4a20'); p.set(x + 1, top + 2, '#6b4a20');   // 열매
+    return p.outline().canvas();
+  },
+
+  /* 바위기둥 (22x34) — 붉은 사암. 가로 지층 띠가 있고 왼쪽 면이 빛을 받는다 */
+  rockSpire(seed) {
+    const rng = Util.makeRng(seed);
+    const R = this.R.sandRock, p = new Pix(22, 34);
+    const topW = 3 + Math.floor(rng() * 3);
+    for (let y = 2; y < 34; y++) {
+      const k = (y - 2) / 32;
+      const half = Math.round(topW + k * (8 - topW) + Math.sin(y * 0.9 + seed) * 0.6);
+      for (let x = 11 - half; x <= 10 + half; x++) {
+        const t = (x - (11 - half)) / Math.max(1, 2 * half - 1);
+        let idx = t < 0.25 ? 4 : (t < 0.55 ? 3 : (t < 0.8 ? 2 : 1));
+        if (y % 6 === 0) idx = Math.max(0, idx - 1);          // 지층 띠
+        if (y % 6 === 1 && t < 0.5) idx = Math.min(5, idx + 1);
+        p.set(x, y, R[idx]);
+      }
+    }
+    return p.outline().canvas();
+  },
+
+  /* 짐승 뼈 (16x9) — 갈비 몇 대와 두개골 */
+  bones(seed) {
+    const R = Art.ramp(40, 18, 4, 46, 92), p = new Pix(16, 9);
+    for (let i = 0; i < 4; i++) { const x = 3 + i * 2; for (let y = 2; y < 7; y++) p.set(x + (y < 4 ? 0 : 1), y, R[y < 4 ? 3 : 2]); }
+    for (let x = 2; x < 11; x++) p.set(x, 7, R[1]);
+    p.blob(13, 4, 2.5, 2.2, R, {}); p.set(13, 4, R[0]); p.set(14, 5, R[0]);
+    return p.outline().canvas();
+  },
+
+  /* ── 물가·숲바닥 장식 ─────────────────────────────────── */
+
+  mushroom(hue) {
+    const C = Art.ramp(hue, 62, 4, 26, 66), S = Art.ramp(36, 26, 3, 70, 92);
+    const p = new Pix(9, 10);
+    for (let y = 5; y < 10; y++) for (let x = 3; x < 6; x++) p.set(x, y, S[x === 3 ? 2 : (x === 4 ? 1 : 0)]);
+    p.blob(4.5, 4, 4, 3, C, { ambient: 0.3 });
+    p.set(3, 2, S[2]); p.set(6, 3, S[2]);                     // 갓 위 흰 점
+    return p.outline().canvas();
+  },
+
+  cattail(seed) {
+    const rng = Util.makeRng(seed);
+    const G = this.R.leaf[0], H = Art.ramp(24, 46, 3, 20, 44), p = new Pix(9, 18);
+    for (let i = 0; i < 3; i++) {
+      const x = 2 + i * 2, top = 3 + Math.floor(rng() * 4);
+      for (let y = top; y < 18; y++) p.set(x, y, G[y < top + 6 ? 3 : 2]);
+      if (i !== 1) continue;
+      for (let y = top - 1; y < top + 4; y++) { p.set(x, y, H[1]); p.set(x + 1, y, H[0]); }
+      p.set(x, top - 1, H[2]);
+    }
+    return p.canvas();
+  },
+
+  lilyPad(seed) {
+    const rng = Util.makeRng(seed);
+    const G = this.R.leaf[3], p = new Pix(11, 9);
+    p.blob(5.5, 4.5, 4.8, 3.6, G, { ambient: 0.35 });
+    for (let k = 0; k < 4; k++) p.clear(5 + k, 4 - Math.floor(k / 2));   // 갈라진 틈
+    if (rng() < 0.5) { p.set(3, 3, '#ffd0e8'); p.set(4, 3, '#ffffff'); p.set(3, 2, '#f0a0c8'); }
+    return p.outline().canvas();
+  },
+
+  /* ── 바닥 그림자 굽기 ─────────────────────────────────────
+     빛이 왼쪽 위에서 오므로 그림자는 **오른쪽 아래**로 진다.
+     그림 안에 그림자를 넣으면 깊이 정렬 때 뒤의 것을 덮으므로, 바닥 그림에 직접 굽는다.
+     가장자리는 바둑판으로 풀어 부드럽게 (반투명 칠이 아니라 순서 디더). */
+  bakeShadows(world) {
+    const g = world.ground;
+    if (!g) return;
+    /* 2560x1920 을 통째로 읽고 다시 쓰면(getImageData/putImageData) 맵 하나에 70ms 가 든다.
+       반투명 칠을 줄 단위로 겹치면 같은 그림이 훨씬 싸다 — 안쪽은 한 줄씩, 가장자리는 한 칸 건너 하나 */
+    const ctx = g.getContext('2d');
+    ctx.fillStyle = 'rgba(12,16,34,0.30)';
+    for (const p of world.props) {
+      const s = p.shadow;
+      if (!s) continue;
+      const cx = p.x + s[0], cy = p.y + s[1], rx = s[2], ry = s[3];
+      for (let y = Math.floor(cy - ry); y <= Math.ceil(cy + ry); y++) {
+        const dy = (y + 0.5 - cy) / ry;
+        if (Math.abs(dy) > 1) continue;
+        const half = rx * Math.sqrt(1 - dy * dy), inner = rx * Math.sqrt(Math.max(0, 0.62 - dy * dy));
+        const x0 = Math.round(cx - half), x1 = Math.round(cx + half);
+        const i0 = Math.round(cx - inner), i1 = Math.round(cx + inner);
+        if (i1 > i0) ctx.fillRect(i0, y, i1 - i0, 1);
+        // 가장자리 반지 — 바둑판으로 한 칸 건너 하나 (부드럽게 풀린다)
+        for (let x = x0; x < i0; x++) if (((x + y) & 1) === 0) ctx.fillRect(x, y, 1, 1);
+        for (let x = Math.max(i1, x0); x < x1; x++) if (((x + y) & 1) === 0) ctx.fillRect(x, y, 1, 1);
+      }
+    }
+  },
+};
+
+</script>
+  <script>
+// ── js/art_creatures.js
+'use strict';
+
+/* 몬스터 — 원본 해상도로 그리는 생성기 (그래픽 전면 개편).
+
+   **가장 큰 문제였던 것**: 몬스터는 레벨마다 덩치가 커지는데, 그걸 16x16 도트 한 장을
+   0.78배·1.37배·2.55배로 늘려 그려서 해결했다. 정수배가 아니면 어떤 줄은 두 칸, 어떤 줄은 한 칸이 되어
+   도트가 들쭉날쭉해지고, 숨쉬기·움츠리기처럼 크기가 바뀌는 동작마다 도트가 지글거렸다
+   (pixel-art 지침이 CRITICAL 로 꼽는 '비정수 배율').
+
+   그래서 몬스터를 **크기를 받는 함수**로 다시 만들었다. 슬라임 12px 이 필요하면 12px 짜리를,
+   보스용 40px 이 필요하면 40px 짜리를 그 자리에서 새로 그린다. 늘리지 않으므로 어떤 크기에서도
+   한 도트가 한 픽셀이다. 한 번 그린 것은 (종류·크기·프레임) 별로 기억해 둔다 (Art.cached).
+
+   모두 같은 규칙: 빛은 왼쪽 위 하나, 색은 ENEMY_COLORS 에서 뽑은 색상 이동 단계,
+   외곽선은 자동 1px, 눈은 어떤 크기에서도 또렷하게 (눈이 표정의 전부다). */
+
+const Creatures = {
+  _ramps: {},
+
+  // 종류 색(ENEMY_COLORS.M)에서 명암 단계를 뽑는다
+  ramp(type, lo, hi) {
+    const key = type + ':' + lo + ':' + hi;
+    if (this._ramps[key]) return this._ramps[key];
+    const pal = ENEMY_COLORS[type] || ENEMY_COLORS.slime;
+    const hsl = Art.toHsl(pal.M);
+    return (this._ramps[key] = Art.ramp(hsl[0], Math.max(18, hsl[1]), 6, lo || 12, hi || 80));
+  },
+
+  EYE: '#140f1c',
+  GLINT: '#ffffff',
+
+  // 그림을 굳힌다 — 외곽선을 두르고, 맞았을 때는 흰 실루엣
+  finish(p, flash, outline) {
+    p.outline(outline);
+    return (flash ? p.silhouette('#ffffff') : p).canvas();
+  },
+
+  // 왼쪽을 볼 때 — 뒤집은 캔버스도 기억한다
+  _flip: new WeakMap(),
+  flip(cv) {
+    let f = this._flip.get(cv);
+    if (!f) { f = flipX(cv); this._flip.set(cv, f); }
+    return f;
+  },
+
+  // 몸 그림을 발 자리에 맞춰 찍는다 — 가운데 정렬, 바닥이 (sy + 7). 늘리지 않는다
+  blit(ctx, cv, sx, sy, lift) {
+    ctx.drawImage(cv, sx - (cv.width >> 1), Math.round(sy + 7 - cv.height + 1 - (lift || 0)));
+    return Math.round(sy + 7 - cv.height + 1 - (lift || 0));   // 머리 꼭대기 (이름표 자리)
+  },
+
+  // (종류, 크기, 프레임, 상태) 마다 한 번만 그린다
+  get(key, make) { return Art.cached('cr:' + key, make); },
+
+  // 눈 한 쌍 — 크기에 따라 1x2 / 2x2+반짝임 / 2x3+반짝임
+  eyes(p, x1, x2, y, S, opts) {
+    opts = opts || {};
+    const col = opts.color || this.EYE;
+    const big = S >= 30, mid = S >= 18;
+    for (const x of [x1, x2]) {
+      if (big) { p.rect(x, y, 2, 3, col); p.set(x, y, opts.glint || this.GLINT); }
+      else if (mid) { p.rect(x, y, 2, 2, col); p.set(x, y, opts.glint || this.GLINT); }
+      else { p.set(x, y, col); p.set(x, y + 1, col); }
+    }
+    if (opts.angry && mid) {   // 성난 눈썹 — 안쪽이 내려간다
+      p.set(x1 - 1, y - 1, col); p.set(x1, y - 1, col); p.set(x1 + 1, y, col);
+      p.set(x2 + 2, y - 1, col); p.set(x2 + 1, y - 1, col); p.set(x2, y, col);
+    }
+  },
+
+  /* ── 슬라임 ─────────────────────────────────────────────
+     물방울 모양 — 위는 둥근 돔, 아래는 바닥에 퍼진 평평한 면.
+     왼쪽 위에 반짝이는 하이라이트가 있어야 '말랑한 젤리'로 읽힌다 */
+  slime(w, h, flash, boss, type) {
+    return this.get(['slime', type || 'slime', w, h, flash ? 1 : 0, boss ? 1 : 0].join(':'), () => {
+      const R = this.ramp(type || 'slime', 14, 82);
+      const crownH = boss ? Math.max(5, Math.round(w * 0.16)) : 0;   // 왕관 자리만큼 위를 비운다
+      const p = new Pix(w + 2, h + 2 + crownH), ox = 1, oy = 1 + crownH;
+      if (boss) {
+        // 거대 슬라임의 왕관 — 세 갈래 금관, 가운데 보석. 머리에 살짝 박혀 있다
+        const G = Art.ramp(44, 82, 5, 26, 80), cx = ox + Math.round(w / 2), cw = Math.max(9, Math.round(w * 0.34));
+        const x0 = cx - (cw >> 1), base = oy + 1;
+        for (let x = x0; x < x0 + cw; x++) {
+          const k = (x - x0) / (cw - 1);
+          const spike = (k < 0.2 || (k > 0.4 && k < 0.6) || k > 0.8) ? crownH : Math.round(crownH * 0.45);
+          for (let y = base - spike; y <= base; y++) p.set(x, y, G[k < 0.35 ? 4 : (k < 0.7 ? 3 : 2)]);
+          p.set(x, base, G[1]);
+        }
+        p.set(cx, base - 2, '#ff4d6d'); p.set(cx - 1, base - 2, '#ff9aae');
+      }
+      const domeY = h * 0.56, half = w / 2;
+      const inside = (x, y) => {
+        const lx = x - ox + 0.5, ly = y - oy + 0.5;
+        if (lx < 0 || lx > w || ly < 0 || ly > h) return false;
+        let hw;
+        if (ly < domeY) { const t = (ly - domeY) / domeY; hw = half * Math.sqrt(Math.max(0, 1 - t * t)); }
+        else hw = half - (ly > h - 1.2 ? 1 : 0);
+        return Math.abs(lx - half) <= hw;
+      };
+      const S = Math.max(w, h);
+      p.shadeMask(inside, ox + w * 0.5, oy + h * 0.56, w * 0.56, h * 0.62, R, { dither: S >= 22, ambient: 0.3 });
+      // 바닥에 닿은 줄 — 한 단 어둡게 (땅에 붙어 있다)
+      for (let x = 0; x < p.w; x++) p.over(x, oy + h - 1, R[1]);
+      // 반짝임 — 왼쪽 위
+      const gx = ox + Math.round(w * 0.22), gy = oy + Math.round(h * 0.2);
+      p.over(gx, gy, Art.mix(R[5], '#ffffff', 0.7)); p.over(gx + 1, gy, Art.mix(R[5], '#ffffff', 0.5));
+      if (S >= 18) { p.over(gx, gy + 1, Art.mix(R[5], '#ffffff', 0.4)); p.over(gx + 3, gy - 1 >= oy ? gy - 1 : gy, R[5]); }
+      // 얼굴
+      const ey = oy + Math.round(h * 0.46);
+      this.eyes(p, ox + Math.round(w * 0.3), ox + Math.round(w * 0.6), ey, S, { angry: boss });
+      if (S >= 16) {   // 입 — 작은 미소 (보스는 이빨)
+        const mx = ox + Math.round(w * 0.47), my = ey + (S >= 30 ? 4 : 3);
+        if (boss) { for (let i = -2; i <= 2; i++) p.over(mx + i, my, this.EYE); p.over(mx - 1, my + 1, '#ffffff'); p.over(mx + 1, my + 1, '#ffffff'); }
+        else { p.over(mx - 1, my, R[0]); p.over(mx, my + 1, R[0]); p.over(mx + 1, my, R[0]); }
+      }
+      return this.finish(p, flash);
+    });
+  },
+
+  /* ── 버섯 ───────────────────────────────────────────────
+     갓(붉은 돔 + 흰 점) 아래 굵은 대, 대에 얼굴. 갓 아래 주름은 그늘이다 */
+  mushroom(S, grow, flash, boss) {
+    const W = Math.round(S * grow), key = ['mush', W, flash ? 1 : 0, boss ? 1 : 0].join(':');
+    return this.get(key, () => {
+      const R = this.ramp('mushroom', 14, 76), C = Art.ramp(38, 30, 5, 44, 92);
+      const w = W, h = Math.round(W * 0.98);
+      const p = new Pix(w + 2, h + 2), ox = 1, oy = 1;
+      const capH = Math.round(h * 0.52), stemW = Math.max(3, Math.round(w * 0.46)), stemTop = oy + capH - 2;
+      // 대 — 왼쪽이 밝다
+      const sx0 = ox + Math.round((w - stemW) / 2);
+      for (let y = stemTop; y < oy + h; y++) for (let x = sx0; x < sx0 + stemW; x++) {
+        const t = (x - sx0) / Math.max(1, stemW - 1);
+        p.set(x, y, C[t < 0.3 ? 4 : (t < 0.65 ? 3 : 2)]);
+      }
+      // 갓 — 아래가 평평한 돔
+      const cx = ox + w / 2, cy = oy + capH;
+      p.blob(cx, cy, w / 2, capH, R, { dither: S >= 24, ambient: 0.24, mask: (x, y) => y < cy - 0.5 });
+      // 갓 아래 주름 — 한 줄 그늘
+      for (let x = ox; x < ox + w; x++) { if (p.has(x, cy - 1)) p.set(x, Math.floor(cy - 1), R[1]); }
+      // 흰 점 — 위·왼쪽 점은 밝게, 오른쪽 아래 점은 그늘진 크림
+      const spots = S >= 24 ? [[0.3, 0.3], [0.58, 0.18], [0.72, 0.5], [0.42, 0.6], [0.16, 0.62]] : [[0.32, 0.36], [0.64, 0.3], [0.5, 0.66]];
+      for (const [sx, sy] of spots) {
+        const x = Math.round(ox + w * sx), y = Math.round(oy + capH * sy);
+        if (!p.has(x, y)) continue;
+        const lit = sx < 0.55;
+        p.set(x, y, lit ? C[4] : C[2]);
+        if (S >= 18) { p.over(x + 1, y, lit ? C[3] : C[1]); p.over(x, y + 1, lit ? C[3] : C[1]); }
+      }
+      // 얼굴 — 대 위쪽
+      const ey = stemTop + Math.max(2, Math.round((oy + h - stemTop) * 0.3));
+      this.eyes(p, sx0 + Math.round(stemW * 0.2), sx0 + Math.round(stemW * 0.62), ey, S, { angry: boss });
+      // 늙은 버섯 — 대에 주름과 수염
+      if (boss) {
+        for (let y = ey + 5; y < oy + h - 2; y += 4) for (let i = 1; i < stemW - 1; i++) if (i % 5 !== 0) p.over(sx0 + i, y, C[1]);
+        const bx = sx0 + Math.round(stemW / 2);
+        for (let i = -2; i <= 2; i++) for (let j = 0; j < 3 - Math.abs(i); j++) p.set(bx + i, ey + 3 + j, C[4 - Math.min(2, j)]);
+      }
+      return this.finish(p, flash);
+    });
+  },
+
+  /* ── 늑대 ───────────────────────────────────────────────
+     옆모습. 몸통·가슴·머리·주둥이·귀·꼬리를 따로 빛 받게 칠하고,
+     먼 쪽 다리는 한 단 어둡게 해 앞뒤를 나눈다. 걸음은 네 장(딛기·지나기·딛기·지나기). */
+  wolf(W, H, frame, pose, flash, alpha) {
+    const key = ['wolf', W, H, frame, pose, flash ? 1 : 0, alpha ? 1 : 0].join(':');
+    return this.get(key, () => {
+      const R = alpha ? Art.ramp(222, 18, 6, 10, 66) : this.ramp('wolf', 14, 78);
+      const RD = R.map((c, i) => R[Math.max(0, i - 1)]);          // 먼 쪽 다리 — 한 단 어둡다
+      const p = new Pix(W + 2, H + 2), ox = 1, oy = 1;
+      const X = (f) => ox + f * W, Y = (f) => oy + f * H;
+      const crouch = pose === 'crouch', lunge = pose === 'lunge';
+      const drop = crouch ? H * 0.1 : 0;
+      const bob = (frame === 1 || frame === 3) && !crouch ? -1 : 0;
+      const legW = Math.max(1, Math.round(W * 0.07));
+      const legTop = Y(0.58) + drop, foot = oy + H - 1;
+      const swing = Math.max(1, Math.round(W * 0.05));
+      const off = lunge ? [2, -2] : [[1, 0, -1, 0][frame], [-1, 0, 1, 0][frame]];   // [가까운 다리, 먼 다리]
+      const leg = (x, dx, ramp) => {
+        const len = foot - legTop;
+        for (let j = 0; j <= len; j++) {
+          const k = j / Math.max(1, len);
+          const lx = Math.round(x + dx * swing * k);
+          for (let i = 0; i < legW; i++) p.set(lx + i, legTop + j, ramp[i === 0 ? 3 : 2]);
+        }
+        p.set(Math.round(x + dx * swing) + legW, foot, ramp[1]);   // 발끝
+      };
+      // 먼 쪽 다리 (뒤에 그린다)
+      leg(X(0.33), lunge ? -2 : off[1], RD);
+      leg(X(0.7), lunge ? 2 : off[1], RD);
+      // 꼬리 — 덥수룩하게 뒤로
+      const tail = [[0.17, 0.4, 0.11], [0.1, 0.33, 0.1], [0.05, 0.25, 0.08]];
+      for (const [tx, ty, tr] of tail) p.blob(X(tx), Y(ty) + drop + bob, H * tr * 1.3, H * tr, R, { ambient: 0.25 });
+      // 몸통과 가슴
+      p.blob(X(0.43), Y(0.46) + drop + bob, W * 0.28, H * 0.21, R, { ambient: 0.22, dither: W >= 34 });
+      p.blob(X(0.65), Y(0.44) + drop + bob, W * 0.13, H * 0.24, R, { ambient: 0.22 });
+      // 가까운 다리
+      leg(X(0.26), lunge ? -2 : off[0], R);
+      leg(X(0.63), lunge ? 2 : off[0], R);
+      // 머리·주둥이 (웅크리면 고개가 낮아진다)
+      const hy = Y(0.29) + drop * 1.5 + bob;
+      p.blob(X(0.8), hy, W * 0.11, H * 0.17, R, { ambient: 0.25 });
+      p.blob(X(0.92), hy + H * 0.07, W * 0.08, H * 0.085, R, { ambient: 0.3 });
+      // 귀 — 세모 둘 (먼 귀는 어둡게)
+      const ear = (ex, ramp) => {
+        const eh = Math.max(2, Math.round(H * 0.15));
+        for (let j = 0; j < eh; j++) { const ww = Math.round((j / eh) * Math.max(1, W * 0.045)); for (let i = -ww; i <= ww; i++) p.set(Math.round(ex) + i, Math.round(hy - H * 0.14) - eh + j + 1, ramp[i < 0 ? 3 : 2]); }
+      };
+      ear(X(0.84), RD); ear(X(0.77), R);
+      // 등줄기 털 — 한 단 어두운 짧은 줄
+      if (W >= 18) for (let x = Math.round(X(0.28)); x < X(0.6); x += 3) p.over(x, Math.round(Y(0.27) + drop + bob), R[2]);
+      // 눈·코·입
+      const ex = Math.round(X(0.84)), ey = Math.round(hy - H * 0.05);
+      p.set(ex, ey, alpha ? '#ff5c5c' : '#ffd85a'); p.set(ex - 1, ey, this.EYE);
+      if (H >= 24) { p.set(ex + 1, ey, alpha ? '#ff9a9a' : '#fff0a0'); }
+      p.set(Math.round(X(0.99)), Math.round(hy + H * 0.04), this.EYE);
+      if (W >= 26) for (let i = 0; i < 3; i++) p.over(Math.round(X(0.9)) + i, Math.round(hy + H * 0.13), R[1]);
+      // 우두머리 — 목덜미 갈기와 흉터
+      if (alpha) {
+        const M = Art.ramp(220, 12, 4, 70, 94);
+        for (let x = Math.round(X(0.6)); x < X(0.74); x++) for (let y = Math.round(Y(0.22) + drop); y < Y(0.36) + drop; y++) if (p.has(x, y) && ((x + y) & 1)) p.set(x, y, M[2]);
+        p.over(ex - 1, ey - 2, '#c04040'); p.over(ex, ey - 1, '#c04040'); p.over(ex + 1, ey + 1, '#c04040');
+      }
+      return this.finish(p, flash);
+    });
+  },
+
+  /* ── 전갈 ───────────────────────────────────────────────
+     옆모습. 마디진 몸, 앞에 집게, 등 위로 휘어 올라간 꼬리와 빛나는 침 */
+  scorpion(W, H, frame, pose, flash) {
+    const key = ['scorp', W, H, frame, pose, flash ? 1 : 0].join(':');
+    return this.get(key, () => {
+      const R = this.ramp('scorpion', 14, 76), RD = R.map((c, i) => R[Math.max(0, i - 1)]);
+      const p = new Pix(W + 2, H + 2), ox = 1, oy = 1;
+      const X = (f) => ox + f * W, Y = (f) => oy + f * H;
+      // 다리 셋 — 먼 쪽 먼저, 프레임마다 엇갈린다
+      const legs = (ramp, phase) => {
+        const foot = oy + H - 1, by = Math.round(Y(0.62));
+        const spread = Math.max(3, Math.round(W * 0.16));
+        for (let i = 0; i < 3; i++) {
+          const bx = Math.round(X(0.34) + i * spread);
+          const kick = ((i + frame + phase) % 2 ? 1 : -1);
+          // 몸 아래에서 뒤로 비스듬히 내려 디딘다 — 프레임마다 발끝이 한 칸씩 오간다
+          const fx = bx - 2 + kick;
+          const len = Math.max(1, foot - by);
+          for (let j = 0; j <= len; j++) {
+            const x = Math.round(bx + (fx - bx) * (j / len));
+            p.set(x, by + j, ramp[j === len ? 1 : (j === 0 ? 3 : 2)]);
+          }
+        }
+      };
+      legs(RD, 1);
+      // 몸 마디
+      for (let i = 0; i < 3; i++) p.blob(X(0.34 + i * 0.13), Y(0.56), W * 0.1, H * 0.15, R, { ambient: 0.24 });
+      p.blob(X(0.72), Y(0.54), W * 0.1, H * 0.14, R, { ambient: 0.26 });   // 머리
+      // 집게 — 앞으로 뻗은 팔 + 두 갈래
+      const reach = pose === 'sting' ? 0.04 : 0;
+      p.blob(X(0.84 + reach), Y(0.56), W * 0.06, H * 0.07, R, {});
+      p.blob(X(0.93 + reach), Y(0.5), W * 0.06, H * 0.08, R, { ambient: 0.3 });
+      p.blob(X(0.93 + reach), Y(0.64), W * 0.05, H * 0.06, RD, {});
+      p.clear(Math.round(X(0.97 + reach)), Math.round(Y(0.57)));
+      legs(R, 0);
+      // 꼬리 — 등 뒤에서 위로 감아 올라 앞을 겨눈다. 마디마다 작아진다
+      const curl = pose === 'windup' ? -0.06 : (pose === 'sting' ? 0.1 : 0);
+      const seg = [[0.18, 0.5, 0.085], [0.1, 0.36, 0.08], [0.1, 0.22, 0.075], [0.18, 0.12, 0.07], [0.3 + curl, 0.1, 0.06]];
+      for (const [sx, sy, r] of seg) p.blob(X(sx), Y(sy), W * r, H * r * 1.4, R, { ambient: 0.28 });
+      // 침 — 밝은 끝
+      const tx = Math.round(X(0.38 + curl)), ty = Math.round(Y(0.16));
+      p.set(tx, ty, '#ffe8a0'); p.set(tx + 1, ty + 1, '#ffd060'); if (W >= 26) p.set(tx + 2, ty + 2, '#c08020');
+      // 눈 — 머리 위 작은 둘
+      p.set(Math.round(X(0.74)), Math.round(Y(0.47)), this.EYE); p.set(Math.round(X(0.78)), Math.round(Y(0.47)), this.EYE);
+      return this.finish(p, flash);
+    });
+  },
+
+  /* ── 선인장 몬스터 ──────────────────────────────────────
+     정면. 골 진 몸통에 팔 둘을 치켜들고, 머리에 꽃, 성난 눈 */
+  cactusMob(S, grow, flash) {
+    const W = Math.round(S * grow), key = ['cact', W, flash ? 1 : 0].join(':');
+    return this.get(key, () => {
+      const R = this.ramp('cactus', 12, 70);
+      const w = W, h = Math.round(W * 1.08);
+      const p = new Pix(w + 2, h + 2), ox = 1, oy = 1;
+      const bw = Math.max(5, Math.round(w * 0.5)), bx = ox + Math.round((w - bw) / 2), top = oy + Math.round(h * 0.12);
+      const col = (x0, y0, y1, cw) => {
+        for (let y = y0; y <= y1; y++) for (let x = x0; x < x0 + cw; x++) {
+          if (y === y0 && cw > 2 && (x === x0 || x === x0 + cw - 1)) continue;
+          const t = (x - x0) / Math.max(1, cw - 1);
+          let idx = t < 0.25 ? 4 : (t < 0.5 ? 3 : (t < 0.78 ? 2 : 1));
+          if (cw >= 5 && ((x - x0) % 2) === 1) idx = Math.max(0, idx - 1);
+          p.set(x, y, R[idx]);
+        }
+      };
+      const aw = Math.max(2, Math.round(w * 0.2));
+      const armY = top + Math.round(h * 0.42);
+      col(ox, top + Math.round(h * 0.18), armY, aw);                      // 왼팔
+      col(ox + w - aw, top + Math.round(h * 0.1), armY - 1, aw);          // 오른팔 (조금 더 높이)
+      for (let x = ox + aw - 1; x < bx + 1; x++) { p.set(x, armY, R[2]); p.set(x, armY - 1, R[3]); }
+      for (let x = bx + bw - 1; x < ox + w - aw + 1; x++) { p.set(x, armY - 1, R[2]); p.set(x, armY - 2, R[3]); }
+      col(bx, top, oy + h - 1, bw);                                        // 몸통
+      // 가시 — 빛 받는 쪽 몇 군데
+      for (let y = top + 2; y < oy + h - 2; y += 3) p.over(bx, y, '#f2ecd0');
+      // 꽃
+      const fx = bx + Math.round(bw / 2);
+      p.set(fx - 1, top - 1, '#ff8fa0'); p.set(fx, top - 2, '#ffd0d8'); p.set(fx + 1, top - 1, '#e56b7a'); p.set(fx, top - 1, '#ffe066');
+      // 성난 눈
+      this.eyes(p, bx + Math.round(bw * 0.15), bx + Math.round(bw * 0.6), top + Math.round(h * 0.2), Math.max(16, S), { angry: true });
+      return this.finish(p, flash);
+    });
+  },
+
+  /* ── 모래벌레 ───────────────────────────────────────────
+     땅속: 모래 언덕. 밖: 마디진 몸통이 솟고 꼭대기에 이빨 둘린 입 */
+  wormMound(W, flash) {
+    return this.get('mound:' + W + ':' + (flash ? 1 : 0), () => {
+      const S = Terrain.R.dsand;
+      const h = Math.max(4, Math.round(W * 0.48)), p = new Pix(W + 2, h + 2);
+      p.blob(1 + W / 2, 1 + h, W / 2, h, S, { ambient: 0.35, mask: (x, y) => y <= h });
+      // 언덕 위 모래 결
+      for (let x = 2; x < W; x += 3) p.over(x, 1 + Math.round(h * 0.55), S[2]);
+      return this.finish(p, flash);
+    });
+  },
+
+  worm(W, H, flash, lord) {
+    return this.get(['worm', W, H, flash ? 1 : 0, lord ? 1 : 0].join(':'), () => {
+      const R = lord ? Art.ramp(28, 50, 6, 14, 70) : this.ramp('sandworm', 12, 72);
+      const p = new Pix(W + 2, H + 2), ox = 1, oy = 1;
+      // 마디 — 아래는 넓고 위로 갈수록 좁아진다. 마디마다 빛 받는 둥근 고리
+      const n = Math.max(3, Math.round(H / Math.max(4, W * 0.36)));
+      for (let i = n - 1; i >= 0; i--) {
+        const k = i / (n - 1);
+        const cy = oy + H - 1 - (H - W * 0.42) * k - W * 0.22;
+        const rx = W * (0.46 - k * 0.12);
+        p.blob(ox + W / 2, cy, rx, W * 0.26, R, { ambient: 0.24 });
+        // 마디 사이 홈
+        for (let x = 0; x < p.w; x++) p.over(x, Math.round(cy + W * 0.24), R[1]);
+      }
+      // 입 — 꼭대기에 어두운 원, 둘레에 흰 이빨
+      const mx = ox + W / 2, my = oy + W * 0.3, mr = W * 0.22;
+      for (let y = Math.floor(my - mr); y <= my + mr; y++) for (let x = Math.floor(mx - mr * 1.3); x <= mx + mr * 1.3; x++) {
+        const q = ((x + 0.5 - mx) / (mr * 1.3)) ** 2 + ((y + 0.5 - my) / mr) ** 2;
+        if (q > 1) continue;
+        const rim = q > 0.55;
+        p.set(x, y, rim ? (y < my && (x % 2) === 0 ? '#f6eedf' : '#4a1c26') : '#200a12');
+      }
+      return this.finish(p, flash);
+    });
+  },
+
+  /* ── 서리 망령 ──────────────────────────────────────────
+     빛나는 불꽃 머리에 흩날리는 꼬리. 스스로 빛나므로 외곽선을 밝게 둔다 */
+  wisp(S, frame, flash) {
+    return this.get(['wisp', S, frame, flash ? 1 : 0].join(':'), () => {
+      const R = this.ramp('wisp', 30, 96);
+      const w = Math.round(S * 0.8), h = S;
+      const p = new Pix(w + 2, h + 2), ox = 1, oy = 1;
+      const hr = w * 0.42;
+      // 꼬리 — 아래로 흩어지는 불꽃 세 갈래 (프레임마다 흔들린다)
+      const sway = [0, 1, 0, -1][frame % 4];
+      for (let i = 0; i < 3; i++) {
+        const bx = ox + w * (0.3 + i * 0.2) + sway * (i === 1 ? 1 : -1);
+        for (let y = Math.round(oy + hr * 2); y < oy + h; y++) {
+          const k = (y - (oy + hr * 2)) / (h - hr * 2);
+          if (k > 0.75 - i * 0.12 + (i === 1 ? 0.2 : 0)) break;
+          p.set(Math.round(bx + Math.sin(k * 5 + i) * 0.8), y, R[k < 0.4 ? 3 : 2]);
+        }
+      }
+      // 머리 — 안쪽이 가장 밝다 (빛나는 것은 바깥이 어둡다)
+      const cx = ox + w / 2, cy = oy + hr + 1;
+      for (let y = Math.floor(cy - hr); y <= cy + hr; y++) for (let x = Math.floor(cx - hr); x <= cx + hr; x++) {
+        const q = ((x + 0.5 - cx) ** 2 + (y + 0.5 - cy) ** 2) / (hr * hr);
+        if (q > 1) continue;
+        p.set(x, y, R[q < 0.2 ? 5 : (q < 0.5 ? 4 : (q < 0.8 ? 3 : 2))]);
+      }
+      this.eyes(p, Math.round(cx - hr * 0.5), Math.round(cx + hr * 0.15), Math.round(cy - hr * 0.1), S, { color: '#0b2a40', glint: '#9fe8ff' });
+      return this.finish(p, flash, flash ? null : '#1b4a66');
+    });
+  },
+
+  /* ── 설인 ───────────────────────────────────────────────
+     정면. 어깨가 넓은 털북숭이, 긴 팔. 얼굴은 어두운 가면에 눈.
+     던질 때(wind)는 두 팔을 머리 위로 들어 눈덩이를 받친다 */
+  yeti(W, H, frame, pose, flash) {
+    return this.get(['yeti', W, H, frame, pose, flash ? 1 : 0].join(':'), () => {
+      const R = this.ramp('yeti', 16, 88), F = Art.ramp(30, 30, 4, 18, 46);
+      const p = new Pix(W + 2, H + 2), ox = 1, oy = 1;
+      const X = (f) => ox + f * W, Y = (f) => oy + f * H;
+      const step = [0, 1, 0, -1][frame % 4];
+      // 다리
+      for (const [lx, d] of [[0.34, step], [0.6, -step]]) {
+        for (let y = Math.round(Y(0.72)); y < oy + H; y++) for (let x = 0; x < Math.max(2, W * 0.16); x++) p.set(Math.round(X(lx) + x), y + (y > Y(0.9) ? 0 : 0), R[x < 1 ? 3 : 2]);
+        p.set(Math.round(X(lx)) + d, oy + H - 1, R[1]);
+      }
+      // 몸통 — 큰 덩어리
+      p.blob(X(0.5), Y(0.5), W * 0.38, H * 0.3, R, { ambient: 0.3 });
+      // 팔 — 평소엔 늘어뜨리고, 던질 땐 머리 위로
+      const up = pose === 'wind';
+      for (const side of [-1, 1]) {
+        const ax = X(0.5 + side * 0.36);
+        if (up) p.blob(ax, Y(0.16), W * 0.1, H * 0.16, R, { ambient: 0.3 });
+        else p.blob(ax, Y(0.58), W * 0.1, H * 0.2, R, { ambient: 0.3, bias: side > 0 ? -0.08 : 0 });
+      }
+      if (up) p.blob(X(0.5), Y(0.04) + 2, W * 0.16, W * 0.16, Terrain.R.snow, { ambient: 0.4 });   // 들어 올린 눈덩이
+      // 머리
+      p.blob(X(0.5), Y(0.24), W * 0.2, H * 0.15, R, { ambient: 0.32 });
+      // 털 끝 — 실루엣 가장자리를 삐죽하게
+      for (let y = 1; y < p.h - 1; y++) for (let x = 1; x < p.w - 1; x++) if (!p.has(x, y) && p.has(x, y + 1) && ((x * 7 + y * 3) % 4 === 0)) p.set(x, y, R[3]);
+      // 얼굴 가면과 눈
+      const fx = Math.round(X(0.5)), fy = Math.round(Y(0.26)), fw = Math.max(2, Math.round(W * 0.13));
+      for (let y = fy - 1; y <= fy + Math.max(2, Math.round(H * 0.06)); y++) for (let x = fx - fw; x <= fx + fw; x++) p.over(x, y, F[1]);
+      this.eyes(p, fx - fw + 1, fx + fw - 2, fy, Math.max(16, W), { color: '#0a0812', glint: '#cfe8ff', angry: true });
+      return this.finish(p, flash);
+    });
+  },
+
+  /* ── 얼음 골렘 ──────────────────────────────────────────
+     정면. 각진 덩어리들 — 면마다 위·왼쪽 모서리는 빛, 아래·오른쪽은 그늘(베벨).
+     가슴에 빛나는 심. 내리칠 때(slam)는 두 팔을 머리 위로 */
+  golem(W, H, frame, pose, flash) {
+    return this.get(['golem', W, H, frame, pose, flash ? 1 : 0].join(':'), () => {
+      const R = this.ramp('golem', 18, 90);
+      const p = new Pix(W + 2, H + 2), ox = 1, oy = 1;
+      const X = (f) => Math.round(ox + f * W), Y = (f) => Math.round(oy + f * H);
+      // 각진 덩어리 하나 — 베벨로 칠한다
+      const block = (x0, y0, x1, y1, shade) => {
+        for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
+          let idx = 3 + (shade || 0);
+          if (y === y0 || x === x0) idx = 5 + (shade || 0);
+          else if (y === y1 || x === x1) idx = 1 + (shade || 0);
+          else if (y === y0 + 1 || x === x0 + 1) idx = 4 + (shade || 0);
+          p.set(x, y, R[Util.clamp(idx, 0, 5)]);
+        }
+      };
+      const step = [0, 1, 0, -1][frame % 4];
+      block(X(0.24), Y(0.74) - Math.max(0, step), X(0.44), Y(0.99), -1);   // 다리
+      block(X(0.56), Y(0.74) - Math.max(0, -step), X(0.76), Y(0.99), -1);
+      block(X(0.18), Y(0.3), X(0.82), Y(0.78), 0);                         // 몸통
+      const up = pose === 'slam';
+      if (up) {   // 팔을 들어 올렸다
+        block(X(0.0), Y(0.0), X(0.2), Y(0.36), 0);
+        block(X(0.8), Y(0.0), X(1.0) - 1, Y(0.36), -1);
+      } else {
+        block(X(0.0), Y(0.32), X(0.2), Y(0.7), 0);
+        block(X(0.8), Y(0.32), X(1.0) - 1, Y(0.7), -1);
+      }
+      block(X(0.32), Y(0.06), X(0.68), Y(0.32), 0);                        // 머리
+      // 눈 — 가는 빛줄기
+      const ey = Y(0.18);
+      for (let x = X(0.38); x <= X(0.47); x++) p.set(x, ey, '#e8fbff');
+      for (let x = X(0.53); x <= X(0.62); x++) p.set(x, ey, '#e8fbff');
+      // 가슴의 심 — 가장 밝게, 둘레는 한 단 낮게
+      const cx = (X(0.5)), cy = Y(0.5), cr = Math.max(1, Math.round(W * 0.08));
+      for (let y = cy - cr - 1; y <= cy + cr + 1; y++) for (let x = cx - cr - 1; x <= cx + cr + 1; x++) {
+        const q = Math.abs(x - cx) + Math.abs(y - cy);
+        if (q <= cr) p.set(x, y, '#ffffff'); else if (q <= cr + 1) p.set(x, y, '#9fe8ff');
+      }
+      // 금 몇 줄
+      for (let i = 0; i < 3; i++) { const x = X(0.26 + i * 0.2), y = Y(0.62 + (i % 2) * 0.08); p.over(x, y, R[1]); p.over(x + 1, y + 1, R[1]); }
+      return this.finish(p, flash);
+    });
+  },
+};
+
+</script>
+  <script>
+// ── js/art_player.js
+'use strict';
+
+/* 플레이어 — 16x16 도트를 다시 그린다 (그래픽 전면 개편).
+
+   예전 도트와 크기·발 자리는 같다. 바뀐 것은 셋.
+     1. 색 — 머리·피부·옷·바지·신발 모두 색상 이동 단계(그늘은 푸르게, 빛은 따뜻하게)
+     2. 빛 — 왼쪽 위. 머리카락 왼쪽에 윤기, 얼굴·팔·옷 왼쪽이 밝고 오른쪽이 그늘
+     3. 걸음 — 두 장(모음/벌림)에서 **네 장**(딛기·지나기·딛기·지나기). 지침의 걷기 주기 그대로
+
+   외곽선은 그리지 않는다 — Pix.outline 이 다른 모든 그림과 같은 규칙(재질 색 1px)으로 두른다.
+
+   글자 하나가 픽셀 한 칸:
+     H 머리  h 머리 그늘  G 머리 윤기     S 피부  s 피부 그늘  L 피부 빛   E 눈
+     T 옷    t 옷 그늘    U 옷 빛         B 허리띠  Y 버클
+     P 바지  p 바지 그늘  K 신발  k 신발 그늘 */
+
+const PlayerArt = {
+  // 몸 (0~12줄) — 다리 세 줄(13~15)은 걸음마다 갈아 끼운다
+  BODY: {
+    down: [
+      '................',
+      '.....hHHHHHh....',
+      '....hHGGHHHHh...',
+      '...hHGHHHHHHHh..',
+      '...hHHhHHHHhHh..',
+      '...hLSSSSSSSsh..',
+      '...hSESSSSESsh..',
+      '....LSSSSSSSs...',
+      '.....sSSSSs.....',
+      '....UTTTTTTt....',
+      '...LUTTTTTTts...',
+      '...STTTTTTTts...',
+      '...sBBBYYBBBs...',
+    ],
+    up: [
+      '................',
+      '.....hHHHHHh....',
+      '....hHHGHHHHh...',
+      '...hHHGHHHHHHh..',
+      '...hHHHHHHHHHh..',
+      '...hHHHHHHHHHh..',
+      '...hhHHHHHHHhh..',
+      '....hhHHHHHhh...',
+      '.....sSSSSs.....',
+      '....UTTTTTTt....',
+      '...LUTTTTTTts...',
+      '...STTTTTTTts...',
+      '...sBBBBBBBBs...',
+    ],
+    right: [
+      '................',
+      '......hHHHHh....',
+      '.....hHGGHHHh...',
+      '....hHGHHHHHHh..',
+      '....hHHHHHhSSs..',
+      '....hHHHHLSSSs..',
+      '....hhHHHSSESs..',
+      '.....hhHHSSSs...',
+      '......sSSs......',
+      '.....UTTTTt.....',
+      '....UTTTSSt.....',
+      '....UTTTSst.....',
+      '....sBBBYBs.....',
+    ],
+  },
+
+  // 다리 — [딛기, 지나기, 딛기(반대), 지나기]
+  LEGS: {
+    front: [
+      ['....PPPPPPPp....', '...PPp...KKk....', '...KKk..........'],   // 왼발 디딤, 오른발 들림
+      ['....PPPPPPPp....', '....PPp..PPp....', '....KKk..KKk....'],   // 모아 지나감
+      ['....PPPPPPPp....', '....KKk...PPp...', '..........KKk...'],   // 오른발 디딤, 왼발 들림
+      ['....PPPPPPPp....', '....PPp..PPp....', '....KKk..KKk....'],
+    ],
+    side: [
+      ['.....PPPPp......', '....PPp.PPp.....', '...KKk...KKk....'],   // 앞발 내딛음
+      ['.....PPPPp......', '.....PPPp.......', '.....KKKKk......'],   // 모아 지나감
+      ['.....PPPPp......', '....ppp.PPp.....', '...kkk...KKk....'],   // 먼 발이 앞으로 (어둡게)
+      ['.....PPPPp......', '.....PPPp.......', '.....KKKKk......'],
+    ],
+  },
+
+  palette() {
+    const hair = Art.ramp(26, 54, 4, 16, 50), skin = Art.ramp(24, 60, 4, 52, 86);
+    const cloth = Art.ramp(214, 54, 4, 26, 66), belt = Art.ramp(30, 44, 3, 18, 42);
+    const pants = Art.ramp(230, 20, 3, 26, 52), boot = Art.ramp(22, 30, 3, 12, 30);
+    return {
+      H: hair[2], h: hair[1], G: hair[3],
+      S: skin[2], s: skin[1], L: skin[3], E: '#1c1630',
+      T: cloth[2], t: cloth[1], U: cloth[3],
+      B: belt[1], Y: '#e8c050',
+      P: pants[2], p: pants[1], K: boot[1], k: boot[0],
+    };
+  },
+
+  // 한 장 — 몸 + 다리를 합치고 외곽선을 두른다
+  frame(dir, f, pal) {
+    const body = this.BODY[dir === 'up' ? 'up' : (dir === 'down' ? 'down' : 'right')];
+    const legs = this.LEGS[dir === 'right' ? 'side' : 'front'][f];
+    const rows = body.concat(legs);
+    const p = new Pix(16, 16);
+    rows.forEach((row, y) => {
+      if (row.length !== 16) throw new Error('player ' + dir + ' row ' + y + ' length ' + row.length);
+      for (let x = 0; x < 16; x++) { const c = pal[row[x]]; if (c) p.set(x, y, c); }
+    });
+    return p.outline();
+  },
+
+  build() {
+    const pal = this.palette();
+    const sets = {}, flash = {};
+    for (const dir of ['down', 'up', 'right']) {
+      const frames = [0, 1, 2, 3].map(f => this.frame(dir, f, pal));
+      sets[dir] = frames.map(p => p.canvas());
+      flash[dir] = frames.map(p => p.silhouette('#ff9a9a').canvas());
+    }
+    sets.left = sets.right.map(flipX);
+    flash.left = flash.right.map(flipX);
+    return { sets, flash };
+  },
+};
+
+</script>
+  <script>
 // ── js/sprites.js
 'use strict';
 
@@ -1759,6 +3551,18 @@ function tinted(src, color) {
   return cv;
 }
 
+// 픽셀 단위 타원 채우기 — 발밑 그림자처럼 납작한 것. 줄마다 한 번에 칠해서 빠르고 칸이 딱 맞는다
+function fillEllipse(ctx, cx, cy, rx, ry, color) {
+  ctx.fillStyle = color;
+  for (let y = Math.floor(cy - ry); y <= Math.ceil(cy + ry); y++) {
+    const dy = (y + 0.5 - cy) / ry;
+    if (Math.abs(dy) > 1) continue;
+    const half = rx * Math.sqrt(1 - dy * dy);
+    const x0 = Math.round(cx - half), x1 = Math.round(cx + half);
+    if (x1 > x0) ctx.fillRect(x0, y, x1 - x0, 1);
+  }
+}
+
 // 픽셀 단위 원 채우기 (안티앨리어싱 없음 = 도트 느낌 유지)
 function fillCircle(ctx, cx, cy, r, color) {
   ctx.fillStyle = color;
@@ -1774,64 +3578,6 @@ function fillCircle(ctx, cx, cy, r, color) {
 /* ── 플레이어 (16x16) ────────────────────────────────────────
    머리 1~7줄, 목 8줄, 몸통 9~12줄, 다리 13~15줄.
    다리 3줄은 따로 떼어 두고 걷기 애니메이션에서 바꿔 끼운다. */
-
-const P_BODY_DOWN = [
-  '................',
-  '....oooooooo....',
-  '...ohhhhhhhho...',
-  '..ohhhhhhhhhho..',
-  '..ohssssssssho..',
-  '..ohseesseesho..',
-  '..ohssssssssho..',
-  '...osssSSssso...',
-  '.....oSSSSo.....',
-  '..otttttttttto..',
-  '.osottttttttoso.',
-  '.osottttttttoso.',
-  '.osobbbbbbbboso.',
-];
-
-const P_BODY_UP = [
-  '................',
-  '....oooooooo....',
-  '...ohhhhhhhho...',
-  '..ohhhhhhhhhho..',
-  '..ohhhhhhhhhho..',
-  '..ohhHHHHHHhho..',
-  '..ohhhhhhhhhho..',
-  '...ohhhhhhhho...',
-  '.....oSSSSo.....',
-  '..otttttttttto..',
-  '.osottttttttoso.',
-  '.osottttttttoso.',
-  '.osobbbbbbbboso.',
-];
-
-const P_BODY_SIDE = [
-  '................',
-  '....oooooooo....',
-  '...ohhhhhhhho...',
-  '..ohhhhhhhhho...',
-  '..ohhhhhssho....',
-  '..ohhhsesssho...',
-  '..ohhhsssssho...',
-  '...ohsssssSo....',
-  '....oSSSSo......',
-  '...ottttttto....',
-  '..otttttttso....',
-  '..otttttttso....',
-  '..obbbbbbbso....',
-];
-
-// [다리 모은 자세, 다리 벌린 자세] — 각각 13,14,15번 줄
-const P_LEGS_FRONT = [
-  ['...opppoopppo...', '...opppoopppo...', '...oBBBooBBBo...'],
-  ['..opppo..opppo..', '..opppo..opppo..', '..oBBBo..oBBBo..'],
-];
-const P_LEGS_SIDE = [
-  ['...opppppo......', '...opppppo......', '...oBBBBBo......'],
-  ['..opppo.oppo....', '..opppo.oppo....', '..oBBBo.oBBo....'],
-];
 
 // 무기 (8x16, 칼끝이 위를 향한다) — 기본 검
 const SWORD = [
@@ -1893,26 +3639,6 @@ const AXE = [
   '.....oo.....',
 ];
 
-// 슬라임 (16x16)
-const SLIME = [
-  '................',
-  '................',
-  '................',
-  '.....oooooo.....',
-  '...oonnnnnnoo...',
-  '..onnnnMMnnnno..',
-  '.onMMMMMMMMMMno.',
-  '.oMMMMMMMMMMMMo.',
-  'oMMkkMMMMMMkkMMo',
-  'oMMkkMMMMMMkkMMo',
-  'oMMMMMMMMMMMMMMo',
-  'oMMMMMmmmmMMMMMo',
-  'oMMMMMMMMMMMMMMo',
-  'ommMMMMMMMMMMmmo',
-  '.ommmmmmmmmmmmo.',
-  '..oooooooooooo..',
-];
-
 // 회복 포션 (10x12) — 2주차 아이템. 빨간 물약.
 const POTION = [
   '....cc....',
@@ -1929,67 +3655,6 @@ const POTION = [
   '..oooooo..',
 ];
 
-// 버섯 몬스터 (16x16) — 갓은 레벨 색, 기둥은 밝은 살구색
-const ENEMY_MUSHROOM = [
-  '................',
-  '.....oooooo.....',
-  '...oonnnnnnoo...',
-  '..onnnnnnnnnno..',
-  '.onnnnMMMMnnnno.',
-  'onnMMMMMMMMMMnno',
-  'oMMMMMMMMMMMMMMo',
-  'oMMMMMMMMMMMMMMo',
-  '.oooooooooooooo.',
-  '...oSSkSSkSSo...',
-  '...oSSSSSSSSo...',
-  '...oSSSSSSSSo...',
-  '...oSSsSSsSSo...',
-  '...oSSSSSSSSo...',
-  '..ooSSSSSSSSoo..',
-  '..oooooooooooo..',
-];
-
-/* 늑대 (28x20, 오른쪽을 본다). 몸통 0~13줄 + 다리 14~19줄을 갈아 끼운다.
-   쫑긋한 귀 둘, 앞으로 뻗은 주둥이, 노란 눈, 몸통과 떨어진 꼬리, 앞뒤로 모인 다리 —
-   옆에서 본 늑대의 윤곽을 그대로 따랐다 (예전 도트는 납작한 슬라임처럼 보였다).
-   g = 등쪽 밝은 털, G = 몸통, d = 배쪽 그늘·먼 쪽 다리, D = 발, S = 코, Y = 눈 */
-const WOLF_BODY = [
-  '..................o..o......',
-  '.................ogo.oGo....',
-  '.................oGgGGGo....',
-  '................oGGGGGGGo...',
-  '................oGGYGGGGoooo',
-  '..........ooooo.oGGGGGGGGGSo',
-  '........ooggggggGGGGGGGGGSSo',
-  '......ooGGGGGGGGGGGGGGGooooo',
-  '....ooGGGGGGGGGGGGGGGGGo....',
-  '..ooGGGGGGGGGGGGGGGGGGGo....',
-  '.oGGoGGGGGGGGGGGGGGGGGGo....',
-  'oGGGGoGGGGGGGGGGGGGGGGdo....',
-  'oGgGGoodddGGGGGGGGGGGddo....',
-  '.oooo..oddddGGGGGGGGdddo....',
-];
-const WOLF_EYE = { x: 19, y: 4 };   // 눈 도트 자리 (우두머리는 여기에 붉은 눈을 덧그린다)
-
-// 먼 쪽 다리(d)는 가까운 다리(G) 뒤에 반 칸 어긋나게 — 걸을 때 앞뒤 다리가 번갈아 벌어진다
-const WOLF_LEGS = [
-  [
-    '.......oddoGGo..oddoGGo.....',
-    '.......oddoGGo..oddoGGo.....',
-    '.......oddoGGo..oddoGGo.....',
-    '.......oddoGGo..oddoGGo.....',
-    '.......oddoDDo..oddoDDo.....',
-    '.......ooooooo..ooooooo.....',
-  ],
-  [
-    '......oGGo.oddo..oddo.oGGo..',
-    '......oGGo.oddo..oddo.oGGo..',
-    '.....oGGo..oddo..oddo..oGGo.',
-    '.....oGGo..oddo..oddo..oGGo.',
-    '.....oDDo..oddo..oddo..oDDo.',
-    '.....oooo..oooo..oooo..oooo.',
-  ],
-];
 
 // 포자 (5x5) — 버섯이 쏘는 탄
 const SPORE = [
@@ -2003,88 +3668,6 @@ const SPORE = [
 // 몬스터 색은 종류가 정한다 (CONFIG 쪽 ENEMY_COLORS). 레벨은 이름표 색으로만 보여준다.
 
 /* ── 절차적 생성 스프라이트 ────────────────────────────────── */
-
-function makeGrassTile(seed) {
-  const cv = makeCanvas(16, 16), ctx = cv.getContext('2d');
-  const rng = Util.makeRng(seed);
-  ctx.fillStyle = '#3f8b40';
-  ctx.fillRect(0, 0, 16, 16);
-  for (let i = 0; i < 22; i++) {
-    ctx.fillStyle = rng() < 0.5 ? '#387d39' : '#47974a';
-    ctx.fillRect(Math.floor(rng() * 16), Math.floor(rng() * 16), 1, 1);
-  }
-  for (let i = 0; i < 3; i++) {   // 풀잎
-    ctx.fillStyle = '#52ac55';
-    ctx.fillRect(Math.floor(rng() * 16), Math.floor(rng() * 14), 1, 2);
-  }
-  return cv;
-}
-
-function makeTree(seed) {
-  const cv = makeCanvas(34, 46), ctx = cv.getContext('2d');
-  const rng = Util.makeRng(seed);
-  const OUT = '#0e2f16', DARK = '#1c5227', MID = '#2b7a35', LIT = '#3d9b45', HI = '#57b95c';
-
-  // 줄기
-  ctx.fillStyle = '#5a3417'; ctx.fillRect(13, 22, 8, 23);
-  ctx.fillStyle = '#7a4a22'; ctx.fillRect(14, 22, 6, 22);
-  ctx.fillStyle = '#946030'; ctx.fillRect(15, 22, 2, 21);
-  ctx.fillStyle = '#5a3417'; ctx.fillRect(10, 42, 4, 3); ctx.fillRect(20, 42, 4, 3);
-
-  // 잎사귀 덩어리 — 외곽선 -> 어두운면 -> 중간톤 -> 밝은면 순으로 겹쳐 칠한다
-  const blobs = [[17, 15, 13], [9, 21, 9], [25, 21, 9], [17, 24, 10], [12, 10, 7], [23, 10, 7]];
-  for (const b of blobs) fillCircle(ctx, b[0], b[1], b[2] + 1, OUT);
-  for (const b of blobs) fillCircle(ctx, b[0], b[1], b[2], DARK);
-  for (const b of blobs) fillCircle(ctx, b[0] - 1, b[1] - 2, b[2] - 2, MID);
-  for (const b of blobs) fillCircle(ctx, b[0] - 3, b[1] - 4, b[2] - 5, LIT);
-
-  // 잎 질감 — 덩어리 안쪽에만 점을 뿌린다
-  for (let i = 0; i < 130; i++) {
-    const x = Math.floor(rng() * 34), y = Math.floor(rng() * 34);
-    let inside = false;
-    for (const b of blobs) {
-      const dx = x - b[0], dy = y - b[1];
-      if (dx * dx + dy * dy < (b[2] - 2) * (b[2] - 2)) { inside = true; break; }
-    }
-    if (!inside) continue;
-    ctx.fillStyle = rng() < 0.45 ? HI : DARK;
-    ctx.fillRect(x, y, 1, 1);
-  }
-  return cv;
-}
-
-function makeBush(seed, pal) {
-  pal = pal || { out: '#0e2f16', dark: '#22622c', mid: '#34873c', lit: '#49a750', shade: '#1a4a22' };
-  const cv = makeCanvas(18, 15), ctx = cv.getContext('2d');
-  const rng = Util.makeRng(seed);
-  const blobs = [[6, 9, 5], [12, 9, 5], [9, 7, 5]];
-  for (const b of blobs) fillCircle(ctx, b[0], b[1], b[2] + 1, pal.out);
-  for (const b of blobs) fillCircle(ctx, b[0], b[1], b[2], pal.dark);
-  for (const b of blobs) fillCircle(ctx, b[0] - 1, b[1] - 2, b[2] - 2, pal.mid);
-  for (let i = 0; i < 14; i++) {
-    ctx.fillStyle = rng() < 0.5 ? pal.lit : pal.shade;
-    ctx.fillRect(2 + Math.floor(rng() * 14), 3 + Math.floor(rng() * 9), 1, 1);
-  }
-  return cv;
-}
-
-function makeRock() {
-  const cv = makeCanvas(13, 11), ctx = cv.getContext('2d');
-  fillCircle(ctx, 6.5, 6.5, 5.5, '#20211f');
-  fillCircle(ctx, 6.5, 6.5, 4.5, '#6a6c66');
-  fillCircle(ctx, 5.5, 5.0, 3.0, '#8b8d85');
-  fillCircle(ctx, 4.8, 4.2, 1.6, '#a6a89f');
-  return cv;
-}
-
-function makeFlower(color) {
-  const cv = makeCanvas(5, 6), ctx = cv.getContext('2d');
-  ctx.fillStyle = '#2c6b30'; ctx.fillRect(2, 3, 1, 3);
-  ctx.fillStyle = color;
-  ctx.fillRect(1, 1, 3, 2); ctx.fillRect(2, 0, 1, 1);
-  ctx.fillStyle = '#ffe9a8'; ctx.fillRect(2, 1, 1, 1);
-  return cv;
-}
 
 // 휘두르는 궤적을 몇 방향으로 나눠 만들어 둘지
 const SLASH_DIRS = 16;
@@ -2120,524 +3703,9 @@ function makeSlashFrame(angle, t) {
 
 /* ── 지형 타일 ─────────────────────────────────────────────── */
 
-// 잡티를 뿌려 단조로움을 없애는 공통 타일 생성기
-function makeNoiseTile(seed, base, dark, light) {
-  const cv = makeCanvas(16, 16), ctx = cv.getContext('2d');
-  const rng = Util.makeRng(seed);
-  ctx.fillStyle = base;
-  ctx.fillRect(0, 0, 16, 16);
-  for (let i = 0; i < 24; i++) {
-    ctx.fillStyle = rng() < 0.5 ? dark : light;
-    ctx.fillRect(Math.floor(rng() * 16), Math.floor(rng() * 16), 1, 1);
-  }
-  return cv;
-}
-
-function makeDirtTile(seed) {
-  const cv = makeNoiseTile(seed, '#7d5f3c', '#6b5032', '#8f6f47');
-  const ctx = cv.getContext('2d');
-  const rng = Util.makeRng(seed + 7);
-  for (let i = 0; i < 3; i++) {   // 작은 자갈
-    ctx.fillStyle = '#9a8a6a';
-    ctx.fillRect(Math.floor(rng() * 15), Math.floor(rng() * 15), 2, 1);
-  }
-  return cv;
-}
-
-function makeSandTile(seed) {
-  return makeNoiseTile(seed, '#c2a877', '#ad9366', '#d6bd8c');
-}
-
-// 깊은 숲 바닥 — 나무 그늘이 져서 가장자리보다 어둡다
-function makeDarkGrassTile(seed) {
-  const cv = makeNoiseTile(seed, '#2c6431', '#255628', '#35743a');
-  const ctx = cv.getContext('2d');
-  const rng = Util.makeRng(seed + 3);
-  for (let i = 0; i < 3; i++) {   // 풀잎
-    ctx.fillStyle = '#3d8442';
-    ctx.fillRect(Math.floor(rng() * 16), Math.floor(rng() * 14), 1, 2);
-  }
-  for (let i = 0; i < 2; i++) {   // 떨어진 솔잎
-    ctx.fillStyle = '#4a3b22';
-    ctx.fillRect(Math.floor(rng() * 15), Math.floor(rng() * 15), 2, 1);
-  }
-  return cv;
-}
-
-// 포자 골짜기 바닥 — 이끼 낀 돌바닥
-function makeStoneTile(seed) {
-  const cv = makeNoiseTile(seed, '#67635d', '#585450', '#787269');
-  const ctx = cv.getContext('2d');
-  const rng = Util.makeRng(seed + 5);
-  for (let i = 0; i < 2; i++) {   // 갈라진 금
-    const x = Math.floor(rng() * 12), y = Math.floor(rng() * 12);
-    ctx.fillStyle = '#484440';
-    ctx.fillRect(x, y, 3, 1);
-    ctx.fillRect(x + 2, y + 1, 2, 1);
-  }
-  for (let i = 0; i < 3; i++) {   // 이끼
-    ctx.fillStyle = '#41703f';
-    ctx.fillRect(Math.floor(rng() * 15), Math.floor(rng() * 15), 2, 1);
-  }
-  return cv;
-}
-
-// 포자 골짜기의 흙길은 자갈밭이 된다
-function makeGravelTile(seed) {
-  const cv = makeNoiseTile(seed, '#5a544d', '#4c473f', '#6d675e');
-  const ctx = cv.getContext('2d');
-  const rng = Util.makeRng(seed + 9);
-  for (let i = 0; i < 5; i++) {
-    ctx.fillStyle = rng() < 0.5 ? '#847d72' : '#413c35';
-    ctx.fillRect(Math.floor(rng() * 14), Math.floor(rng() * 14), 2, 2);
-  }
-  return cv;
-}
-
-function makeWaterTile(seed) {
-  const cv = makeNoiseTile(seed, '#2f6f9e', '#27618c', '#3a80b0');
-  const ctx = cv.getContext('2d');
-  const rng = Util.makeRng(seed + 13);
-  for (let i = 0; i < 2; i++) {   // 잔물결
-    const x = Math.floor(rng() * 10), y = Math.floor(rng() * 16);
-    ctx.fillStyle = '#5aa3cc';
-    ctx.fillRect(x, y, 3, 1);
-    ctx.fillRect(x + 3, y + 1, 2, 1);
-  }
-  return cv;
-}
-
 /* ── 숲 소품 ───────────────────────────────────────────────── */
 
-function makePine(seed) {
-  const cv = makeCanvas(30, 46), ctx = cv.getContext('2d');
-  const rng = Util.makeRng(seed);
-  const OUT = '#0c2a17', DARK = '#17452a', MID = '#20603a', LIT = '#2d7d4a';
-  ctx.fillStyle = '#4a3018'; ctx.fillRect(13, 34, 5, 11);
-  ctx.fillStyle = '#664226'; ctx.fillRect(14, 34, 3, 10);
-  // 아래에서 위로 좁아지는 삼각 층 3개
-  const layers = [[38, 14], [28, 12], [18, 9], [9, 6]];
-  for (let li = 0; li < layers.length; li++) {
-    const baseY = layers[li][0], half = layers[li][1];
-    for (let r = 0; r < half + 3; r++) {
-      const y = baseY - r;
-      const wHalf = Math.round(half * (1 - r / (half + 3)));
-      ctx.fillStyle = OUT;
-      ctx.fillRect(15 - wHalf - 1, y, wHalf * 2 + 3, 1);
-      ctx.fillStyle = r > half * 0.55 ? LIT : (r > half * 0.25 ? MID : DARK);
-      ctx.fillRect(15 - wHalf, y, wHalf * 2 + 1, 1);
-    }
-  }
-  for (let i = 0; i < 40; i++) {  // 잎 질감
-    const x = 4 + Math.floor(rng() * 22), y = 8 + Math.floor(rng() * 32);
-    const px = ctx.getImageData(x, y, 1, 1).data;
-    if (px[3] === 0) continue;
-    ctx.fillStyle = rng() < 0.5 ? '#3a9558' : '#134026';
-    ctx.fillRect(x, y, 1, 1);
-  }
-  return cv;
-}
-
-function makeDeadTree(seed) {
-  const cv = makeCanvas(26, 40), ctx = cv.getContext('2d');
-  const rng = Util.makeRng(seed);
-  const BARK = '#5b4a35', DARK = '#3a2e20', LIT = '#7a6549';
-  ctx.fillStyle = DARK; ctx.fillRect(11, 14, 6, 25);
-  ctx.fillStyle = BARK; ctx.fillRect(12, 14, 4, 24);
-  ctx.fillStyle = LIT;  ctx.fillRect(13, 15, 1, 22);
-  // 가지 — 위로 벌어지게
-  const branches = [[13, 20, -1, -1, 7], [15, 17, 1, -1, 8], [13, 26, -1, -1, 5], [15, 24, 1, -1, 5]];
-  for (const b of branches) {
-    let x = b[0], y = b[1];
-    for (let i = 0; i < b[4]; i++) {
-      x += b[2]; y += b[3] * (rng() < 0.4 ? 0 : 1);
-      ctx.fillStyle = DARK; ctx.fillRect(x, y, 2, 2);
-      ctx.fillStyle = BARK; ctx.fillRect(x, y, 1, 1);
-    }
-  }
-  return cv;
-}
-
-function makeStump(seed) {
-  const cv = makeCanvas(15, 13), ctx = cv.getContext('2d');
-  ctx.fillStyle = '#2e2114'; ctx.fillRect(2, 6, 11, 6);
-  ctx.fillStyle = '#573a1e'; ctx.fillRect(3, 6, 9, 5);
-  fillCircle(ctx, 7.5, 5.5, 5.5, '#2e2114');
-  fillCircle(ctx, 7.5, 5.5, 4.5, '#8a6334');
-  fillCircle(ctx, 7.5, 5.5, 3.0, '#6b4a26');
-  fillCircle(ctx, 7.5, 5.5, 1.5, '#8a6334');
-  return cv;
-}
-
-function makeLog(seed) {
-  const cv = makeCanvas(22, 11), ctx = cv.getContext('2d');
-  ctx.fillStyle = '#2e2114'; ctx.fillRect(2, 2, 18, 8);
-  ctx.fillStyle = '#5f411f'; ctx.fillRect(2, 3, 18, 6);
-  ctx.fillStyle = '#7c5729'; ctx.fillRect(3, 3, 16, 2);
-  fillCircle(ctx, 3.5, 5.5, 3.5, '#2e2114');
-  fillCircle(ctx, 3.5, 5.5, 2.6, '#8a6334');
-  fillCircle(ctx, 3.5, 5.5, 1.1, '#6b4a26');
-  const rng = Util.makeRng(seed);
-  for (let i = 0; i < 6; i++) {   // 나뭇결
-    ctx.fillStyle = '#4a3218';
-    ctx.fillRect(6 + Math.floor(rng() * 12), 4 + Math.floor(rng() * 4), 2, 1);
-  }
-  return cv;
-}
-
-function makeBoulder(seed) {
-  const cv = makeCanvas(22, 17), ctx = cv.getContext('2d');
-  fillCircle(ctx, 11, 10, 8.5, '#1e1f1d');
-  fillCircle(ctx, 11, 10, 7.5, '#5f625b');
-  fillCircle(ctx, 9, 8, 5.0, '#7d8079');
-  fillCircle(ctx, 8, 6.5, 2.6, '#9aa093');
-  const rng = Util.makeRng(seed);
-  for (let i = 0; i < 8; i++) {   // 이끼
-    ctx.fillStyle = '#3f7d43';
-    ctx.fillRect(5 + Math.floor(rng() * 12), 11 + Math.floor(rng() * 4), 1, 1);
-  }
-  return cv;
-}
-
 /* ── 사막 바닥·소품 ───────────────────────────────────────── */
-
-// 사막 모래 — 물가 모래보다 따뜻하고 밝다
-function makeDesertSandTile(seed) {
-  return makeNoiseTile(seed, '#d9c27f', '#c9b06e', '#e6d191');
-}
-
-// 모래언덕 — 바람결 무늬가 진 밝은 모래 (꽃밭 자리에 쓴다)
-function makeDuneTile(seed) {
-  const cv = makeNoiseTile(seed, '#e0cc8a', '#d1bb79', '#ecd99c');
-  const ctx = cv.getContext('2d');
-  const rng = Util.makeRng(seed + 17);
-  for (let i = 0; i < 3; i++) {
-    const x = Math.floor(rng() * 8), y = 2 + Math.floor(rng() * 12);
-    ctx.fillStyle = '#c4aa66';
-    ctx.fillRect(x, y, 4, 1);
-    ctx.fillRect(x + 4, y + 1, 4, 1);
-  }
-  return cv;
-}
-
-// 갈라진 땅 — 마른 진흙. 숲의 흙 자리(공터·길)에 쓴다
-function makeCrackedTile(seed) {
-  const cv = makeNoiseTile(seed, '#9a6b3c', '#8a5e33', '#a97a47');
-  const ctx = cv.getContext('2d');
-  const rng = Util.makeRng(seed + 23);
-  for (let i = 0; i < 3; i++) {   // 갈라진 금
-    let x = Math.floor(rng() * 14), y = Math.floor(rng() * 14);
-    ctx.fillStyle = '#6a4424';
-    for (let k = 0; k < 4; k++) {
-      ctx.fillRect(x, y, 1, 1);
-      x += rng() < 0.5 ? 1 : 0; y += rng() < 0.6 ? 1 : 0;
-      if (x > 15 || y > 15) break;
-    }
-  }
-  return cv;
-}
-
-/* ── 얼어붙은 고원 (로드맵 12주차) ──────────────────────
-   눈은 거의 흰색이라 알갱이를 너무 뿌리면 지저분해진다 — 아주 옅게만 섞는다.
-   대신 **푸른 그림자**로 요철을 준다 (흰 바탕에서 깊이가 보이는 거의 유일한 방법). */
-function makeSnowTile(seed) {
-  const cv = makeNoiseTile(seed, '#dceaf3', '#c7dbe8', '#f2f8fc');
-  const ctx = cv.getContext('2d');
-  const rng = Util.makeRng(seed + 11);
-  for (let i = 0; i < 2; i++) {   // 바람에 쓸린 자국
-    const x = Math.floor(rng() * 10), y = 2 + Math.floor(rng() * 12);
-    ctx.fillStyle = '#bcd4e4';
-    ctx.fillRect(x, y, 5, 1);
-  }
-  return cv;
-}
-
-// 그늘진 눈 — 빽빽한 침엽수 아래. 푸르스름하게 가라앉는다
-function makeShadeSnowTile(seed) {
-  return makeNoiseTile(seed, '#b4cadc', '#a1b9cd', '#c8dbe9');
-}
-
-// 맨 얼음 — 공터·길 자리. 금이 가 있어 눈과 바로 구분된다
-function makeIceTile(seed) {
-  const cv = makeNoiseTile(seed, '#96c4da', '#85b3cb', '#b4d9ea');
-  const ctx = cv.getContext('2d');
-  const rng = Util.makeRng(seed + 29);
-  for (let i = 0; i < 3; i++) {   // 갈라진 금
-    let x = Math.floor(rng() * 14), y = Math.floor(rng() * 14);
-    ctx.fillStyle = '#6e9bb4';
-    for (let k = 0; k < 5; k++) {
-      ctx.fillRect(x, y, 1, 1);
-      x += rng() < 0.6 ? 1 : 0; y += rng() < 0.5 ? 1 : 0;
-      if (x > 15 || y > 15) break;
-    }
-  }
-  return cv;
-}
-
-// 눈더미 — 꽃밭 자리. 가장 밝아서 지도에서 하얗게 뜬다
-function makeSnowDriftTile(seed) {
-  const cv = makeNoiseTile(seed, '#e8f2f8', '#d6e6f0', '#ffffff');
-  const ctx = cv.getContext('2d');
-  const rng = Util.makeRng(seed + 37);
-  for (let i = 0; i < 3; i++) {
-    const x = Math.floor(rng() * 9), y = 2 + Math.floor(rng() * 12);
-    ctx.fillStyle = '#cfe2ee';
-    ctx.fillRect(x, y, 4, 1);
-    ctx.fillRect(x + 3, y + 1, 4, 1);
-  }
-  return cv;
-}
-
-// 서리 섞인 모래 — 물가 자리 (얼어붙은 못 둘레)
-function makeFrostGravelTile(seed) {
-  return makeNoiseTile(seed, '#bad0dc', '#a8c0cf', '#cfe0ea');
-}
-
-// 얼어붙은 못 — 물 자리. 깊고 어두운 얼음이라 '못 건넌다'가 보인다
-function makeFrozenWaterTile(seed) {
-  const cv = makeNoiseTile(seed, '#2b5a78', '#23506d', '#3a7294');
-  const ctx = cv.getContext('2d');
-  const rng = Util.makeRng(seed + 43);
-  for (let i = 0; i < 2; i++) {
-    const x = Math.floor(rng() * 12), y = Math.floor(rng() * 14);
-    ctx.fillStyle = '#7fb4cf';
-    ctx.fillRect(x, y, 3, 1);
-  }
-  return cv;
-}
-
-/* 눈 덮인 침엽수 (20x36) — 가지 위에 눈이 얹혀 있다.
-   숲의 침엽수와 실루엣이 같아야 '같은 종류의 나무'로 읽히고, 색만 달라 설원이 된다 */
-  // 설원 초목
-function makeSnowPine(seed) {
-  const cv = makeCanvas(20, 36), ctx = cv.getContext('2d');
-  const rng = Util.makeRng(seed);
-  const OUT = '#16303a', DARK = '#1d4a46', MID = '#2a6a5c', SNOW = '#eaf4fa', SHADE = '#c3dae8';
-  ctx.fillStyle = '#3b2a1c'; ctx.fillRect(9, 28, 3, 8);       // 줄기
-  ctx.fillStyle = '#2a1d12'; ctx.fillRect(9, 28, 1, 8);
-  // 삼각 가지 세 단 — 아래가 넓다
-  const tier = (cy, half) => {
-    for (let y = 0; y < 9; y++) {
-      const w = Math.round(half * (y / 8));
-      ctx.fillStyle = OUT;
-      ctx.fillRect(10 - w - 1, cy + y, w * 2 + 3, 1);
-      ctx.fillStyle = y < 3 ? DARK : MID;
-      ctx.fillRect(10 - w, cy + y, w * 2 + 1, 1);
-    }
-    // 눈 — 가지 윗면에만 얹힌다
-    for (let y = 0; y < 5; y++) {
-      const w = Math.round(half * (y / 8));
-      ctx.fillStyle = y < 2 ? SNOW : SHADE;
-      ctx.fillRect(10 - w, cy + y, w * 2 + 1, 1);
-    }
-  };
-  tier(2, 5); tier(10, 7); tier(18, 9);
-  // 눈 몇 점이 더 얹혀 있다
-  for (let i = 0; i < 5; i++) {
-    ctx.fillStyle = SNOW;
-    ctx.fillRect(3 + Math.floor(rng() * 14), 12 + Math.floor(rng() * 14), 1, 1);
-  }
-  return cv;
-}
-
-// 얼음 기둥 (14x30) — 사막 바위기둥 자리. 속이 비쳐 보이게 밝은 심을 넣는다
-function makeIceSpire(seed) {
-  const cv = makeCanvas(14, 30), ctx = cv.getContext('2d');
-  const rng = Util.makeRng(seed);
-  const OUT = '#2b5a78', DARK = '#4e90b0', MID = '#79bdd8', LIT = '#c6ecfa';
-  const top = 2 + Math.floor(rng() * 4);
-  for (let y = top; y < 30; y++) {
-    const k = (y - top) / (30 - top);
-    const w = Math.round(1 + k * 5);
-    ctx.fillStyle = OUT; ctx.fillRect(7 - w - 1, y, w * 2 + 3, 1);
-    ctx.fillStyle = k < 0.3 ? LIT : (k < 0.65 ? MID : DARK);
-    ctx.fillRect(7 - w, y, w * 2 + 1, 1);
-    if (w > 2) { ctx.fillStyle = LIT; ctx.fillRect(7 - w + 1, y, 1, 1); }   // 빛나는 심
-  }
-  return cv;
-}
-
-// 눈 덮인 바위 (12x10)
-function makeSnowRock(seed) {
-  const cv = makeCanvas(12, 10), ctx = cv.getContext('2d');
-  const rng = Util.makeRng(seed);
-  ctx.fillStyle = '#4a5a66'; ctx.fillRect(1, 3, 10, 7);
-  ctx.fillStyle = '#6b7f8e'; ctx.fillRect(2, 4, 8, 5);
-  ctx.fillStyle = '#eaf4fa'; ctx.fillRect(2, 3, 8, 2);      // 윗면의 눈
-  ctx.fillStyle = '#c3dae8'; ctx.fillRect(2, 5, 7, 1);
-  for (let i = 0; i < 3; i++) { ctx.fillStyle = '#8c9fae'; ctx.fillRect(2 + Math.floor(rng() * 7), 6 + Math.floor(rng() * 3), 1, 1); }
-  return cv;
-}
-
-// 기둥 선인장 (22x40) — 몸통 하나에 팔 둘. 나무 자리에 선다 (부딪힌다)
-function makeCactus(seed) {
-  const cv = makeCanvas(22, 40), ctx = cv.getContext('2d');
-  const rng = Util.makeRng(seed);
-  const OUT = '#12330f', DARK = '#2a6a2a', MID = '#3f9040', LIT = '#5ab05a';
-  const col = (x, y0, y1, w) => {   // 위가 둥근 세로 기둥
-    ctx.fillStyle = OUT; ctx.fillRect(x - 1, y0 - 1, w + 2, y1 - y0 + 2);
-    ctx.fillStyle = DARK; ctx.fillRect(x, y0, w, y1 - y0);
-    ctx.fillStyle = MID; ctx.fillRect(x + 1, y0, w - 2, y1 - y0);
-    ctx.fillStyle = LIT; ctx.fillRect(x + 1, y0 + 1, 1, y1 - y0 - 2);
-    ctx.fillStyle = OUT; ctx.fillRect(x - 1, y0 - 1, 1, 1); ctx.fillRect(x + w, y0 - 1, 1, 1);
-    ctx.fillStyle = MID; ctx.fillRect(x, y0 - 1, w, 1);
-  };
-  const armL = 5 + Math.floor(rng() * 4), armR = 6 + Math.floor(rng() * 4);
-  col(3, 22 - armL, 27, 4);  ctx.fillStyle = OUT; ctx.fillRect(7, 24, 1, 4); ctx.fillStyle = DARK; ctx.fillRect(7, 25, 2, 2);   // 왼팔
-  col(15, 20 - armR, 26, 4); ctx.fillStyle = OUT; ctx.fillRect(14, 23, 1, 4); ctx.fillStyle = DARK; ctx.fillRect(13, 24, 2, 2);  // 오른팔
-  col(8, 6, 39, 6);          // 몸통
-  // 가시 — 밝은 점을 세로로 띄엄띄엄
-  for (let i = 0; i < 26; i++) {
-    const x = Math.floor(rng() * 22), y = Math.floor(rng() * 38);
-    const px = ctx.getImageData(x, y, 1, 1).data;
-    if (px[3] === 0) continue;
-    ctx.fillStyle = rng() < 0.5 ? '#d8e8b0' : '#1e4d1e';
-    ctx.fillRect(x, y, 1, 1);
-  }
-  // 꽃 하나 (가끔)
-  if (rng() < 0.5) { ctx.fillStyle = '#e56b7a'; ctx.fillRect(10, 4, 2, 2); ctx.fillStyle = '#ffd0d8'; ctx.fillRect(10, 4, 1, 1); }
-  return cv;
-}
-
-// 공 선인장 (14x13) — 낮고 둥글다. 그루터기 자리에 선다 (부딪힌다)
-function makeBarrelCactus(seed) {
-  const cv = makeCanvas(14, 13), ctx = cv.getContext('2d');
-  const rng = Util.makeRng(seed);
-  fillCircle(ctx, 7, 7, 6, '#12330f');
-  fillCircle(ctx, 7, 7, 5, '#2a6a2a');
-  fillCircle(ctx, 6, 6, 3.5, '#3f9040');
-  ctx.fillStyle = '#2a6a2a';
-  for (let x = 3; x <= 11; x += 2) ctx.fillRect(x, 3, 1, 8);   // 세로 골
-  for (let i = 0; i < 10; i++) { ctx.fillStyle = '#d8e8b0'; ctx.fillRect(2 + Math.floor(rng() * 10), 2 + Math.floor(rng() * 9), 1, 1); }
-  ctx.fillStyle = '#e56b7a'; ctx.fillRect(6, 1, 2, 2); ctx.fillStyle = '#ffd0d8'; ctx.fillRect(6, 1, 1, 1);
-  return cv;
-}
-
-// 야자수 (30x44) — 오아시스 둘레. 휘어진 줄기 위에 잎이 사방으로 늘어진다
-function makePalm(seed) {
-  const cv = makeCanvas(30, 44), ctx = cv.getContext('2d');
-  const rng = Util.makeRng(seed);
-  const lean = rng() < 0.5 ? -1 : 1;
-  // 줄기 — 아래에서 위로 살짝 휜다
-  for (let y = 43; y >= 12; y--) {
-    const t = (43 - y) / 31;
-    const x = 14 + Math.round(lean * t * t * 5);
-    ctx.fillStyle = '#4a3018'; ctx.fillRect(x - 1, y, 5, 1);
-    ctx.fillStyle = (y % 3 === 0) ? '#8a6a3a' : '#6e4e2a'; ctx.fillRect(x, y, 3, 1);
-  }
-  const cx = 14 + lean * 5, cy = 12;
-  // 잎 — 여덟 방향으로 늘어지는 선
-  const OUT = '#12330f', LEAF = '#3f9040', LIT = '#6bb35b';
-  for (let i = 0; i < 8; i++) {
-    const a = -Math.PI * 0.9 + (i / 7) * Math.PI * 0.8 * 2;
-    const len = 9 + Math.floor(rng() * 4);
-    for (let k = 0; k < len; k++) {
-      const droop = k * k * 0.06;
-      const x = Math.round(cx + Math.cos(a) * k), y = Math.round(cy + Math.sin(a) * k * 0.5 + droop);
-      ctx.fillStyle = OUT; ctx.fillRect(x - 1, y - 1, 3, 3);
-    }
-  }
-  for (let i = 0; i < 8; i++) {
-    const a = -Math.PI * 0.9 + (i / 7) * Math.PI * 0.8 * 2;
-    const len = 9 + Math.floor(rng() * 4);
-    for (let k = 0; k < len; k++) {
-      const droop = k * k * 0.06;
-      const x = Math.round(cx + Math.cos(a) * k), y = Math.round(cy + Math.sin(a) * k * 0.5 + droop);
-      ctx.fillStyle = k % 2 ? LEAF : LIT; ctx.fillRect(x, y, 1, 1);
-    }
-  }
-  ctx.fillStyle = '#6e4e2a'; ctx.fillRect(cx - 1, cy - 1, 3, 3);   // 잎 뿌리
-  // 열매
-  ctx.fillStyle = '#c96a3a'; ctx.fillRect(cx - 2, cy + 2, 2, 2); ctx.fillRect(cx + 1, cy + 3, 2, 2);
-  return cv;
-}
-
-// 바위기둥 (22x34) — 사막의 침엽수 자리. 맵 가장자리 담장으로도 쓴다 (부딪힌다)
-function makeRockSpire(seed) {
-  const cv = makeCanvas(22, 34), ctx = cv.getContext('2d');
-  const rng = Util.makeRng(seed);
-  const OUT = '#3a2a1a', DARK = '#8a6a44', MID = '#b08a5a', LIT = '#d0aa74';
-  const topX = 8 + Math.floor(rng() * 6);
-  for (let y = 2; y < 33; y++) {
-    const t = (y - 2) / 31;
-    const half = 1 + Math.round(t * 8 + (rng() - 0.5) * 1.5);
-    const cx = Math.round(topX + (11 - topX) * t);
-    ctx.fillStyle = OUT; ctx.fillRect(cx - half - 1, y, half * 2 + 3, 1);
-    ctx.fillStyle = y < 6 ? LIT : DARK; ctx.fillRect(cx - half, y, half * 2 + 1, 1);
-    ctx.fillStyle = MID; ctx.fillRect(cx - half, y, Math.max(1, half), 1);
-    if (rng() < 0.3) { ctx.fillStyle = LIT; ctx.fillRect(cx - half + 1, y, 1, 1); }
-  }
-  ctx.fillStyle = OUT; ctx.fillRect(1, 33, 20, 1);
-  return cv;
-}
-
-// 뼈 (16x9) — 해골과 갈비. 지나갈 수 있는 장식
-function makeBones(seed) {
-  const cv = makeCanvas(16, 9), ctx = cv.getContext('2d');
-  const rng = Util.makeRng(seed);
-  const OUT = '#6a5a44', BONE = '#efe6d0', DARK = '#c9bb9c';
-  fillCircle(ctx, 4, 4, 3.5, OUT); fillCircle(ctx, 4, 4, 2.5, BONE);
-  ctx.fillStyle = OUT; ctx.fillRect(3, 4, 1, 1); ctx.fillRect(5, 4, 1, 1);   // 눈구멍
-  ctx.fillStyle = DARK; ctx.fillRect(3, 6, 3, 1);
-  for (let i = 0; i < 4; i++) {   // 갈비
-    const x = 8 + i * 2;
-    ctx.fillStyle = OUT; ctx.fillRect(x, 2 + (i % 2), 1, 5);
-    ctx.fillStyle = BONE; ctx.fillRect(x, 3 + (i % 2), 1, 3);
-  }
-  ctx.fillStyle = OUT; ctx.fillRect(8, 1, 8, 1); ctx.fillStyle = BONE; ctx.fillRect(9, 1, 6, 1);
-  if (rng() < 0.5) { ctx.fillStyle = BONE; ctx.fillRect(12, 8, 3, 1); }
-  return cv;
-}
-
-// 버섯 (9x10) — 색만 바꿔 여러 종류를 만든다
-const MUSHROOM = [
-  '..ooooo..',
-  '.oNNNNNo.',
-  'oNNDNNDNo',
-  'oMMMDMMMo',
-  'oMMMMMMMo',
-  '.ooSSSoo.',
-  '..oSSSo..',
-  '..oSSSo..',
-  '..osSso..',
-  '..ooooo..',
-];
-
-function makeCattail(seed) {
-  const cv = makeCanvas(9, 18), ctx = cv.getContext('2d');
-  const rng = Util.makeRng(seed);
-  for (let i = 0; i < 3; i++) {
-    const x = 2 + i * 2, top = 3 + Math.floor(rng() * 4);
-    ctx.fillStyle = '#2f6b34';
-    ctx.fillRect(x, top, 1, 17 - top);
-    if (i === 1) {   // 가운데만 갈색 이삭
-      ctx.fillStyle = '#5a3a1c';
-      ctx.fillRect(x - 1, top - 1, 3, 5);
-      ctx.fillStyle = '#7a5228';
-      ctx.fillRect(x, top - 1, 1, 4);
-    }
-  }
-  return cv;
-}
-
-// 흔들리는 풀 — 같은 시드로 3프레임을 만들어 기울기만 바꾼다
-function makeGrassTuft(seed, lean, pal) {
-  pal = pal || { tip: '#63c065', dark: '#357936', mid: '#469a48' };
-  const cv = makeCanvas(13, 13), ctx = cv.getContext('2d');
-  const rng = Util.makeRng(seed);
-  for (let i = 0; i < 7; i++) {
-    const bx = 2 + Math.floor(rng() * 9);
-    const h = 5 + Math.floor(rng() * 6);
-    const dark = rng() < 0.5;
-    for (let k = 0; k < h; k++) {
-      const t = k / h;
-      const x = bx + Math.round(lean * t * 2);
-      ctx.fillStyle = k > h - 3 ? pal.tip : (dark ? pal.dark : pal.mid);
-      ctx.fillRect(x, 12 - k, 1, 1);
-    }
-  }
-  return cv;
-}
 
 /* 동굴 입구 — 포자 골짜기의 이정표. 미니맵에도 표시된다.
    지금은 들어갈 수 없는 장식이지만, 나중에 보스방 입구로 쓸 자리다. */
@@ -2915,15 +3983,6 @@ function makeCaveEntrance(seed) {
   return cv;
 }
 
-function makeLilyPad(seed) {
-  const cv = makeCanvas(11, 9), ctx = cv.getContext('2d');
-  fillCircle(ctx, 5.5, 4.5, 4.5, '#1d5a2c');
-  fillCircle(ctx, 5.5, 4.0, 3.6, '#2f8040');
-  fillCircle(ctx, 4.5, 3.2, 1.8, '#3f9950');
-  ctx.clearRect(5, 4, 3, 5);     // 잎의 갈라진 틈
-  return cv;
-}
-
 // 화면 가장자리를 어둡게 — 격자 디더링으로 도트 느낌을 유지한다
 function makeVignette(w, h, strength) {
   const cv = makeCanvas(w, h), ctx = cv.getContext('2d');
@@ -2986,51 +4045,6 @@ function makeSpinRing(t) {
       ctx.fillRect(x, y, 1, 1);
     }
   }
-  return cv;
-}
-
-/* ── 보스: 거대 슬라임 ─────────────────────────────────────
-   32x32 격자를 손으로 찍기엔 칸이 너무 많아서, 나무처럼 원을 겹쳐 그린다.
-   일반 슬라임과 같은 레벨 색을 쓰되 눈매를 사납게 해서 구분한다. */
-function makeGiantSlime(pal) {
-  const W = 44, H = 38;
-  const cv = makeCanvas(W, H), ctx = cv.getContext('2d');
-  const OUT = '#12100e';
-  const cx = W / 2;
-
-  // 몸통 — 아래가 퍼진 돔 모양
-  const blobs = [[cx, 22, 19], [cx - 9, 26, 13], [cx + 9, 26, 13], [cx, 14, 14]];
-  for (const b of blobs) fillCircle(ctx, b[0], b[1], b[2] + 1, OUT);
-  for (const b of blobs) fillCircle(ctx, b[0], b[1], b[2], pal.M);
-  ctx.clearRect(0, 33, W, H - 33);          // 바닥을 평평하게 자른다
-  ctx.fillStyle = OUT; ctx.fillRect(6, 32, W - 12, 1);
-
-  // 위쪽 하이라이트와 아래쪽 그늘
-  fillCircle(ctx, cx - 5, 12, 9, pal.n);
-  fillCircle(ctx, cx - 7, 9, 5, '#ffffff');
-  ctx.globalAlpha = 0.55;
-  fillCircle(ctx, cx, 30, 15, pal.m);
-  ctx.globalAlpha = 1;
-
-  // 사나운 눈 — 눈썹이 안쪽으로 기울어 있다
-  for (const side of [-1, 1]) {
-    const ex = cx + side * 8;
-    ctx.fillStyle = OUT;
-    ctx.fillRect(ex - 3, 17, 6, 6);
-    ctx.fillStyle = '#ff5a4a';
-    ctx.fillRect(ex - 2, 19, 4, 3);
-    ctx.fillStyle = '#ffffff';
-    ctx.fillRect(ex + (side > 0 ? -2 : 1), 19, 1, 1);
-    // 눈썹
-    ctx.fillStyle = OUT;
-    for (let i = 0; i < 5; i++) ctx.fillRect(ex - 3 + i, 14 + (side > 0 ? 4 - i : i) * 0.5, 1, 2);
-  }
-
-  // 입
-  ctx.fillStyle = OUT;
-  ctx.fillRect(cx - 5, 27, 10, 2);
-  ctx.fillRect(cx - 6, 26, 1, 1);
-  ctx.fillRect(cx + 5, 26, 1, 1);
   return cv;
 }
 
@@ -3144,156 +4158,8 @@ const LOOT_SPORE = [
 
 /* ── 사막 몬스터 ─────────────────────────────────────────── */
 
-// 전갈 (24x14, 오른쪽을 본다). 꼬리가 등 위로 말려 올라와 침이 앞을 향한다. 다리 11~13줄은 두 프레임
-// M = 몸통, m = 마디 그늘·다리, n = 밝은면, k = 눈, S = 침
-const SCORPION_BODY = [
-  '......ooo...............',
-  '.....onnMo..............',
-  '....onMoooo.............',
-  '....oMo..oSSo...........',
-  '....oMo...oSo...........',
-  '...oMMo....o......ooo...',
-  '..oMMMoooooooooooooMMMo.',
-  '.oMMMMMMMMMMMMMMMMMMkMMo',
-  'oMMmMMmMMmMMmMMmMMMMMMMo',
-  '.ommmmmmmmmmmmmmmmmoMMMo',
-  '..ooooooooooooooooo.ooo.',
-];
-const SCORPION_LEGS = [
-  ['...mm...mm...mm...mm....', '..mm...mm...mm...mm.....', '..m....m....m....m......'],
-  ['....mm...mm...mm...mm...', '...mm...mm...mm...mm....', '...m....m....m....m.....'],
-];
-
-// 선인장 몬스터 (16x17) — 팔 둘 달린 기둥 선인장. 머리에 꽃 하나, 눈은 화났다
-const CACTUS_MOB = [
-  '......oRRo......',
-  '.....onMMMo.....',
-  '.oo..oMMMMo..oo.',
-  'onMo.oMkMkMo.oMo',
-  'oMMooMMMMMMooMMo',
-  'oMMMMMMMMMMMMMMo',
-  '.oMMMMnMMMMMMMo.',
-  '..ooMMMMMMMMoo..',
-  '....oMMnMMMMo...',
-  '....nMMMMMMMn...',
-  '....oMmMMmMMo...',
-  '....nMMMMMMMn...',
-  '....oMmMMMmMo...',
-  '....nMMMMMMMn...',
-  '....oMMMmMMMo...',
-  '.....oMMMMMo....',
-  '......ooooo.....',
-];
-
 /* ── 설원 몬스터 셋 (로드맵 12주차) ──────────────────────
    m 어두운면 / M 본체 / n 하이라이트 는 ENEMY_COLORS 가 종류별로 채운다. */
-
-// 서리 망령 (14x16) — 둥둥 뜬 푸른 불꽃. 아래가 흩어져 있어 '발이 없다'가 보인다
-const WISP = [
-  '.....oMo......',
-  '....oMnMo.....',
-  '...oMnnnMo....',
-  '..oMnnknnMo...',
-  '..oMnnnnnMo...',
-  '..oMnkMknMo...',
-  '..oMnnnnnMo...',
-  '...oMnnnMo....',
-  '...oMMnMMo....',
-  '....oMMMo.....',
-  '....oMmMo.....',
-  '.....oMo......',
-  '....o.M.o.....',
-  '...o..m..o....',
-  '......o.......',
-  '.....o........',
-];
-
-/* 설인 (20x22) — 덩치 큰 털북숭이. 팔이 길어서 던지는 동작이 읽힌다.
-   흰 눈 위에서 묻히지 않도록 털을 누렇게(ENEMY_COLORS.yeti) 잡았다 */
-const YETI = [
-  '....oooooooo....',
-  '...oMMMMMMMMo...',
-  '..oMMnnnnnnMMo..',
-  '..oMnMkMMkMnMo..',
-  '..oMnMMMMMMnMo..',
-  '..oMMnMooMnMMo..',
-  '...oMMnnnnMMo...',
-  '..ooMMMMMMMMoo..',
-  '.oMMoMMMMMMoMMo.',
-  'oMMMoMnnnnMoMMMo',
-  'oMMMoMnnnnMoMMMo',
-  'oMMMoMMMMMMoMMMo',
-  '.oMMoMMMMMMoMMo.',
-  '..ooMMMMMMMMoo..',
-  '....oMMMMMMo....',
-  '....oMMooMMo....',
-  '....oMMooMMo....',
-  '...oMMMooMMMo...',
-  '...oMMMooMMMo...',
-  '..ooMMoooMMoo...',
-  '..oMMMo.oMMMo...',
-  '..ooooo.ooooo...',
-];
-
-/* 얼음 골렘 (18x20) — 각진 얼음덩이. 둥근 것이 많은 다른 몬스터들과 실루엣으로 구분된다.
-   가슴의 심(n)이 밝아서 '여기가 약점'처럼 읽힌다 */
-const GOLEM = [
-  '...oooo..oooo...',
-  '..oMMMMooMMMMo..',
-  '..oMnMMooMMnMo..',
-  '..oMMMMooMMMMo..',
-  '..ooMMMMMMMMoo..',
-  '.oMMMMkMMkMMMMo.',
-  'oMMMMMMMMMMMMMMo',
-  'oMMMMnnnnnnMMMMo',
-  'oMMMnnnnnnnnMMMo',
-  'oMMMnnnMMnnnMMMo',
-  'oMMMMnnnnnnMMMMo',
-  'oMMMMMnnnnMMMMMo',
-  'oMMMMMMMMMMMMMMo',
-  '.oMMMMMMMMMMMMo.',
-  '..oMMMMMMMMMMo..',
-  '..oMMMo..oMMMo..',
-  '..oMMMo..oMMMo..',
-  '.oMMMMo..oMMMMo.',
-  '.oMMMMo..oMMMMo.',
-  '.oooooo..oooooo.',
-];
-
-// 모래벌레 — 땅속에서는 모래 언덕(16x8)만 보이고, 솟구치면 입을 벌린 몸통(16x21)이 선다
-const WORM_MOUND = [
-  '......oooo......',
-  '....ooDDDDoo....',
-  '..ooDDDdddDDoo..',
-  '.oDDDdddddddDDo.',
-  'oDDdddddddddddDo',
-  'oddddddddddddddo',
-  '.oooooooooooooo.',
-  '................',
-];
-const WORM_BODY = [
-  '.oo.........oo..',
-  'onMo.......onMo.',
-  '.oMMo..oo..oMMo.',
-  '..oMMooRRooMMo..',
-  '...oMMRRRRMMo...',
-  '...oMkRRRRkMo...',
-  '...oMMMRRMMMo...',
-  '...oMMMMMMMMo...',
-  '...onMMMMMMno...',
-  '...ommMMMMmmo...',
-  '...oMMMMMMMMo...',
-  '...onMMMMMMno...',
-  '...ommMMMMmmo...',
-  '...oMMMMMMMMo...',
-  '...onMMMMMMno...',
-  '...ommMMMMmmo...',
-  '...oMMMMMMMMo...',
-  '..oMMMMMMMMMMo..',
-  '.oDDMMMMMMMMDDo.',
-  'oDDDDDMMMMDDDDDo',
-  '.oooooooooooooo.',
-];
 
 // 사막 전리품 — 전갈 침 / 선인장 열매 / 벌레 비늘
 const LOOT_STINGER = [
@@ -3529,18 +4395,10 @@ const MERCHANT = [
 const MERCHANT_BLINK = MERCHANT.map((row, i) => i === 5 ? MERCHANT[4] : row);   // 눈 줄만 살 색으로
 
 function buildSprites() {
-  // 플레이어: 방향 x 다리자세
-  const dirs = {
-    down: [P_BODY_DOWN, P_LEGS_FRONT],
-    up: [P_BODY_UP, P_LEGS_FRONT],
-    right: [P_BODY_SIDE, P_LEGS_SIDE],
-  };
-  SPRITES.player = {};
-  for (const dir in dirs) {
-    const body = dirs[dir][0], legSets = dirs[dir][1];
-    SPRITES.player[dir] = legSets.map((legs, i) => makeSprite('player_' + dir + i, body.concat(legs)));
-  }
-  SPRITES.player.left = SPRITES.player.right.map(flipX);
+  // 플레이어 — 네 방향 x 걸음 네 장 (js/art_player.js)
+  const pa = PlayerArt.build();
+  SPRITES.player = pa.sets;
+  SPRITES.playerFlash = pa.flash;
 
   SPRITES.sword = makeSprite('sword', SWORD);
   // 무기 3종 x 레벨 1~5. 휘두르기 코드는 손잡이가 아래·날이 위라는 방향만 가정한다.
@@ -3608,23 +4466,9 @@ function buildSprites() {
   SPRITES.shrine = [0, 1].map(i => makeShrine(1701 + i * 149));
   SPRITES.digMound = [0, 1].map(i => makeDigMound(1801 + i * 167));
 
-  /* 몬스터 — 종류마다 색이 하나다. 레벨은 머리 위 이름표 색이 알려준다.
-     (예전에는 레벨 등급 8종을 전부 찍어 두고 골라 썼다) */
+  /* 몬스터 몸은 js/art_creatures.js 가 크기마다 원본 해상도로 그린다 (늘려 그리지 않는다).
+     여기 남은 것은 몬스터가 쏘는 탄뿐이다 — 쏜 몬스터의 색을 따른다 */
   const EC = ENEMY_COLORS;
-  SPRITES.slime = makeSprite('slime', SLIME, EC.slime);
-  SPRITES.slimeFlash = makeSilhouette(SPRITES.slime, '#ffffff');
-
-  // 버섯 — 갓은 종류 색, 기둥은 공통
-  const STALK = { S: '#e8dcc0', s: '#c9bb9c' };
-  SPRITES.mushroomEnemy = makeSprite('mushroom_enemy', ENEMY_MUSHROOM, Object.assign({}, EC.mushroom, STALK));
-  SPRITES.mushroomEnemyFlash = makeSilhouette(SPRITES.mushroomEnemy, '#ffffff');
-
-  // 늑대 — [다리프레임] 두 장, 왼쪽은 좌우 반전
-  const fur = { G: EC.wolf.M, g: EC.wolf.n, d: EC.wolf.m, D: '#7a6a55', S: '#4a3d32' };
-  SPRITES.wolf = WOLF_LEGS.map((legs, f) => makeSprite('wolf_' + f, WOLF_BODY.concat(legs), fur));
-  SPRITES.wolfLeft = SPRITES.wolf.map(flipX);
-  SPRITES.wolfFlash = SPRITES.wolf.map(s => makeSilhouette(s, '#ffffff'));
-  SPRITES.wolfLeftFlash = SPRITES.wolfLeft.map(s => makeSilhouette(s, '#ffffff'));
 
   // 탄 — 쏜 몬스터의 색을 따른다 (버섯 포자 / 거대 슬라임이 뱉는 덩이)
   SPRITES.spore = {
@@ -3632,25 +4476,6 @@ function buildSprites() {
     slime: makeSprite('spore_slime', SPORE, EC.slime),
   };
 
-  // ── 사막 몬스터
-  SPRITES.scorpion = SCORPION_LEGS.map((legs, f) => makeSprite('scorpion_' + f, SCORPION_BODY.concat(legs), Object.assign({ S: '#2b1d12' }, EC.scorpion)));
-  SPRITES.scorpionLeft = SPRITES.scorpion.map(flipX);
-  SPRITES.scorpionFlash = SPRITES.scorpion.map(s => makeSilhouette(s, '#ffffff'));
-  SPRITES.scorpionLeftFlash = SPRITES.scorpionLeft.map(s => makeSilhouette(s, '#ffffff'));
-  SPRITES.cactusMob = makeSprite('cactus_mob', CACTUS_MOB, Object.assign({ R: '#e56b7a' }, EC.cactus));
-  SPRITES.cactusMobFlash = makeSilhouette(SPRITES.cactusMob, '#ffffff');
-  // 설원 몬스터 셋
-  SPRITES.wisp = makeSprite('wisp', WISP, EC.wisp);
-  SPRITES.wispFlash = makeSilhouette(SPRITES.wisp, '#ffffff');
-  SPRITES.yeti = makeSprite('yeti', YETI, EC.yeti);
-  SPRITES.yetiLeft = flipX(SPRITES.yeti);
-  SPRITES.yetiFlash = makeSilhouette(SPRITES.yeti, '#ffffff');
-  SPRITES.yetiLeftFlash = makeSilhouette(SPRITES.yetiLeft, '#ffffff');
-  SPRITES.golem = makeSprite('golem', GOLEM, EC.golem);
-  SPRITES.golemFlash = makeSilhouette(SPRITES.golem, '#ffffff');
-  SPRITES.wormMound = makeSprite('worm_mound', WORM_MOUND, { o: '#9a8560', D: '#e0cc8a', d: '#c9b06e' });
-  SPRITES.worm = makeSprite('worm', WORM_BODY, Object.assign({ R: '#8e2a2a', D: '#e0cc8a' }, EC.sandworm));
-  SPRITES.wormFlash = makeSilhouette(SPRITES.worm, '#ffffff');
 
   // 텔레포트 비석 — 룬이 밝은 것 / 어두운 것
   /* 장비 — 가죽은 갈색, 쇠는 은빛, 망토는 초록, 장신구는 금빛에 보석 하나 */
@@ -3673,38 +4498,35 @@ function buildSprites() {
     makeSprite('obelisk_off', OBELISK, { G: '#7d8493', g: '#5e6572', C: '#2a8fa0', B: '#4a4f5a' }),
   ];
 
-  // 보스 — 거대 슬라임도 슬라임 색을 쓴다 (덩치와 붉은 눈으로 구별된다). 착지 충격파 4프레임
-  SPRITES.giantSlime = makeGiantSlime(EC.slime);
-  SPRITES.giantSlimeFlash = makeSilhouette(SPRITES.giantSlime, '#ffffff');
+  // 거대 슬라임 착지 충격파 4프레임
   SPRITES.shockRing = [0, 0.34, 0.67, 1].map(t => makeShockRing(t, CONFIG.bosses.slime.slam.radius));
-  SPRITES.playerFlash = {};
-  for (const dir in SPRITES.player) {
-    SPRITES.playerFlash[dir] = SPRITES.player[dir].map(s => makeSilhouette(s, '#ff9a9a'));
-  }
 
-  // 지형 타일
-  SPRITES.grass = [0, 1, 2, 3, 4, 5].map(i => makeGrassTile(1000 + i * 977));
-  SPRITES.dirt = [0, 1, 2, 3].map(i => makeDirtTile(2000 + i * 811));
-  SPRITES.sand = [0, 1, 2].map(i => makeSandTile(3000 + i * 733));
-  SPRITES.water = [0, 1, 2, 3].map(i => makeWaterTile(4000 + i * 659));
-  SPRITES.darkGrass = [0, 1, 2, 3].map(i => makeDarkGrassTile(5000 + i * 613));
-  SPRITES.stone = [0, 1, 2, 3].map(i => makeStoneTile(6000 + i * 571));
-  SPRITES.gravel = [0, 1, 2].map(i => makeGravelTile(7000 + i * 487));
-  SPRITES.desertSand = [0, 1, 2, 3].map(i => makeDesertSandTile(8000 + i * 419));
-  SPRITES.dune = [0, 1, 2].map(i => makeDuneTile(9000 + i * 383));
-  SPRITES.cracked = [0, 1, 2].map(i => makeCrackedTile(9500 + i * 347));
+  /* 지형 타일 — 설계된 무늬로 (js/art_terrain.js). 재질마다 변종 넷 */
+  Terrain.initRamps();
+  const TR = Terrain.R, many = (n, seed, step, fn) => Array.from({ length: n }, (_, i) => fn(seed + i * step));
+  SPRITES.grass = many(6, 1000, 977, s => Terrain.grass(s, TR.grass));
+  SPRITES.meadow = many(4, 1100, 911, s => Terrain.grass(s, TR.grass, { base: 4, blades: 2 }));
+  SPRITES.darkGrass = many(4, 5000, 613, s => Terrain.grass(s, TR.shadeGrass, { dull: true }));
+  SPRITES.dirt = many(4, 2000, 811, s => Terrain.dirt(s, TR.dirt));
+  SPRITES.sand = many(3, 3000, 733, s => Terrain.sand(s, TR.shore));
+  SPRITES.water = many(4, 4000, 659, s => Terrain.water(s, TR.water));
+  SPRITES.stone = many(4, 6000, 571, s => Terrain.stone(s, TR.stone));
+  SPRITES.gravel = many(3, 7000, 487, s => Terrain.gravel(s, TR.gravel));
+  SPRITES.desertSand = many(4, 8000, 419, s => Terrain.desertSand(s, TR.dsand));
+  SPRITES.dune = many(3, 9000, 383, s => Terrain.dune(s, TR.dsand));
+  SPRITES.cracked = many(3, 9500, 347, s => Terrain.cracked(s, TR.cracked));
   // 설원 바닥
-  SPRITES.snow = [0, 1, 2, 3].map(i => makeSnowTile(2101 + i * 137));
-  SPRITES.shadeSnow = [0, 1, 2, 3].map(i => makeShadeSnowTile(2201 + i * 149));
-  SPRITES.ice = [0, 1, 2].map(i => makeIceTile(2301 + i * 163));
-  SPRITES.snowDrift = [0, 1, 2].map(i => makeSnowDriftTile(2401 + i * 179));
-  SPRITES.frostGravel = [0, 1, 2].map(i => makeFrostGravelTile(2501 + i * 181));
-  SPRITES.frozenWater = [0, 1, 2].map(i => makeFrozenWaterTile(2601 + i * 191));
+  SPRITES.snow = many(4, 2101, 137, s => Terrain.snow(s, TR.snow));
+  SPRITES.shadeSnow = many(4, 2201, 149, s => Terrain.snow(s, TR.shadeSnow, true));
+  SPRITES.ice = many(3, 2301, 163, s => Terrain.ice(s, TR.ice));
+  SPRITES.snowDrift = many(3, 2401, 179, s => Terrain.drift(s, TR.snow));
+  SPRITES.frostGravel = many(3, 2501, 181, s => Terrain.gravel(s, TR.frost));
+  SPRITES.frozenWater = many(3, 2601, 191, s => Terrain.frozen(s, TR.frozen));
 
   /* 바닥 타일 묶음 — 볕 드는 숲 바닥 / 빽빽한 숲의 그늘진 바닥 / 보스 방의 돌바닥.
      같은 "풀"이라도 어느 묶음이냐에 따라 밝은 잔디 / 그늘진 잔디 / 돌바닥이 된다. */
   SPRITES.groundSets = {
-    forest: { grass: SPRITES.grass, dirt: SPRITES.dirt, meadow: SPRITES.grass },
+    forest: { grass: SPRITES.grass, dirt: SPRITES.dirt, meadow: SPRITES.meadow },
     shade:  { grass: SPRITES.darkGrass, dirt: SPRITES.dirt, meadow: SPRITES.darkGrass },
     stone:  { grass: SPRITES.stone, dirt: SPRITES.gravel, meadow: SPRITES.stone },
     // 사막 — 풀은 오아시스 둘레에만, 흙 자리는 갈라진 땅, 꽃밭 자리는 모래언덕, 바탕은 사막 모래
@@ -3715,43 +4537,46 @@ function buildSprites() {
   };
 
   // 나무 — 활엽수 / 침엽수 / 고사목
-  SPRITES.tree = [0, 1, 2, 3].map(i => makeTree(31 + i * 613));
-  SPRITES.pine = [0, 1].map(i => makePine(101 + i * 547));
-  SPRITES.deadTree = [0, 1].map(i => makeDeadTree(211 + i * 379));
+  /* 나무 — js/art_props.js. 활엽수는 모양 넷에 꽃·열매 핀 것을 하나씩 섞어
+     숲을 걸을 때 같은 나무만 반복되지 않게 했다 (꽃·열매는 여덟 그루에 한 그루꼴) */
+  Props.initRamps();
+  SPRITES.tree = [
+    Props.tree(31, 'round', 0), Props.tree(644, 'round', 1), Props.tree(1257, 'oval', 2), Props.tree(1870, 'wide', 3),
+    Props.tree(2483, 'round', 2), Props.tree(3096, 'oval', 0), Props.tree(3709, 'blossom', 1), Props.tree(4322, 'fruit', 3),
+  ];
+  SPRITES.pine = [Props.pine(101, false), Props.pine(648, false), Props.pine(1195, false)];
+  SPRITES.deadTree = [Props.deadTree(211), Props.deadTree(590)];
   // 사막 초목 — 기둥 선인장 / 공 선인장 / 야자수 / 바위기둥 / 뼈
-  SPRITES.cactus = [0, 1, 2].map(i => makeCactus(1301 + i * 271));
-  SPRITES.barrelCactus = [0, 1].map(i => makeBarrelCactus(1401 + i * 191));
-  SPRITES.palm = [0, 1].map(i => makePalm(1501 + i * 233));
-  SPRITES.rockSpire = [0, 1, 2].map(i => makeRockSpire(1601 + i * 211));
-  SPRITES.bones = [0, 1].map(i => makeBones(1701 + i * 157));
-  SPRITES.snowPine = [0, 1].map(i => makeSnowPine(2701 + i * 197));
-  SPRITES.iceSpire = [0, 1, 2].map(i => makeIceSpire(2801 + i * 199));
-  SPRITES.snowRock = [0, 1].map(i => makeSnowRock(2901 + i * 211));
-  SPRITES.frostBush = [0, 1].map(i => makeBush(3001 + i * 223, { out: '#1d3a46', dark: '#2a5a66', mid: '#4a8a9a', lit: '#9fd4e4', shade: '#16303a' }));
+  SPRITES.cactus = [0, 1, 2].map(i => Props.cactus(1301 + i * 271));
+  SPRITES.barrelCactus = [0, 1].map(i => Props.barrelCactus(1401 + i * 191));
+  SPRITES.palm = [0, 1].map(i => Props.palm(1501 + i * 233));
+  SPRITES.rockSpire = [0, 1, 2].map(i => Props.rockSpire(1601 + i * 211));
+  SPRITES.bones = [0, 1].map(i => Props.bones(1701 + i * 157));
+  SPRITES.snowPine = [Props.pine(2701, true), Props.pine(2898, true), Props.pine(3095, true)];
+  SPRITES.iceSpire = [0, 1, 2, 3].map(i => Props.iceSpire(2801 + i * 199));
+  const PR = Props.R;
+  SPRITES.snowRock = [0, 1].map(i => Props.rock(2901 + i * 211, 12, 10, PR.stone, { cap: 'snow' }));
+  SPRITES.frostBush = [0, 1].map(i => Props.bush(3001 + i * 223, PR.frostLeaf, 'plain'));
+  SPRITES.dryBush = [0, 1].map(i => Props.bush(1801 + i * 431, PR.dryLeaf, 'plain'));
 
-  SPRITES.dryBush = [0, 1].map(i => makeBush(1801 + i * 431, { out: '#3a2a10', dark: '#7a6a2a', mid: '#a08e3a', lit: '#c9b25a', shade: '#5a4a1a' }));
-
-  // 바닥 소품
-  SPRITES.bush = [0, 1, 2].map(i => makeBush(77 + i * 431));
-  SPRITES.rock = [makeRock()];
-  SPRITES.boulder = [0, 1].map(i => makeBoulder(307 + i * 281));
-  SPRITES.stump = [makeStump(401)];
-  SPRITES.log = [0, 1].map(i => makeLog(503 + i * 197));
-  SPRITES.cattail = [0, 1].map(i => makeCattail(601 + i * 173));
+  // 바닥 소품 — 수풀은 열매·꽃 핀 것이 섞인다
+  SPRITES.bush = [Props.bush(77, PR.bush, 'plain'), Props.bush(508, PR.bush, 'plain'), Props.bush(939, PR.bush, 'berry'), Props.bush(1370, PR.bush, 'flower')];
+  SPRITES.rock = [Props.rock(51, 13, 11, PR.stone)];
+  SPRITES.boulder = [Props.rock(307, 22, 17, PR.stone), Props.rock(588, 22, 17, PR.stone, { cap: 'moss' })];
+  SPRITES.stump = [Props.stump(401)];
+  SPRITES.log = [0, 1].map(i => Props.log(503 + i * 197));
+  SPRITES.cattail = [0, 1].map(i => Props.cattail(601 + i * 173));
   SPRITES.caveEntrance = [0, 1].map(i => makeCaveEntrance(907 + i * 233));
-  SPRITES.lilyPad = [0, 1].map(i => makeLilyPad(701 + i * 149));
-  SPRITES.flower = ['#e8d15a', '#e56b7a', '#c79ce8', '#f0f0f0'].map(makeFlower);
+  SPRITES.lilyPad = [0, 1].map(i => Props.lilyPad(701 + i * 149));
+  // 꽃 — 노랑·분홍·보라·흰색 (색상값으로 고른다)
+  SPRITES.flower = [50, 345, 275, 210].map(h => Props.flower(h));
 
-  // 버섯 3색
-  SPRITES.mushroom = [
-    { M: '#b83a3a', N: '#d95c5c', D: '#f6ece0', S: '#e8dcc0', s: '#c9bb9c' },
-    { M: '#7a4fae', N: '#9a6fce', D: '#f6ece0', S: '#e8dcc0', s: '#c9bb9c' },
-    { M: '#a8762c', N: '#c99446', D: '#f6ece0', S: '#e8dcc0', s: '#c9bb9c' },
-  ].map((pal, i) => makeSprite('mushroom' + i, MUSHROOM, pal));
+  // 버섯 3색 — 붉은 / 보라 / 갈색 갓
+  SPRITES.mushroom = [2, 275, 32].map(h => Props.mushroom(h));
 
   // 흔들리는 풀 — [왼쪽, 가운데, 오른쪽] 3프레임 x 3종
-  SPRITES.tuft = [0, 1, 2].map(k => [-1, 0, 1].map(lean => makeGrassTuft(811 + k * 127, lean)));
-  SPRITES.dryTuft = [0, 1, 2].map(k => [-1, 0, 1].map(lean => makeGrassTuft(911 + k * 127, lean, { tip: '#e0cc8a', dark: '#8a7a3a', mid: '#b09a4a' })));
+  SPRITES.tuft = [0, 1, 2].map(k => [-1, 0, 1].map(lean => Props.tuft(811 + k * 127, lean, PR.leaf[k % 4])));
+  SPRITES.dryTuft = [0, 1, 2].map(k => [-1, 0, 1].map(lean => Props.tuft(911 + k * 127, lean, PR.dryLeaf)));
 
   SPRITES.vignette = makeVignette(CONFIG.VIEW_W, CONFIG.VIEW_H, CONFIG.ambient.vignette);
   SPRITES.leaf = ['#4f9a3f', '#7fae3a', '#b8933a', '#c07a35'].map(c => {
@@ -3776,6 +4601,19 @@ function buildSprites() {
     SPRITES.heavySlash.push([0, 0.5, 1].map(t => makeHeavySlashFrame(a, t)));
   }
   SPRITES.spinRing = [0, 0.5, 1].map(makeSpinRing);
+
+  /* ── 마무리 손질 — 손으로 찍은 옛 도트의 외곽선을 새 규칙(재질 색 1px)으로 맞춘다.
+     모양은 그대로 두고 검정 외곽선만 바꾸므로, 마을·아이템·장비가 새 나무·몬스터와 한 세상처럼 보인다 */
+  const fix = (v) => Array.isArray(v) ? v.map(fix) : (v && v.width ? Art.recolorOutline(v) : v);
+  for (const key of ['merchant', 'smith', 'alchemist', 'chest', 'ruinPillar', 'ruinBlock', 'tent', 'fence', 'fenceV',
+    'campfire', 'shrine', 'digMound', 'anvil', 'questBoard', 'stall', 'caveEntrance', 'obelisk', 'potion', 'coin', 'sword']) {
+    if (SPRITES[key]) SPRITES[key] = fix(SPRITES[key]);
+  }
+  for (const group of ['loot', 'gear', 'spore']) {
+    const g = SPRITES[group];
+    if (g) for (const k in g) g[k] = fix(g[k]);
+  }
+  for (const id in SPRITES.weapons) SPRITES.weapons[id] = fix(SPRITES.weapons[id]);
 }
 
 </script>
@@ -4456,21 +5294,6 @@ const Sound = {
 
 const TILE_GRASS = 0, TILE_DIRT = 1, TILE_SAND = 2, TILE_WATER = 3, TILE_MEADOW = 4;
 
-// 타일 경계를 흐릴 때 쓰는 대표색 — [테마][색 줄][타일종류]. 숲은 볕/그늘 두 줄, 사막은 한 줄
-const TILE_BASE_COLOR = {
-  forest: [
-    ['#3f8b40', '#7d5f3c', '#c2a877', '#2f6f9e', '#3f8b40'],   // 볕이 드는 숲 바닥
-    ['#2c6431', '#7d5f3c', '#c2a877', '#2f6f9e', '#2c6431'],   // 빽빽한 숲의 그늘진 바닥
-  ],
-  desert: [
-    ['#3f8b40', '#9a6b3c', '#d9c27f', '#2f6f9e', '#e0cc8a'],   // 오아시스 풀, 갈라진 땅, 모래, 물, 모래언덕
-  ],
-  snow: [
-    ['#dceaf3', '#96c4da', '#bad0dc', '#2b5a78', '#e8f2f8'],   // 눈, 맨 얼음, 서리 모래, 얼어붙은 못, 눈더미
-    ['#b4cadc', '#85b3cb', '#a8c0cf', '#23506d', '#d6e6f0'],   // 그늘진 눈
-  ],
-};
-
 const World = {
   w: 0,            // 픽셀 단위 맵 크기
   h: 0,
@@ -4521,6 +5344,7 @@ const World = {
     Forge.place();      // 대장간 — 무기에 속성을 박는 모루 (보스 전에는 모루만)
     if (typeof Village !== 'undefined') Village.place();   // 10주차: 거점 — 연금술사·창고·모닥불·집
     this.placePortal(); // 텔레포트 비석 — 시작 지점 반대편
+    Props.bakeShadows(this);   // 서 있는 것들의 그림자를 바닥에 굽는다 (빛 반대편)
     this.buildGrid();   // 바위·그루터기·가판대까지 포함해 다시 만든다
   },
 
@@ -4649,8 +5473,13 @@ const World = {
           // 벽 — 거의 검게 덮고 결만 남긴다
           ctx.fillStyle = WALL_TINT;
           ctx.fillRect(x, y, T, T);
+          /* 결 — 무작위 점 대신 바위 틈 두 줄 (칸마다 엇갈려 벽돌처럼 이어진다).
+             rng 는 예전과 같은 횟수만 부른다 — 그래야 방 안 바위 배치가 그대로다 */
+          for (let k = 0; k < 10; k++) rng();
           ctx.fillStyle = WALL_GRAIN;
-          for (let k = 0; k < 5; k++) ctx.fillRect(x + Math.floor(rng() * T), y + Math.floor(rng() * T), 1, 1);
+          const off = ((tx + ty) & 1) ? 7 : 2;
+          ctx.fillRect(x + off, y + 4, 6, 1); ctx.fillRect(x + ((off + 8) % 16), y + 11, 5, 1);
+          ctx.fillRect(x + off + 5, y + 5, 1, 1);
         } else if (rng() < 0.035) {
           // 자갈은 아주 드물게 — 흔하면 바닥이 어수선해서 보스 동작이 안 보인다
           ctx.drawImage(SPRITES.rock[0], x + Math.floor(rng() * 6), y + Math.floor(rng() * 7));
@@ -4833,21 +5662,12 @@ const World = {
 
   /* ── 바닥 굽기 ─────────────────────────────────────────── */
 
+  /* 바닥은 Terrain.bake 가 픽셀 단위로 굽는다 — 칸 경계를 부드럽게 휘고,
+     물가·풀가장자리에 규칙대로 테두리를 넣는다 (js/art_terrain.js). 그 위에 꽃·돌멩이를 찍는다 */
   bakeGround(rng) {
-    const T = CONFIG.TILE, W = this.cols, H = this.rows;
-    this.ground = makeCanvas(this.w, this.h);
+    this.ground = Terrain.bake(this, rng);
     const ctx = this.ground.getContext('2d');
     ctx.imageSmoothingEnabled = false;
-
-    for (let ty = 0; ty < H; ty++) {
-      for (let tx = 0; tx < W; tx++) {
-        const i = ty * W + tx;
-        const set = this.groundSet(this.tiles[i], this.groundSetName(this.shade[i]));
-        ctx.drawImage(set[Math.floor(rng() * set.length)], tx * T, ty * T);
-      }
-    }
-
-    this.ditherEdges(ctx, rng);
     this.bakeDetails(ctx, rng);
   },
 
@@ -4867,40 +5687,6 @@ const World = {
     if (tile === TILE_WATER) return g.water || SPRITES.water; // 설원은 얼어붙은 못
     if (tile === TILE_MEADOW) return g.meadow;
     return g.grass;
-  },
-
-  // 경계에 서로의 색을 흩뿌려 칼같은 직선을 없앤다.
-  // 타일 종류가 같아도 그늘 여부가 다르면 색이 다르므로 그늘 경계도 함께 흐려진다.
-  ditherEdges(ctx, rng) {
-    const T = CONFIG.TILE, W = this.cols, H = this.rows;
-    const rows = TILE_BASE_COLOR[this.spec.theme] || TILE_BASE_COLOR.forest;
-    const colorAt = (i) => rows[this.colorRow[i]][this.tiles[i]];
-    const sprinkle = (x, y, w, h, color, n) => {
-      ctx.fillStyle = color;
-      for (let i = 0; i < n; i++) {
-        ctx.fillRect(x + Math.floor(rng() * w), y + Math.floor(rng() * h), 1, 1);
-      }
-    };
-    for (let ty = 0; ty < H; ty++) {
-      for (let tx = 0; tx < W; tx++) {
-        const i = ty * W + tx;
-        const c = colorAt(i);
-        if (tx + 1 < W) {
-          const cn = colorAt(i + 1);
-          if (cn !== c) {
-            sprinkle(tx * T + T - 3, ty * T, 3, T, cn, 8);
-            sprinkle((tx + 1) * T, ty * T, 3, T, c, 8);
-          }
-        }
-        if (ty + 1 < H) {
-          const cn = colorAt(i + W);
-          if (cn !== c) {
-            sprinkle(tx * T, ty * T + T - 3, T, 3, cn, 8);
-            sprinkle(tx * T, (ty + 1) * T, T, 3, c, 8);
-          }
-        }
-      }
-    }
   },
 
   // 지형에 어울리는 잔디테일을 바닥에 직접 찍는다 (움직이지 않으므로 구워도 된다)
@@ -4968,6 +5754,8 @@ const World = {
     };
     if (opts && opts.frames) { p.frames = opts.frames; p.phase = Math.random() * Math.PI * 2; }
     this.props.push(p);
+    // 부딪히는 것은 바닥 그림자를 드리운다 (나무는 따로 크게 정한다) — Props.bakeShadows 가 굽는다
+    if (opts && opts.solid) p.shadow = [Math.round(sprite.width * 0.14), 1, Math.round(sprite.width * 0.42), Math.max(2, Math.round(sprite.width * 0.15))];
     if (opts && opts.solid) {
       this.solids.push({ x: x - opts.solid[0], y: y - opts.solid[1], w: opts.solid[0] * 2, h: opts.solid[1] + opts.solid[2] });
     }
@@ -5035,7 +5823,11 @@ const World = {
       } else {
         sprite = Util.choice(SPRITES.tree); solid = [6, 5, 8];
       }
-      this.addProp(sprite, x, y, { solid: solid }).tree = true;   // 미니맵에 숲으로 표시되고, 뒤에 서면 옅어진다
+      const tp = this.addProp(sprite, x, y, { solid: solid });
+      tp.tree = true;   // 미니맵에 숲으로 표시되고, 뒤에 서면 옅어진다
+      // 바닥 그림자 — 빛 반대편(오른쪽 아래)으로. 넓은 나무일수록 넓게
+      const sw = sprite.width;
+      tp.shadow = [Math.round(sw * 0.16), 2, Math.round(sw * 0.34), Math.max(2, Math.round(sw * 0.11))];
     };
 
     // 맵 가장자리는 나무로 둘러 벽처럼 막는다
@@ -5207,7 +5999,7 @@ const World = {
     p.sign = { text: 'PORTAL', color: '#5ff0ff', dy: 26 };
     p.draw = (ctx, cam) => {
       const sx = Math.round(p.x - cam.x), sy = Math.round(p.y - cam.y);
-      fillCircle(ctx, sx, sy + 1, 7, 'rgba(0,0,0,0.28)');
+      fillEllipse(ctx, sx + 1, sy + 1, 7, 2.9, 'rgba(10,12,20,0.3)');
       // 아직 잠긴 비석은 룬이 꺼진 채다 — 멀리서도 '아직 안 열렸다'가 보인다
       const sealed = this.mapId === 'forest' && typeof Game !== 'undefined' && Game.portalUnlocked && !Game.portalUnlocked();
       const sp = (!sealed && Math.floor(World.time * 2) % 2 === 0) ? SPRITES.obelisk[0] : SPRITES.obelisk[1];
@@ -6631,22 +7423,24 @@ class Player {
     if (this.trail.length) {
       for (const t of this.trail) {
         ctx.globalAlpha = Util.clamp(t.life / 0.2, 0, 1) * 0.34;
-        ctx.drawImage(SPRITES.player[t.facing][0], Math.round(t.x - cam.x) - 8, Math.round(t.y - cam.y) - 8);
+        ctx.drawImage(SPRITES.player[t.facing][1], Math.round(t.x - cam.x) - 8, Math.round(t.y - cam.y) - 8);
       }
       ctx.globalAlpha = 1;
     }
 
     // 무적 시간 동안 사라지지는 않는다 — 대신 잠깐 붉게 물들어 맞았음을 알린다 (아래 set 선택)
 
-    // 그림자
-    fillCircle(ctx, sx, sy + 7, 5, 'rgba(0,0,0,0.28)');
+    // 그림자 — 납작한 타원, 빛 반대편으로 한 칸
+    fillEllipse(ctx, sx + 1, sy + 7, 5, 2, 'rgba(10,12,20,0.32)');
 
-    const frame = this.moving && Math.floor(this.walkTime * 8) % 2 === 1 ? 1 : 0;
+    /* 걸음 네 장 — 딛기(0)·지나기(1)·딛기(2)·지나기(3). 한 장에 약 0.1초.
+       서 있을 땐 다리를 모은 지나기 자세(1)로 선다 */
+    const frame = this.moving ? Math.floor(this.walkTime * 10) % 4 : 1;
     // 맞은 직후 0.25초는 붉은 실루엣, 그 뒤 무적이 남은 동안엔 한 프레임 걸러 살짝 옅어질 뿐 늘 보인다
     const set = this.invuln > CONFIG.player.invulnTime - 0.25 ? SPRITES.playerFlash : SPRITES.player;
     if (this.invuln > 0 && Math.floor(this.invuln * 20) % 2 === 0) ctx.globalAlpha = 0.75;
-    // 걸을 때 살짝 위아래로 흔들리면 발걸음이 살아난다
-    const bob = frame === 1 ? -1 : 0;
+    // 지나기 자세에서 몸이 가장 높다 — 걸을 때만 한 칸 솟는다
+    const bob = this.moving && (frame === 1 || frame === 3) ? -1 : 0;
     // 회전베기 중에는 바라보는 방향을 빠르게 돌려서 도는 것처럼 보이게 한다
     const facing = this.activeSkill === 'spin' ? Player.facingFromAngle(this.spinAngle) : this.facing;
     // 광폭화 중엔 몸 뒤에 붉은 그림자가 떨린다
@@ -7133,24 +7927,22 @@ class Enemy {
     const sx = Math.round(this.x - cam.x);
     const sy = Math.round(this.y - cam.y);
     if (this.elite) Elite.drawAura(ctx, this, sx, sy);   // 발밑 고리는 몸에 가려지지 않게 먼저
-    // 맞은 직후엔 발을 축으로 옆으로 퍼졌다 돌아온다 — 충격이 몸에 전해지는 느낌
-    if (this.hurtFlash > 0) {
-      const k = this.hurtFlash / 0.12;
-      ctx.save();
-      ctx.translate(sx, sy + 7);
-      ctx.scale(1 + k * 0.16, 1 - k * 0.14);
-      ctx.translate(-sx, -(sy + 7));
-      this.drawBody(ctx, sx, sy);
-      ctx.restore();
-      return;
-    }
+    /* 맞은 직후엔 옆으로 퍼졌다 돌아온다 — 충격이 몸에 전해지는 느낌.
+       예전엔 캔버스를 비정수 배율로 늘려서 도트가 뭉개졌다. 이제는 눌린 크기(hitSX/hitSY)를
+       그리는 쪽에 넘겨 **그 크기로 다시 그린다** (늘리지 않는다) */
+    this.hitK = this.hurtFlash > 0 ? this.hurtFlash / 0.12 : 0;
     this.drawBody(ctx, sx, sy);
   }
 
   drawBody(ctx, sx, sy) { /* 하위 클래스가 채운다 */ }
 
+  // 맞은 순간의 눌림 배수 (그림 크기에 곱한다)
+  get hitSX() { return 1 + (this.hitK || 0) * 0.16; }
+  get hitSY() { return 1 - (this.hitK || 0) * 0.14; }
+
+  // 발밑 그림자 — 납작한 타원, 빛 반대편으로 한 칸 (둥근 원은 공처럼 떠 보인다)
   drawShadow(ctx, sx, sy, radius) {
-    fillCircle(ctx, sx, sy + 6, radius, 'rgba(0,0,0,0.28)');
+    fillEllipse(ctx, sx + 1, sy + 6, radius, Math.max(1.5, radius * 0.42), 'rgba(10,12,20,0.32)');
   }
 
   // 레벨 표시와 체력바 — 모든 몬스터가 같은 자리에 같은 모양으로 띄운다
@@ -7246,17 +8038,15 @@ class Slime extends Enemy {
       stretchX = 1 + 0.16 * k;
     }
 
-    const w = Math.round(16 * this.scale * stretchX);
-    const h = Math.round(16 * this.scale * stretchY);
-
     // 그림자 — 떠 있을수록 작아진다
     const shadowScale = 1 - (-yOff / (6 * this.scale)) * 0.35;
     this.drawShadow(ctx, sx, sy, 5.5 * this.scale * shadowScale);
 
-    const sprite = this.hurtFlash > 0 ? SPRITES.slimeFlash : SPRITES.slime;
-    ctx.drawImage(sprite, sx - Math.round(w / 2), Math.round(sy + yOff + 7 - h), w, h);
-
-    this.drawLabel(ctx, sx, Math.round(sy + yOff - h + 4));
+    // 몸 — 늘어난 크기 그대로 새로 그린다 (Creatures.slime)
+    const w = Math.round(14 * this.scale * stretchX * this.hitSX);
+    const h = Math.round(12 * this.scale * stretchY * this.hitSY);
+    const top = Creatures.blit(ctx, Creatures.slime(w, h, this.hurtFlash > 0), sx, sy, Math.round(-yOff));
+    this.drawLabel(ctx, sx, top + 2);
   }
 }
 
@@ -7345,16 +8135,11 @@ class Mushroom extends Enemy {
     if (this.windup > 0) grow = 1 + (1 - this.windup / cfg.windup) * 0.16;
     else if (this.puff > 0) grow = 1 - (this.puff / 0.18) * 0.12;
 
-    const w = Math.round(16 * this.scale * grow);
-    const h = Math.round(16 * this.scale * grow);
-
     this.drawShadow(ctx, sx, sy, 5.5 * this.scale);
-    const set = this.hurtFlash > 0 ? SPRITES.mushroomEnemyFlash : SPRITES.mushroomEnemy;
-    ctx.drawImage(set, sx - Math.round(w / 2), Math.round(sy + 7 - h), w, h);
-
-    const topY = Math.round(sy + 7 - h + 4);
-    if (this.windup > 0) this.drawWarning(ctx, sx, topY, 1 - this.windup / cfg.windup);
-    this.drawLabel(ctx, sx, topY);
+    const cv = Creatures.mushroom(Math.round(15 * this.scale * this.hitSX), grow, this.hurtFlash > 0);
+    const top = Creatures.blit(ctx, cv, sx, sy);
+    if (this.windup > 0) this.drawWarning(ctx, sx, top + 2, 1 - this.windup / cfg.windup);
+    this.drawLabel(ctx, sx, top + 2);
   }
 }
 
@@ -7462,33 +8247,21 @@ class Wolf extends Enemy {
   }
 
   drawBody(ctx, sx, sy) {
-    const frame = (this.state === 'windup' || this.state === 'recover')
-      ? 0
-      : (Math.floor(this.stepTime * 6) % 2);
+    // 걸음 네 장 — 딛기·지나기·딛기·지나기. 웅크리거나 숨 고를 땐 멈춘다
+    const still = this.state === 'windup' || this.state === 'recover';
+    const frame = still ? 0 : Math.floor(this.stepTime * 8) % 4;
+    const pose = this.state === 'windup' ? 'crouch' : (this.state === 'lunge' ? 'lunge' : 'walk');
+    const sxScale = this.state === 'lunge' ? 1.12 : (this.state === 'windup' ? 1.04 : 1);
 
-    const flash = this.hurtFlash > 0;
-    const set = this.facing >= 0
-      ? (flash ? SPRITES.wolfFlash : SPRITES.wolf)
-      : (flash ? SPRITES.wolfLeftFlash : SPRITES.wolfLeft);
-    const sprite = set[frame];
-
-    // 웅크릴 때는 납작해지고, 돌진할 때는 앞으로 길어진다
-    let sxScale = 1, syScale = 1;
-    if (this.state === 'windup') { syScale = 0.82; sxScale = 1.06; }
-    else if (this.state === 'lunge') { syScale = 0.92; sxScale = 1.12; }
-
-    const draw = this.scale * CONFIG.wolf.spriteScale;
-    const w = Math.round(sprite.width * draw * sxScale);
-    const h = Math.round(sprite.height * draw * syScale);
+    const W = Math.round(22 * this.scale * sxScale * this.hitSX);
+    const H = Math.round(16 * this.scale * this.hitSY);
+    let cv = Creatures.wolf(W, H, frame, pose, this.hurtFlash > 0);
+    if (this.facing < 0) cv = Creatures.flip(cv);
 
     this.drawShadow(ctx, sx, sy, 6.5 * this.scale);
-    ctx.drawImage(sprite, sx - Math.round(w / 2), Math.round(sy + 7 - h), w, h);
-
-    const topY = Math.round(sy + 7 - h + 2);
-    if (this.state === 'windup') {
-      this.drawWarning(ctx, sx, topY, 1 - this.timer / CONFIG.wolf.windup);
-    }
-    this.drawLabel(ctx, sx, topY);
+    const top = Creatures.blit(ctx, cv, sx, sy) + 2;
+    if (this.state === 'windup') this.drawWarning(ctx, sx, top, 1 - this.timer / CONFIG.wolf.windup);
+    this.drawLabel(ctx, sx, top);
   }
 }
 
@@ -7591,27 +8364,23 @@ class Scorpion extends Enemy {
   drawBody(ctx, sx, sy) {
     const cfg = CONFIG.scorpion;
     const moving = this.state === 'wander' || this.state === 'chase' || this.state === 'sting';
-    const frame = moving ? (Math.floor(this.stepTime * 6) % 2) : 0;
-    const flash = this.hurtFlash > 0;
-    const set = this.facing >= 0
-      ? (flash ? SPRITES.scorpionFlash : SPRITES.scorpion)
-      : (flash ? SPRITES.scorpionLeftFlash : SPRITES.scorpionLeft);
-    const sprite = set[frame];
+    const frame = moving ? Math.floor(this.stepTime * 8) % 4 : 0;
+    const pose = this.state === 'windup' ? 'windup' : (this.state === 'sting' ? 'sting' : 'walk');
 
-    // 예고 때는 뒤로 움츠리고, 찌를 때는 앞으로 길어진다
+    // 예고 때는 뒤로 움츠리고, 찌를 때는 앞으로 길어진다 — 크기를 바꿔 새로 그린다
     let sxScale = 1, syScale = 1;
-    if (this.state === 'windup') { sxScale = 0.9; syScale = 1.1; }
-    else if (this.state === 'sting') { sxScale = 1.15; syScale = 0.92; }
+    if (this.state === 'windup') { sxScale = 0.92; syScale = 1.06; }
+    else if (this.state === 'sting') { sxScale = 1.12; syScale = 0.94; }
 
-    const draw = this.scale * 0.85;
-    const w = Math.round(sprite.width * draw * sxScale);
-    const h = Math.round(sprite.height * draw * syScale);
+    const W = Math.round(24 * 0.85 * this.scale * sxScale * this.hitSX);
+    const H = Math.round(17 * 0.85 * this.scale * syScale * this.hitSY);
+    let cv = Creatures.scorpion(W, H, frame, pose, this.hurtFlash > 0);
+    if (this.facing < 0) cv = Creatures.flip(cv);
+
     this.drawShadow(ctx, sx, sy, 7 * this.scale);
-    ctx.drawImage(sprite, sx - Math.round(w / 2), Math.round(sy + 7 - h), w, h);
-
-    const topY = Math.round(sy + 7 - h + 2);
-    if (this.state === 'windup') this.drawWarning(ctx, sx, topY, 1 - this.timer / cfg.windup);
-    this.drawLabel(ctx, sx, topY);
+    const top = Creatures.blit(ctx, cv, sx, sy) + 2;
+    if (this.state === 'windup') this.drawWarning(ctx, sx, top, 1 - this.timer / cfg.windup);
+    this.drawLabel(ctx, sx, top);
   }
 }
 
@@ -7687,15 +8456,11 @@ class Cactus extends Enemy {
     if (this.windup > 0) grow = 1 + (1 - this.windup / cfg.windup) * 0.14;
     else if (this.puff > 0) grow = 1 - (this.puff / 0.18) * 0.1;
 
-    const sprite = this.hurtFlash > 0 ? SPRITES.cactusMobFlash : SPRITES.cactusMob;
-    const w = Math.round(sprite.width * this.scale * grow);
-    const h = Math.round(sprite.height * this.scale * grow);
     this.drawShadow(ctx, sx, sy, 5.5 * this.scale);
-    ctx.drawImage(sprite, sx - Math.round(w / 2), Math.round(sy + 7 - h), w, h);
-
-    const topY = Math.round(sy + 7 - h + 4);
-    if (this.windup > 0) this.drawWarning(ctx, sx, topY, 1 - this.windup / cfg.windup);
-    this.drawLabel(ctx, sx, topY);
+    const cv = Creatures.cactusMob(Math.round(16 * this.scale * this.hitSX), grow, this.hurtFlash > 0);
+    const top = Creatures.blit(ctx, cv, sx, sy) + 3;
+    if (this.windup > 0) this.drawWarning(ctx, sx, top, 1 - this.windup / cfg.windup);
+    this.drawLabel(ctx, sx, top);
   }
 }
 
@@ -7829,22 +8594,19 @@ class Sandworm extends Enemy {
       // 모래 언덕 — 예고 때는 좌우로 들썩이고 조금 부푼다
       const jitter = this.state === 'rise' ? Math.round(Math.sin(World.time * 40) * this.shake) : 0;
       const grow = this.state === 'rise' ? 1 + (1 - this.timer / cfg.windup) * 0.3 : (this.state === 'burrow' ? 0.8 : 1);
-      const sp = SPRITES.wormMound;
-      const w = Math.round(sp.width * this.scale * grow), h = Math.round(sp.height * this.scale * grow);
-      ctx.drawImage(sp, sx - Math.round(w / 2) + jitter, Math.round(sy + 7 - h), w, h);
-      const topY = Math.round(sy + 7 - h);
-      if (this.state === 'rise') this.drawWarning(ctx, sx, topY, 1 - this.timer / cfg.windup);
-      UI.drawText(ctx, 'L' + this.level, sx - 4, topY - 5, this.labelColor, false);
+      const cv = Creatures.wormMound(Math.round(16 * this.scale * grow));
+      const top = Creatures.blit(ctx, cv, sx + jitter, sy);
+      if (this.state === 'rise') this.drawWarning(ctx, sx, top, 1 - this.timer / cfg.windup);
+      UI.drawText(ctx, 'L' + this.level, sx - 4, top - 5, this.labelColor, false);
       return;
     }
     // 밖에 나온 몸통 — 막 솟았을 땐 위로 늘어났다가 자리를 잡는다
-    const age = Math.max(0, cfg.surfaced - this.timer);   // 음수가 되면 몸이 화면만큼 늘어난다
+    const age = Math.max(0, cfg.surfaced - this.timer);
     const stretch = age < 0.25 ? 1 + (0.25 - age) * 1.2 : 1;
-    const sprite = this.hurtFlash > 0 ? SPRITES.wormFlash : SPRITES.worm;
-    const w = Math.round(sprite.width * this.scale), h = Math.round(sprite.height * this.scale * stretch);
+    const W = Math.round(14 * this.scale * this.hitSX), H = Math.round(21 * this.scale * stretch * this.hitSY);
     this.drawShadow(ctx, sx, sy, 6 * this.scale);
-    ctx.drawImage(sprite, sx - Math.round(w / 2), Math.round(sy + 7 - h), w, h);
-    this.drawLabel(ctx, sx, Math.round(sy + 7 - h + 2));
+    const top = Creatures.blit(ctx, Creatures.worm(W, H, this.hurtFlash > 0), sx, sy);
+    this.drawLabel(ctx, sx, top + 2);
   }
 }
 
@@ -7914,22 +8676,20 @@ class Wisp extends Enemy {
 
   drawBody(ctx, sx, sy) {
     const cfg = CONFIG.wisp;
-    const lift = Math.sin(this.bob) * cfg.bobAmp;
-    const sprite = this.hurtFlash > 0 ? SPRITES.wispFlash : SPRITES.wisp;
-    const w = Math.round(sprite.width * this.scale);
-    const h = Math.round(sprite.height * this.scale);
+    const lift = Math.round(Math.sin(this.bob) * cfg.bobAmp) + 3;
+    const frame = Math.floor(this.bob * 2) % 4;
 
     // 발이 없으므로 그림자는 작고 흐리게 — 땅에 닿아 있지 않다는 표시
-    fillCircle(ctx, sx, sy + 6, 3.5 * this.scale, 'rgba(0,0,0,0.18)');
+    fillEllipse(ctx, sx + 1, sy + 6, 3.5 * this.scale, 1.5, 'rgba(10,12,20,0.18)');
 
     // 벽(나무·바위) 안에 들어가 있으면 흐려진다. 사라지지는 않는다
     this.inWall = World.blocked({ x: this.x - 3, y: this.y, w: 6, h: 4 });
     ctx.save();
     if (this.inWall) ctx.globalAlpha = cfg.wallAlpha;
-    ctx.drawImage(sprite, sx - Math.round(w / 2), Math.round(sy + lift + 4 - h), w, h);
+    const cv = Creatures.wisp(Math.round(16 * this.scale * this.hitSX), frame, this.hurtFlash > 0);
+    const top = Creatures.blit(ctx, cv, sx, sy, lift);
     ctx.restore();
-
-    this.drawLabel(ctx, sx, Math.round(sy + lift + 4 - h + 2));
+    this.drawLabel(ctx, sx, top + 2);
   }
 }
 
@@ -8088,23 +8848,16 @@ class Yeti extends Enemy {
   }
 
   drawBody(ctx, sx, sy) {
-    const flash = this.hurtFlash > 0;
-    const sprite = this.facing >= 0
-      ? (flash ? SPRITES.yetiFlash : SPRITES.yeti)
-      : (flash ? SPRITES.yetiLeftFlash : SPRITES.yetiLeft);
+    const frame = this.state === 'wind' ? 0 : Math.floor(this.stepTime * 6) % 4;
+    const pose = this.state === 'wind' ? 'wind' : 'walk';
+    const W = Math.round(16 * this.scale * this.hitSX), H = Math.round(22 * this.scale * this.hitSY);
+    let cv = Creatures.yeti(W, H, frame, pose, this.hurtFlash > 0);
+    if (this.facing < 0) cv = Creatures.flip(cv);
 
-    // 치켜들 때는 몸이 뒤로 젖혀진다 (예고 동작)
-    let sxScale = 1, syScale = 1;
-    if (this.state === 'wind') { syScale = 1.08; sxScale = 0.94; }
-
-    const w = Math.round(sprite.width * this.scale * sxScale);
-    const h = Math.round(sprite.height * this.scale * syScale);
     this.drawShadow(ctx, sx, sy, 6.5 * this.scale);
-    ctx.drawImage(sprite, sx - Math.round(w / 2), Math.round(sy + 7 - h), w, h);
-
-    const topY = Math.round(sy + 7 - h + 2);
-    if (this.state === 'wind') this.drawWarning(ctx, sx, topY, 1 - this.timer / CONFIG.yeti.windup);
-    this.drawLabel(ctx, sx, topY);
+    const top = Creatures.blit(ctx, cv, sx, sy) + 2;
+    if (this.state === 'wind') this.drawWarning(ctx, sx, top, 1 - this.timer / CONFIG.yeti.windup);
+    this.drawLabel(ctx, sx, top);
   }
 
   // 날아가는 눈덩이는 몸보다 위에 (머리 위를 넘어오는 게 보여야 한다)
@@ -8236,21 +8989,20 @@ class Golem extends Enemy {
   }
 
   drawBody(ctx, sx, sy) {
-    const sprite = this.hurtFlash > 0 ? SPRITES.golemFlash : SPRITES.golem;
-    // 걸을 때 좌우로 무겁게 흔들린다. 내리칠 땐 몸을 한껏 늘였다가 내려찍는다
-    const sway = (this.state === 'chase' || this.state === 'wander') ? Math.sin(this.stepTime * 3) * 1 : 0;
+    const moving = this.state === 'chase' || this.state === 'wander';
+    const frame = moving ? Math.floor(this.stepTime * 5) % 4 : 0;
+    const pose = this.state === 'slam' ? 'slam' : 'walk';
+    // 내리칠 땐 몸을 한껏 늘였다가, 찍은 뒤엔 납작해진다 — 크기를 바꿔 새로 그린다
     let syScale = 1;
-    if (this.state === 'slam') syScale = 1 + (1 - Math.max(0, this.timer) / CONFIG.golem.slam.windup) * 0.14;
-    else if (this.state === 'recover') syScale = 0.9;
+    if (this.state === 'slam') syScale = 1 + (1 - Math.max(0, this.timer) / CONFIG.golem.slam.windup) * 0.12;
+    else if (this.state === 'recover') syScale = 0.92;
 
-    const w = Math.round(sprite.width * this.scale);
-    const h = Math.round(sprite.height * this.scale * syScale);
+    const W = Math.round(16 * this.scale * this.hitSX), H = Math.round(20 * this.scale * syScale * this.hitSY);
+    const cv = Creatures.golem(W, H, frame, pose, this.hurtFlash > 0);
     this.drawShadow(ctx, sx, sy, 7 * this.scale);
-    ctx.drawImage(sprite, sx - Math.round(w / 2) + Math.round(sway), Math.round(sy + 7 - h), w, h);
-
-    const topY = Math.round(sy + 7 - h + 2);
-    if (this.state === 'slam') this.drawWarning(ctx, sx, topY, 1 - this.timer / CONFIG.golem.slam.windup);
-    this.drawLabel(ctx, sx, topY);
+    const top = Creatures.blit(ctx, cv, sx, sy) + 2;
+    if (this.state === 'slam') this.drawWarning(ctx, sx, top, 1 - this.timer / CONFIG.golem.slam.windup);
+    this.drawLabel(ctx, sx, top);
   }
 }
 
@@ -8680,15 +9432,12 @@ class GiantSlime extends Boss {
       ctx.drawImage(ring, sx - Math.floor(ring.width / 2), sy + 8 - Math.floor(ring.height / 2));
     }
 
-    // 몸 — squash 로 눌리고 늘어난다 (예고 동작이 전부 여기서 보인다)
-    const sprite = this.hurtFlash > 0 ? SPRITES.giantSlimeFlash : SPRITES.giantSlime;
+    // 몸 — squash 로 눌리고 늘어난다 (예고 동작이 전부 여기서 보인다). 그 크기로 새로 그린다
     const bounce = this.state === 'idle' ? Math.sin(this.hopTimer * 4) * 0.05 : 0;
     const sq = this.squash + bounce;
-    const w = Math.round(sprite.width * (1 - sq * 0.5));
-    const h = Math.round(sprite.height * (1 + sq * 0.5));
-    ctx.drawImage(sprite, sx - Math.round(w / 2), Math.round(y + 12 - h), w, h);
-
-    const topY = Math.round(y + 12 - h);
+    const cv = Creatures.slime(Math.round(42 * (1 - sq * 0.5)), Math.round(34 * (1 + sq * 0.5)), this.hurtFlash > 0, true);
+    const topY = Math.round(y + 13 - cv.height);
+    ctx.drawImage(cv, sx - (cv.width >> 1), topY);
     if (this.warn > 0) this.drawWarning(ctx, sx, topY, 1 - this.warn / 0.6);
   }
 }
@@ -8721,10 +9470,9 @@ class AlphaWolf extends Boss {
     this.airHeight = 0;
     this.target = { x: x, y: y };
     this.circleDir = 1;      // 도는 방향
-    // 몸통: 늑대 도트 x3, 아랫단은 y+7
-    const sp = SPRITES.wolf[0];
-    this.bodyW = Math.round(sp.width * this.scale * 0.85);
-    this.bodyH = Math.round(sp.height * this.scale * 0.9);
+    // 몸통 판정 — 늑대 몸(28x20)을 덩치만큼 키운 것의 안쪽. 아랫단은 y+7
+    this.bodyW = Math.round(28 * this.scale * 0.85);
+    this.bodyH = Math.round(20 * this.scale * 0.9);
     this.bodyBottom = 7;
   }
 
@@ -8918,29 +9666,19 @@ class AlphaWolf extends Boss {
   drawBody(ctx, sx, sy) {
     const y = sy - Math.round(this.airHeight);
     const moving = this.state === 'lunge' || this.state === 'circle' || this.state === 'idle';
-    const frame = moving ? (Math.floor(this.stepTime * 6) % 2) : 0;
-    const flash = this.hurtFlash > 0;
-    const set = this.facing >= 0 ? (flash ? SPRITES.wolfFlash : SPRITES.wolf) : (flash ? SPRITES.wolfLeftFlash : SPRITES.wolfLeft);
-    const sprite = set[frame];
+    const frame = moving ? Math.floor(this.stepTime * 8) % 4 : 0;
+    const pose = this.state === 'lunge' ? 'lunge' : (this.squash < -0.15 ? 'crouch' : 'walk');
 
     const lift = this.airHeight / 34;
     this.drawShadow(ctx, sx, sy, 7 * this.scale * (1 - lift * 0.4));
 
-    // 눌림/늘어남 — 예고에서 웅크리고 돌진에서 길어진다
+    // 눌림/늘어남 — 예고에서 웅크리고 돌진에서 길어진다 (그 크기로 새로 그린다)
     const sq = this.squash;
-    const w = Math.round(sprite.width * this.scale * (1 - sq * 0.35));
-    const h = Math.round(sprite.height * this.scale * (1 + sq * 0.5));
-    ctx.drawImage(sprite, sx - Math.round(w / 2), Math.round(y + 7 - h), w, h);
-
-    // 우두머리 표시 — 눈 도트 자리에 붉은 눈을 덧그린다 (도트를 새로 그리지 않고도 구별된다)
-    if (!flash) {
-      ctx.fillStyle = '#ff5c5c';
-      const px = this.facing >= 0 ? WOLF_EYE.x : sprite.width - 1 - WOLF_EYE.x;
-      const cw = w / sprite.width, ch = h / sprite.height;
-      ctx.fillRect(Math.round(sx - w / 2 + px * cw), Math.round(y + 7 - h + WOLF_EYE.y * ch), Math.max(1, Math.round(cw)), Math.max(1, Math.round(ch)));
-    }
-
-    const topY = Math.round(y + 7 - h);
+    const W = Math.round(28 * this.scale * (1 - sq * 0.35)), H = Math.round(20 * this.scale * (1 + sq * 0.5));
+    let cv = Creatures.wolf(W, H, frame, pose, this.hurtFlash > 0, true);   // 우두머리 — 붉은 눈·갈기·흉터
+    if (this.facing < 0) cv = Creatures.flip(cv);
+    const topY = Math.round(y + 8 - cv.height);
+    ctx.drawImage(cv, sx - (cv.width >> 1), topY);
     if (this.warn > 0) this.drawWarning(ctx, sx, topY, 1 - this.warn / 0.6);
   }
 }
@@ -9159,12 +9897,8 @@ class ElderShroom extends Boss {
 
   drawBody(ctx, sx, sy) {
     this.drawShadow(ctx, sx, sy, 6 * this.scale);
-    const sprite = this.hurtFlash > 0 ? SPRITES.mushroomEnemyFlash : SPRITES.mushroomEnemy;
-    const w = Math.round(sprite.width * this.scale * (1 + this.grow * 0.5));
-    const h = Math.round(sprite.height * this.scale * (1 + this.grow * 0.5));
-    ctx.drawImage(sprite, sx - Math.round(w / 2), Math.round(sy + 7 - h), w, h);
-
-    const topY = Math.round(sy + 7 - h);
+    const cv = Creatures.mushroom(Math.round(16 * this.scale), 1 + this.grow * 0.5, this.hurtFlash > 0, true);
+    const topY = Creatures.blit(ctx, cv, sx, sy);
     if (this.warn > 0) this.drawWarning(ctx, sx, topY, 1 - this.warn / 0.6);
   }
 }
@@ -9375,25 +10109,17 @@ class SandLord extends Boss {
   }
 
   drawBody(ctx, sx, sy) {
-    // 땅속 — 모래 언덕만 지나간다
+    // 땅속 — 큰 모래 언덕만 지나간다 (들썩이며)
     if (this.underground) {
-      const wob = Math.sin(World.time * 14) * 2;
-      ctx.fillStyle = '#c9b06e';
-      fillCircle(ctx, sx, sy + 3, 13, '#c9b06e');
-      fillCircle(ctx, sx + wob, sy + 1, 9, '#e6d191');
-      fillCircle(ctx, sx - wob, sy + 4, 6, '#b89a5a');
+      const wob = Math.round(Math.sin(World.time * 14) * 2);
+      Creatures.blit(ctx, Creatures.wormMound(Math.round(13 * this.scale)), sx + wob, sy);
       return;
     }
-
-    const sprite = this.hurtFlash > 0 ? SPRITES.wormFlash : SPRITES.worm;
     const stretch = 1 + this.squash * 0.25;
-    const w = Math.round(sprite.width * this.scale * (1 - this.squash * 0.12));
-    const h = Math.round(sprite.height * this.scale * stretch);
+    const W = Math.round(16 * this.scale * (1 - this.squash * 0.12)), H = Math.round(21 * this.scale * stretch);
     this.drawShadow(ctx, sx, sy, 10 * this.scale);
-    ctx.drawImage(sprite, sx - Math.round(w / 2), Math.round(sy + 7 - h), w, h);
-
-    const topY = Math.round(sy + 7 - h + 2);
-    if (this.warn > 0) this.drawWarning(ctx, sx, topY, 1 - this.warn / 0.6);
+    const topY = Creatures.blit(ctx, Creatures.worm(W, H, this.hurtFlash > 0, true), sx, sy);
+    if (this.warn > 0) this.drawWarning(ctx, sx, topY + 2, 1 - this.warn / 0.6);
     this.squash *= 0.9;   // 늘어났던 몸이 서서히 돌아온다
   }
 }
@@ -10476,7 +11202,7 @@ const Items = {
       const color = CONFIG.weapons.levelColor[levelTier(d.level)] || '#ffffff';
       const set = SPRITES.weapons && SPRITES.weapons[d.weapon];
       const sp = set && set[levelTier(d.level)];
-      fillCircle(ctx, sx, sy + 5, 5, 'rgba(0,0,0,0.28)');
+      fillEllipse(ctx, sx + 1, sy + 5, 5, 2.1, 'rgba(10,12,20,0.3)');
       if (d.growing) this.drawAura(ctx, sx, sy, d.age);
       if (sp) ctx.drawImage(sp, sx - Math.floor(sp.width / 2), sy - 8 + bob);
       // 어떤 무기가 몇 레벨인지 바닥에서도 바로 보인다
@@ -10493,7 +11219,7 @@ const Items = {
 
     if (d.kind === 'gear') {
       const sp = Gear.sprite(d.item), color = Gear.color(d.item);
-      fillCircle(ctx, sx, sy + 5, 5, 'rgba(0,0,0,0.28)');
+      fillEllipse(ctx, sx + 1, sy + 5, 5, 2.1, 'rgba(10,12,20,0.3)');
       // 희귀한 것은 바닥에 옅은 색 원판이 숨쉰다
       if (d.item.rarity >= 2) {
         const pulse = 1 + Math.sin(d.age * 3) * 0.5;
@@ -10509,7 +11235,7 @@ const Items = {
 
     if (d.kind === 'loot') {
       const ls = CONFIG.loot.items[d.id], sp = SPRITES.loot[d.id];
-      fillCircle(ctx, sx, sy + 5, 4, 'rgba(0,0,0,0.28)');
+      fillEllipse(ctx, sx + 1, sy + 5, 4, 1.7, 'rgba(10,12,20,0.3)');
       ctx.drawImage(sp, sx - Math.floor(sp.width / 2), sy - 6 + bob);
       if (Math.floor(d.age * 3) % 2 === 0) { ctx.fillStyle = '#ffffff'; ctx.fillRect(sx + 3, sy - 8 + bob, 1, 1); }
       if (ls.trophy) UI.drawText(ctx, ls.name, sx, sy + 8, ls.color, true);   // 보스 전리품은 이름이 보인다
@@ -10517,7 +11243,7 @@ const Items = {
       return;
     }
 
-    fillCircle(ctx, sx, sy + 5, 4, 'rgba(0,0,0,0.28)');
+    fillEllipse(ctx, sx + 1, sy + 5, 4, 1.7, 'rgba(10,12,20,0.3)');
     const sp = SPRITES.potion;
     ctx.drawImage(sp, sx - Math.floor(sp.width / 2), sy - 6 + bob);
     // 반짝임 — 아직 안 주운 드랍이 눈에 띄게
@@ -10581,7 +11307,7 @@ const Shop = {
   // 상인 그리기 — 가끔 눈을 깜빡이고, 가까이 오면 머리 위에 안내가 뜬다
   drawNpc(ctx, cam, npc) {
     const sx = Math.round(npc.x - cam.x), sy = Math.round(npc.y - cam.y);
-    fillCircle(ctx, sx, sy + 1, 5, 'rgba(0,0,0,0.28)');
+    fillEllipse(ctx, sx + 1, sy + 1, 5, 2.1, 'rgba(10,12,20,0.3)');
     // 4초마다 0.15초 동안 눈을 감는다
     const t = World.time % 4;
     const sp = (t > 3.7 && t < 3.85) ? SPRITES.merchant[1] : SPRITES.merchant[0];
@@ -11217,7 +11943,7 @@ const Landmarks = {
     const sx = Math.round(chest.x - cam.x), sy = Math.round(chest.y - cam.y);
     const open = this.isOpened(chest.mapId, chest.index);
     const sp = SPRITES.chest[open ? 1 : 0];
-    fillCircle(ctx, sx, sy + 1, 7, 'rgba(0,0,0,0.28)');
+    fillEllipse(ctx, sx + 1, sy + 1, 7, 2.9, 'rgba(10,12,20,0.3)');
     /* 안 연 상자는 바닥에 옅은 금빛 원판이 숨쉰다 — 폐허 돌덩이 사이에서도 한눈에 띄게.
        (멀리서 '저기 뭔가 있다'로 읽히는 게 이 기능의 전부라 여기에 공을 들인다) */
     if (!open) {
@@ -11618,7 +12344,7 @@ const Forge = {
 
   drawNpc(ctx, cam, npc) {
     const sx = Math.round(npc.x - cam.x), sy = Math.round(npc.y - cam.y);
-    fillCircle(ctx, sx, sy + 1, 5, 'rgba(0,0,0,0.28)');
+    fillEllipse(ctx, sx + 1, sy + 1, 5, 2.1, 'rgba(10,12,20,0.3)');
     // 4초마다 잠깐 망치질하듯 몸이 숙여진다
     const t = World.time % 2.4;
     const sp = (t > 2.1 && t < 2.3) ? SPRITES.smith[1] : SPRITES.smith[0];
@@ -12466,7 +13192,7 @@ const Village = {
 
   drawNpc(ctx, cam, npc) {
     const sx = Math.round(npc.x - cam.x), sy = Math.round(npc.y - cam.y);
-    fillCircle(ctx, sx, sy + 1, 5, 'rgba(0,0,0,0.28)');
+    fillEllipse(ctx, sx + 1, sy + 1, 5, 2.1, 'rgba(10,12,20,0.3)');
     // 가끔 고개를 끄덕인다
     const t = World.time % 3.2;
     const base = (SPRITES.alchemist && SPRITES.alchemist[0]) || SPRITES.merchant[0];
@@ -12480,7 +13206,7 @@ const Village = {
 
   drawStash(ctx, cam, c) {
     const sx = Math.round(c.x - cam.x), sy = Math.round(c.y - cam.y);
-    fillCircle(ctx, sx, sy + 1, 7, 'rgba(0,0,0,0.28)');
+    fillEllipse(ctx, sx + 1, sy + 1, 7, 2.9, 'rgba(10,12,20,0.3)');
     ctx.drawImage(SPRITES.chest[0], sx + c.ox, sy + c.oy);
     if (Math.floor(World.time * 2) % 2 === 0) {
       ctx.fillStyle = '#ffffff';
@@ -13521,6 +14247,20 @@ const UI = {
     this.fx.setTransform(this.FINE, 0, 0, this.FINE, 0, 0);
   },
 
+  /* 화면 배율이 정해지면 고운 레이어의 해상도를 **기기 픽셀과 1:1** 로 맞춘다.
+     그래야 글자도 늘어나지 않고 원본 픽셀로 찍힌다. 글자 배율은 한 칸이 게임 4단위를
+     넘지 않는 정수로 고른다 (넘으면 창 안의 글자가 밖으로 삐져나온다). 3배면 예전과 똑같다. */
+  resizeLayer(scale) {
+    const s = Math.max(2, scale);
+    this.FINE = s;
+    this.TEXT_SCALE = Math.max(1, Math.floor(s * 4 / 6));
+    this.layer.width = CONFIG.VIEW_W * s;
+    this.layer.height = CONFIG.VIEW_H * s;
+    this.fx = this.layer.getContext('2d');
+    this.fx.imageSmoothingEnabled = false;
+    this.fx.setTransform(s, 0, 0, s, 0, 0);
+  },
+
   clearLayer() {
     if (!this.fx) return;
     this.fx.save();
@@ -13989,6 +14729,19 @@ const UI = {
 
 const PATCH_NOTES = [
   {
+    date: '2026-10-19',
+    notes: [
+      '그래픽을 통째로 다시 그렸다 — 바닥·나무·소품·몬스터·보스·플레이어 전부',
+      '몬스터를 늘려 그리지 않고 크기마다 새로 그린다. 어떤 레벨에서도 도트가 고르다',
+      '화면도 정수 배율로만 — 창 크기와 윈도 배율(125% 등)을 기기 픽셀로 계산한다',
+      '빛은 왼쪽 위 하나. 그늘은 푸르게, 빛은 따뜻하게. 그림자는 오른쪽 아래로',
+      '바닥에서 무작위 점 질감을 없애고 풀잎·조약돌·물결 무늬로. 흙길·물가 경계가 둥글게 휜다',
+      '꽃 핀 나무, 열매 달린 나무와 수풀, 이끼 낀 바위가 섞인다',
+      '걸음이 두 장에서 네 장으로 — 플레이어·늑대·전갈·설인·골렘',
+      '거대 슬라임은 왕관, 우두머리 늑대는 갈기와 흉터, 늙은 버섯은 수염이 생겼다',
+    ],
+  },
+  {
     date: '2026-10-18',
     notes: [
       '세 번째 무대 — 얼어붙은 고원 (41~60레벨). 눈과 얼음 기둥의 벌판',
@@ -14315,6 +15068,8 @@ const Game = {
     this.ctx = this.canvas.getContext('2d');
     this.ctx.imageSmoothingEnabled = false;
     UI.initLayer(document.getElementById('ui'));   // 글자·창을 그릴 고운 레이어
+    this.fitScreen();
+    window.addEventListener('resize', () => this.fitScreen());
 
     buildSprites();
     Input.init(this.canvas);
@@ -14331,6 +15086,27 @@ const Game = {
 
     this.lastTime = performance.now();
     requestAnimationFrame(this.frame.bind(this));
+  },
+
+  /* 화면 크기 — **정수 배율만** 쓴다 (pixel-art 지침: 비정수 배율은 도트를 망가뜨린다).
+     기기 픽셀(devicePixelRatio)로 계산해야 윈도 125% 배율에서도 한 도트가 정확히 N 픽셀이 된다.
+     예전엔 CSS 로 1152px 을 두고 창이 작으면 줄였는데, 125% 화면에서는 한 도트가 3.75픽셀이 되어
+     줄마다 굵기가 달랐다. */
+  fitScreen() {
+    const dpr = window.devicePixelRatio || 1;
+    // 아래 조작 안내·저장 문구가 실제로 차지하는 높이만큼만 비운다 (어림값으로 비우면 한 배율을 손해 본다)
+    const below = ['controls', 'savenote'].reduce((s, id) => { const e = document.getElementById(id); return s + (e ? e.offsetHeight + 14 : 0); }, 0);
+    const availW = Math.max(1, (window.innerWidth - 24) * dpr), availH = Math.max(1, (window.innerHeight - below - 16) * dpr);
+    const s = Math.max(1, Math.floor(Math.min(availW / CONFIG.VIEW_W, availH / CONFIG.VIEW_H)));
+    if (s === this.screenScale) return;
+    this.screenScale = s;
+    const cssW = CONFIG.VIEW_W * s / dpr, cssH = CONFIG.VIEW_H * s / dpr;
+    for (const id of ['game', 'ui']) {
+      const c = document.getElementById(id);
+      c.style.width = cssW + 'px';
+      c.style.height = cssH + 'px';
+    }
+    UI.resizeLayer(s);
   },
 
   // saved 가 있으면 그 시드로 같은 맵을 되살리고 진행 상황을 얹는다

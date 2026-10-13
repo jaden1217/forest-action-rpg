@@ -99,32 +99,20 @@ class Wolf extends Enemy {
   }
 
   drawBody(ctx, sx, sy) {
-    const frame = (this.state === 'windup' || this.state === 'recover')
-      ? 0
-      : (Math.floor(this.stepTime * 6) % 2);
+    // 걸음 네 장 — 딛기·지나기·딛기·지나기. 웅크리거나 숨 고를 땐 멈춘다
+    const still = this.state === 'windup' || this.state === 'recover';
+    const frame = still ? 0 : Math.floor(this.stepTime * 8) % 4;
+    const pose = this.state === 'windup' ? 'crouch' : (this.state === 'lunge' ? 'lunge' : 'walk');
+    const sxScale = this.state === 'lunge' ? 1.12 : (this.state === 'windup' ? 1.04 : 1);
 
-    const flash = this.hurtFlash > 0;
-    const set = this.facing >= 0
-      ? (flash ? SPRITES.wolfFlash : SPRITES.wolf)
-      : (flash ? SPRITES.wolfLeftFlash : SPRITES.wolfLeft);
-    const sprite = set[frame];
-
-    // 웅크릴 때는 납작해지고, 돌진할 때는 앞으로 길어진다
-    let sxScale = 1, syScale = 1;
-    if (this.state === 'windup') { syScale = 0.82; sxScale = 1.06; }
-    else if (this.state === 'lunge') { syScale = 0.92; sxScale = 1.12; }
-
-    const draw = this.scale * CONFIG.wolf.spriteScale;
-    const w = Math.round(sprite.width * draw * sxScale);
-    const h = Math.round(sprite.height * draw * syScale);
+    const W = Math.round(22 * this.scale * sxScale * this.hitSX);
+    const H = Math.round(16 * this.scale * this.hitSY);
+    let cv = Creatures.wolf(W, H, frame, pose, this.hurtFlash > 0);
+    if (this.facing < 0) cv = Creatures.flip(cv);
 
     this.drawShadow(ctx, sx, sy, 6.5 * this.scale);
-    ctx.drawImage(sprite, sx - Math.round(w / 2), Math.round(sy + 7 - h), w, h);
-
-    const topY = Math.round(sy + 7 - h + 2);
-    if (this.state === 'windup') {
-      this.drawWarning(ctx, sx, topY, 1 - this.timer / CONFIG.wolf.windup);
-    }
-    this.drawLabel(ctx, sx, topY);
+    const top = Creatures.blit(ctx, cv, sx, sy) + 2;
+    if (this.state === 'windup') this.drawWarning(ctx, sx, top, 1 - this.timer / CONFIG.wolf.windup);
+    this.drawLabel(ctx, sx, top);
   }
 }

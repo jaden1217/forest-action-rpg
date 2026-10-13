@@ -11,21 +11,6 @@
 
 const TILE_GRASS = 0, TILE_DIRT = 1, TILE_SAND = 2, TILE_WATER = 3, TILE_MEADOW = 4;
 
-// 타일 경계를 흐릴 때 쓰는 대표색 — [테마][색 줄][타일종류]. 숲은 볕/그늘 두 줄, 사막은 한 줄
-const TILE_BASE_COLOR = {
-  forest: [
-    ['#3f8b40', '#7d5f3c', '#c2a877', '#2f6f9e', '#3f8b40'],   // 볕이 드는 숲 바닥
-    ['#2c6431', '#7d5f3c', '#c2a877', '#2f6f9e', '#2c6431'],   // 빽빽한 숲의 그늘진 바닥
-  ],
-  desert: [
-    ['#3f8b40', '#9a6b3c', '#d9c27f', '#2f6f9e', '#e0cc8a'],   // 오아시스 풀, 갈라진 땅, 모래, 물, 모래언덕
-  ],
-  snow: [
-    ['#dceaf3', '#96c4da', '#bad0dc', '#2b5a78', '#e8f2f8'],   // 눈, 맨 얼음, 서리 모래, 얼어붙은 못, 눈더미
-    ['#b4cadc', '#85b3cb', '#a8c0cf', '#23506d', '#d6e6f0'],   // 그늘진 눈
-  ],
-};
-
 const World = {
   w: 0,            // 픽셀 단위 맵 크기
   h: 0,
@@ -76,6 +61,7 @@ const World = {
     Forge.place();      // 대장간 — 무기에 속성을 박는 모루 (보스 전에는 모루만)
     if (typeof Village !== 'undefined') Village.place();   // 10주차: 거점 — 연금술사·창고·모닥불·집
     this.placePortal(); // 텔레포트 비석 — 시작 지점 반대편
+    Props.bakeShadows(this);   // 서 있는 것들의 그림자를 바닥에 굽는다 (빛 반대편)
     this.buildGrid();   // 바위·그루터기·가판대까지 포함해 다시 만든다
   },
 
@@ -204,8 +190,13 @@ const World = {
           // 벽 — 거의 검게 덮고 결만 남긴다
           ctx.fillStyle = WALL_TINT;
           ctx.fillRect(x, y, T, T);
+          /* 결 — 무작위 점 대신 바위 틈 두 줄 (칸마다 엇갈려 벽돌처럼 이어진다).
+             rng 는 예전과 같은 횟수만 부른다 — 그래야 방 안 바위 배치가 그대로다 */
+          for (let k = 0; k < 10; k++) rng();
           ctx.fillStyle = WALL_GRAIN;
-          for (let k = 0; k < 5; k++) ctx.fillRect(x + Math.floor(rng() * T), y + Math.floor(rng() * T), 1, 1);
+          const off = ((tx + ty) & 1) ? 7 : 2;
+          ctx.fillRect(x + off, y + 4, 6, 1); ctx.fillRect(x + ((off + 8) % 16), y + 11, 5, 1);
+          ctx.fillRect(x + off + 5, y + 5, 1, 1);
         } else if (rng() < 0.035) {
           // 자갈은 아주 드물게 — 흔하면 바닥이 어수선해서 보스 동작이 안 보인다
           ctx.drawImage(SPRITES.rock[0], x + Math.floor(rng() * 6), y + Math.floor(rng() * 7));
@@ -388,21 +379,12 @@ const World = {
 
   /* ── 바닥 굽기 ─────────────────────────────────────────── */
 
+  /* 바닥은 Terrain.bake 가 픽셀 단위로 굽는다 — 칸 경계를 부드럽게 휘고,
+     물가·풀가장자리에 규칙대로 테두리를 넣는다 (js/art_terrain.js). 그 위에 꽃·돌멩이를 찍는다 */
   bakeGround(rng) {
-    const T = CONFIG.TILE, W = this.cols, H = this.rows;
-    this.ground = makeCanvas(this.w, this.h);
+    this.ground = Terrain.bake(this, rng);
     const ctx = this.ground.getContext('2d');
     ctx.imageSmoothingEnabled = false;
-
-    for (let ty = 0; ty < H; ty++) {
-      for (let tx = 0; tx < W; tx++) {
-        const i = ty * W + tx;
-        const set = this.groundSet(this.tiles[i], this.groundSetName(this.shade[i]));
-        ctx.drawImage(set[Math.floor(rng() * set.length)], tx * T, ty * T);
-      }
-    }
-
-    this.ditherEdges(ctx, rng);
     this.bakeDetails(ctx, rng);
   },
 
@@ -422,40 +404,6 @@ const World = {
     if (tile === TILE_WATER) return g.water || SPRITES.water; // 설원은 얼어붙은 못
     if (tile === TILE_MEADOW) return g.meadow;
     return g.grass;
-  },
-
-  // 경계에 서로의 색을 흩뿌려 칼같은 직선을 없앤다.
-  // 타일 종류가 같아도 그늘 여부가 다르면 색이 다르므로 그늘 경계도 함께 흐려진다.
-  ditherEdges(ctx, rng) {
-    const T = CONFIG.TILE, W = this.cols, H = this.rows;
-    const rows = TILE_BASE_COLOR[this.spec.theme] || TILE_BASE_COLOR.forest;
-    const colorAt = (i) => rows[this.colorRow[i]][this.tiles[i]];
-    const sprinkle = (x, y, w, h, color, n) => {
-      ctx.fillStyle = color;
-      for (let i = 0; i < n; i++) {
-        ctx.fillRect(x + Math.floor(rng() * w), y + Math.floor(rng() * h), 1, 1);
-      }
-    };
-    for (let ty = 0; ty < H; ty++) {
-      for (let tx = 0; tx < W; tx++) {
-        const i = ty * W + tx;
-        const c = colorAt(i);
-        if (tx + 1 < W) {
-          const cn = colorAt(i + 1);
-          if (cn !== c) {
-            sprinkle(tx * T + T - 3, ty * T, 3, T, cn, 8);
-            sprinkle((tx + 1) * T, ty * T, 3, T, c, 8);
-          }
-        }
-        if (ty + 1 < H) {
-          const cn = colorAt(i + W);
-          if (cn !== c) {
-            sprinkle(tx * T, ty * T + T - 3, T, 3, cn, 8);
-            sprinkle(tx * T, (ty + 1) * T, T, 3, c, 8);
-          }
-        }
-      }
-    }
   },
 
   // 지형에 어울리는 잔디테일을 바닥에 직접 찍는다 (움직이지 않으므로 구워도 된다)
@@ -523,6 +471,8 @@ const World = {
     };
     if (opts && opts.frames) { p.frames = opts.frames; p.phase = Math.random() * Math.PI * 2; }
     this.props.push(p);
+    // 부딪히는 것은 바닥 그림자를 드리운다 (나무는 따로 크게 정한다) — Props.bakeShadows 가 굽는다
+    if (opts && opts.solid) p.shadow = [Math.round(sprite.width * 0.14), 1, Math.round(sprite.width * 0.42), Math.max(2, Math.round(sprite.width * 0.15))];
     if (opts && opts.solid) {
       this.solids.push({ x: x - opts.solid[0], y: y - opts.solid[1], w: opts.solid[0] * 2, h: opts.solid[1] + opts.solid[2] });
     }
@@ -590,7 +540,11 @@ const World = {
       } else {
         sprite = Util.choice(SPRITES.tree); solid = [6, 5, 8];
       }
-      this.addProp(sprite, x, y, { solid: solid }).tree = true;   // 미니맵에 숲으로 표시되고, 뒤에 서면 옅어진다
+      const tp = this.addProp(sprite, x, y, { solid: solid });
+      tp.tree = true;   // 미니맵에 숲으로 표시되고, 뒤에 서면 옅어진다
+      // 바닥 그림자 — 빛 반대편(오른쪽 아래)으로. 넓은 나무일수록 넓게
+      const sw = sprite.width;
+      tp.shadow = [Math.round(sw * 0.16), 2, Math.round(sw * 0.34), Math.max(2, Math.round(sw * 0.11))];
     };
 
     // 맵 가장자리는 나무로 둘러 벽처럼 막는다
@@ -762,7 +716,7 @@ const World = {
     p.sign = { text: 'PORTAL', color: '#5ff0ff', dy: 26 };
     p.draw = (ctx, cam) => {
       const sx = Math.round(p.x - cam.x), sy = Math.round(p.y - cam.y);
-      fillCircle(ctx, sx, sy + 1, 7, 'rgba(0,0,0,0.28)');
+      fillEllipse(ctx, sx + 1, sy + 1, 7, 2.9, 'rgba(10,12,20,0.3)');
       // 아직 잠긴 비석은 룬이 꺼진 채다 — 멀리서도 '아직 안 열렸다'가 보인다
       const sealed = this.mapId === 'forest' && typeof Game !== 'undefined' && Game.portalUnlocked && !Game.portalUnlocked();
       const sp = (!sealed && Math.floor(World.time * 2) % 2 === 0) ? SPRITES.obelisk[0] : SPRITES.obelisk[1];

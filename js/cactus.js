@@ -67,14 +67,10 @@ class Cactus extends Enemy {
     if (this.windup > 0) grow = 1 + (1 - this.windup / cfg.windup) * 0.14;
     else if (this.puff > 0) grow = 1 - (this.puff / 0.18) * 0.1;
 
-    const sprite = this.hurtFlash > 0 ? SPRITES.cactusMobFlash : SPRITES.cactusMob;
-    const w = Math.round(sprite.width * this.scale * grow);
-    const h = Math.round(sprite.height * this.scale * grow);
     this.drawShadow(ctx, sx, sy, 5.5 * this.scale);
-    ctx.drawImage(sprite, sx - Math.round(w / 2), Math.round(sy + 7 - h), w, h);
-
-    const topY = Math.round(sy + 7 - h + 4);
-    if (this.windup > 0) this.drawWarning(ctx, sx, topY, 1 - this.windup / cfg.windup);
-    this.drawLabel(ctx, sx, topY);
+    const cv = Creatures.cactusMob(Math.round(16 * this.scale * this.hitSX), grow, this.hurtFlash > 0);
+    const top = Creatures.blit(ctx, cv, sx, sy) + 3;
+    if (this.windup > 0) this.drawWarning(ctx, sx, top, 1 - this.windup / cfg.windup);
+    this.drawLabel(ctx, sx, top);
   }
 }

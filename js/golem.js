@@ -109,20 +109,19 @@ class Golem extends Enemy {
   }
 
   drawBody(ctx, sx, sy) {
-    const sprite = this.hurtFlash > 0 ? SPRITES.golemFlash : SPRITES.golem;
-    // 걸을 때 좌우로 무겁게 흔들린다. 내리칠 땐 몸을 한껏 늘였다가 내려찍는다
-    const sway = (this.state === 'chase' || this.state === 'wander') ? Math.sin(this.stepTime * 3) * 1 : 0;
+    const moving = this.state === 'chase' || this.state === 'wander';
+    const frame = moving ? Math.floor(this.stepTime * 5) % 4 : 0;
+    const pose = this.state === 'slam' ? 'slam' : 'walk';
+    // 내리칠 땐 몸을 한껏 늘였다가, 찍은 뒤엔 납작해진다 — 크기를 바꿔 새로 그린다
     let syScale = 1;
-    if (this.state === 'slam') syScale = 1 + (1 - Math.max(0, this.timer) / CONFIG.golem.slam.windup) * 0.14;
-    else if (this.state === 'recover') syScale = 0.9;
+    if (this.state === 'slam') syScale = 1 + (1 - Math.max(0, this.timer) / CONFIG.golem.slam.windup) * 0.12;
+    else if (this.state === 'recover') syScale = 0.92;
 
-    const w = Math.round(sprite.width * this.scale);
-    const h = Math.round(sprite.height * this.scale * syScale);
+    const W = Math.round(16 * this.scale * this.hitSX), H = Math.round(20 * this.scale * syScale * this.hitSY);
+    const cv = Creatures.golem(W, H, frame, pose, this.hurtFlash > 0);
     this.drawShadow(ctx, sx, sy, 7 * this.scale);
-    ctx.drawImage(sprite, sx - Math.round(w / 2) + Math.round(sway), Math.round(sy + 7 - h), w, h);
-
-    const topY = Math.round(sy + 7 - h + 2);
-    if (this.state === 'slam') this.drawWarning(ctx, sx, topY, 1 - this.timer / CONFIG.golem.slam.windup);
-    this.drawLabel(ctx, sx, topY);
+    const top = Creatures.blit(ctx, cv, sx, sy) + 2;
+    if (this.state === 'slam') this.drawWarning(ctx, sx, top, 1 - this.timer / CONFIG.golem.slam.windup);
+    this.drawLabel(ctx, sx, top);
   }
 }

@@ -148,7 +148,7 @@ const Landmarks = {
     const sx = Math.round(chest.x - cam.x), sy = Math.round(chest.y - cam.y);
     const open = this.isOpened(chest.mapId, chest.index);
     const sp = SPRITES.chest[open ? 1 : 0];
-    fillCircle(ctx, sx, sy + 1, 7, 'rgba(0,0,0,0.28)');
+    fillEllipse(ctx, sx + 1, sy + 1, 7, 2.9, 'rgba(10,12,20,0.3)');
     /* 안 연 상자는 바닥에 옅은 금빛 원판이 숨쉰다 — 폐허 돌덩이 사이에서도 한눈에 띄게.
        (멀리서 '저기 뭔가 있다'로 읽히는 게 이 기능의 전부라 여기에 공을 들인다) */
     if (!open) {

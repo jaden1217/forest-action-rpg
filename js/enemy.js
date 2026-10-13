@@ -191,24 +191,22 @@ class Enemy {
     const sx = Math.round(this.x - cam.x);
     const sy = Math.round(this.y - cam.y);
     if (this.elite) Elite.drawAura(ctx, this, sx, sy);   // 발밑 고리는 몸에 가려지지 않게 먼저
-    // 맞은 직후엔 발을 축으로 옆으로 퍼졌다 돌아온다 — 충격이 몸에 전해지는 느낌
-    if (this.hurtFlash > 0) {
-      const k = this.hurtFlash / 0.12;
-      ctx.save();
-      ctx.translate(sx, sy + 7);
-      ctx.scale(1 + k * 0.16, 1 - k * 0.14);
-      ctx.translate(-sx, -(sy + 7));
-      this.drawBody(ctx, sx, sy);
-      ctx.restore();
-      return;
-    }
+    /* 맞은 직후엔 옆으로 퍼졌다 돌아온다 — 충격이 몸에 전해지는 느낌.
+       예전엔 캔버스를 비정수 배율로 늘려서 도트가 뭉개졌다. 이제는 눌린 크기(hitSX/hitSY)를
+       그리는 쪽에 넘겨 **그 크기로 다시 그린다** (늘리지 않는다) */
+    this.hitK = this.hurtFlash > 0 ? this.hurtFlash / 0.12 : 0;
     this.drawBody(ctx, sx, sy);
   }
 
   drawBody(ctx, sx, sy) { /* 하위 클래스가 채운다 */ }
 
+  // 맞은 순간의 눌림 배수 (그림 크기에 곱한다)
+  get hitSX() { return 1 + (this.hitK || 0) * 0.16; }
+  get hitSY() { return 1 - (this.hitK || 0) * 0.14; }
+
+  // 발밑 그림자 — 납작한 타원, 빛 반대편으로 한 칸 (둥근 원은 공처럼 떠 보인다)
   drawShadow(ctx, sx, sy, radius) {
-    fillCircle(ctx, sx, sy + 6, radius, 'rgba(0,0,0,0.28)');
+    fillEllipse(ctx, sx + 1, sy + 6, radius, Math.max(1.5, radius * 0.42), 'rgba(10,12,20,0.32)');
   }
 
   // 레벨 표시와 체력바 — 모든 몬스터가 같은 자리에 같은 모양으로 띄운다

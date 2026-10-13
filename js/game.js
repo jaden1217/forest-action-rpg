@@ -39,6 +39,8 @@ const Game = {
     this.ctx = this.canvas.getContext('2d');
     this.ctx.imageSmoothingEnabled = false;
     UI.initLayer(document.getElementById('ui'));   // 글자·창을 그릴 고운 레이어
+    this.fitScreen();
+    window.addEventListener('resize', () => this.fitScreen());
 
     buildSprites();
     Input.init(this.canvas);
@@ -55,6 +57,27 @@ const Game = {
 
     this.lastTime = performance.now();
     requestAnimationFrame(this.frame.bind(this));
+  },
+
+  /* 화면 크기 — **정수 배율만** 쓴다 (pixel-art 지침: 비정수 배율은 도트를 망가뜨린다).
+     기기 픽셀(devicePixelRatio)로 계산해야 윈도 125% 배율에서도 한 도트가 정확히 N 픽셀이 된다.
+     예전엔 CSS 로 1152px 을 두고 창이 작으면 줄였는데, 125% 화면에서는 한 도트가 3.75픽셀이 되어
+     줄마다 굵기가 달랐다. */
+  fitScreen() {
+    const dpr = window.devicePixelRatio || 1;
+    // 아래 조작 안내·저장 문구가 실제로 차지하는 높이만큼만 비운다 (어림값으로 비우면 한 배율을 손해 본다)
+    const below = ['controls', 'savenote'].reduce((s, id) => { const e = document.getElementById(id); return s + (e ? e.offsetHeight + 14 : 0); }, 0);
+    const availW = Math.max(1, (window.innerWidth - 24) * dpr), availH = Math.max(1, (window.innerHeight - below - 16) * dpr);
+    const s = Math.max(1, Math.floor(Math.min(availW / CONFIG.VIEW_W, availH / CONFIG.VIEW_H)));
+    if (s === this.screenScale) return;
+    this.screenScale = s;
+    const cssW = CONFIG.VIEW_W * s / dpr, cssH = CONFIG.VIEW_H * s / dpr;
+    for (const id of ['game', 'ui']) {
+      const c = document.getElementById(id);
+      c.style.width = cssW + 'px';
+      c.style.height = cssH + 'px';
+    }
+    UI.resizeLayer(s);
   },
 
   // saved 가 있으면 그 시드로 같은 맵을 되살리고 진행 상황을 얹는다

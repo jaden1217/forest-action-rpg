@@ -888,22 +888,24 @@ class Player {
     if (this.trail.length) {
       for (const t of this.trail) {
         ctx.globalAlpha = Util.clamp(t.life / 0.2, 0, 1) * 0.34;
-        ctx.drawImage(SPRITES.player[t.facing][0], Math.round(t.x - cam.x) - 8, Math.round(t.y - cam.y) - 8);
+        ctx.drawImage(SPRITES.player[t.facing][1], Math.round(t.x - cam.x) - 8, Math.round(t.y - cam.y) - 8);
       }
       ctx.globalAlpha = 1;
     }
 
     // 무적 시간 동안 사라지지는 않는다 — 대신 잠깐 붉게 물들어 맞았음을 알린다 (아래 set 선택)
 
-    // 그림자
-    fillCircle(ctx, sx, sy + 7, 5, 'rgba(0,0,0,0.28)');
+    // 그림자 — 납작한 타원, 빛 반대편으로 한 칸
+    fillEllipse(ctx, sx + 1, sy + 7, 5, 2, 'rgba(10,12,20,0.32)');
 
-    const frame = this.moving && Math.floor(this.walkTime * 8) % 2 === 1 ? 1 : 0;
+    /* 걸음 네 장 — 딛기(0)·지나기(1)·딛기(2)·지나기(3). 한 장에 약 0.1초.
+       서 있을 땐 다리를 모은 지나기 자세(1)로 선다 */
+    const frame = this.moving ? Math.floor(this.walkTime * 10) % 4 : 1;
     // 맞은 직후 0.25초는 붉은 실루엣, 그 뒤 무적이 남은 동안엔 한 프레임 걸러 살짝 옅어질 뿐 늘 보인다
     const set = this.invuln > CONFIG.player.invulnTime - 0.25 ? SPRITES.playerFlash : SPRITES.player;
     if (this.invuln > 0 && Math.floor(this.invuln * 20) % 2 === 0) ctx.globalAlpha = 0.75;
-    // 걸을 때 살짝 위아래로 흔들리면 발걸음이 살아난다
-    const bob = frame === 1 ? -1 : 0;
+    // 지나기 자세에서 몸이 가장 높다 — 걸을 때만 한 칸 솟는다
+    const bob = this.moving && (frame === 1 || frame === 3) ? -1 : 0;
     // 회전베기 중에는 바라보는 방향을 빠르게 돌려서 도는 것처럼 보이게 한다
     const facing = this.activeSkill === 'spin' ? Player.facingFromAngle(this.spinAngle) : this.facing;
     // 광폭화 중엔 몸 뒤에 붉은 그림자가 떨린다

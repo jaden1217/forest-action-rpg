@@ -23,10 +23,9 @@ class AlphaWolf extends Boss {
     this.airHeight = 0;
     this.target = { x: x, y: y };
     this.circleDir = 1;      // 도는 방향
-    // 몸통: 늑대 도트 x3, 아랫단은 y+7
-    const sp = SPRITES.wolf[0];
-    this.bodyW = Math.round(sp.width * this.scale * 0.85);
-    this.bodyH = Math.round(sp.height * this.scale * 0.9);
+    // 몸통 판정 — 늑대 몸(28x20)을 덩치만큼 키운 것의 안쪽. 아랫단은 y+7
+    this.bodyW = Math.round(28 * this.scale * 0.85);
+    this.bodyH = Math.round(20 * this.scale * 0.9);
     this.bodyBottom = 7;
   }
 
@@ -220,29 +219,19 @@ class AlphaWolf extends Boss {
   drawBody(ctx, sx, sy) {
     const y = sy - Math.round(this.airHeight);
     const moving = this.state === 'lunge' || this.state === 'circle' || this.state === 'idle';
-    const frame = moving ? (Math.floor(this.stepTime * 6) % 2) : 0;
-    const flash = this.hurtFlash > 0;
-    const set = this.facing >= 0 ? (flash ? SPRITES.wolfFlash : SPRITES.wolf) : (flash ? SPRITES.wolfLeftFlash : SPRITES.wolfLeft);
-    const sprite = set[frame];
+    const frame = moving ? Math.floor(this.stepTime * 8) % 4 : 0;
+    const pose = this.state === 'lunge' ? 'lunge' : (this.squash < -0.15 ? 'crouch' : 'walk');
 
     const lift = this.airHeight / 34;
     this.drawShadow(ctx, sx, sy, 7 * this.scale * (1 - lift * 0.4));
 
-    // 눌림/늘어남 — 예고에서 웅크리고 돌진에서 길어진다
+    // 눌림/늘어남 — 예고에서 웅크리고 돌진에서 길어진다 (그 크기로 새로 그린다)
     const sq = this.squash;
-    const w = Math.round(sprite.width * this.scale * (1 - sq * 0.35));
-    const h = Math.round(sprite.height * this.scale * (1 + sq * 0.5));
-    ctx.drawImage(sprite, sx - Math.round(w / 2), Math.round(y + 7 - h), w, h);
-
-    // 우두머리 표시 — 눈 도트 자리에 붉은 눈을 덧그린다 (도트를 새로 그리지 않고도 구별된다)
-    if (!flash) {
-      ctx.fillStyle = '#ff5c5c';
-      const px = this.facing >= 0 ? WOLF_EYE.x : sprite.width - 1 - WOLF_EYE.x;
-      const cw = w / sprite.width, ch = h / sprite.height;
-      ctx.fillRect(Math.round(sx - w / 2 + px * cw), Math.round(y + 7 - h + WOLF_EYE.y * ch), Math.max(1, Math.round(cw)), Math.max(1, Math.round(ch)));
-    }
-
-    const topY = Math.round(y + 7 - h);
+    const W = Math.round(28 * this.scale * (1 - sq * 0.35)), H = Math.round(20 * this.scale * (1 + sq * 0.5));
+    let cv = Creatures.wolf(W, H, frame, pose, this.hurtFlash > 0, true);   // 우두머리 — 붉은 눈·갈기·흉터
+    if (this.facing < 0) cv = Creatures.flip(cv);
+    const topY = Math.round(y + 8 - cv.height);
+    ctx.drawImage(cv, sx - (cv.width >> 1), topY);
     if (this.warn > 0) this.drawWarning(ctx, sx, topY, 1 - this.warn / 0.6);
   }
 }

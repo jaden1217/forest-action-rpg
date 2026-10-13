@@ -61,21 +61,19 @@ class Wisp extends Enemy {
 
   drawBody(ctx, sx, sy) {
     const cfg = CONFIG.wisp;
-    const lift = Math.sin(this.bob) * cfg.bobAmp;
-    const sprite = this.hurtFlash > 0 ? SPRITES.wispFlash : SPRITES.wisp;
-    const w = Math.round(sprite.width * this.scale);
-    const h = Math.round(sprite.height * this.scale);
+    const lift = Math.round(Math.sin(this.bob) * cfg.bobAmp) + 3;
+    const frame = Math.floor(this.bob * 2) % 4;
 
     // 발이 없으므로 그림자는 작고 흐리게 — 땅에 닿아 있지 않다는 표시
-    fillCircle(ctx, sx, sy + 6, 3.5 * this.scale, 'rgba(0,0,0,0.18)');
+    fillEllipse(ctx, sx + 1, sy + 6, 3.5 * this.scale, 1.5, 'rgba(10,12,20,0.18)');
 
     // 벽(나무·바위) 안에 들어가 있으면 흐려진다. 사라지지는 않는다
     this.inWall = World.blocked({ x: this.x - 3, y: this.y, w: 6, h: 4 });
     ctx.save();
     if (this.inWall) ctx.globalAlpha = cfg.wallAlpha;
-    ctx.drawImage(sprite, sx - Math.round(w / 2), Math.round(sy + lift + 4 - h), w, h);
+    const cv = Creatures.wisp(Math.round(16 * this.scale * this.hitSX), frame, this.hurtFlash > 0);
+    const top = Creatures.blit(ctx, cv, sx, sy, lift);
     ctx.restore();
-
-    this.drawLabel(ctx, sx, Math.round(sy + lift + 4 - h + 2));
+    this.drawLabel(ctx, sx, top + 2);
   }
 }

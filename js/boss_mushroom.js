@@ -209,12 +209,8 @@ class ElderShroom extends Boss {
 
   drawBody(ctx, sx, sy) {
     this.drawShadow(ctx, sx, sy, 6 * this.scale);
-    const sprite = this.hurtFlash > 0 ? SPRITES.mushroomEnemyFlash : SPRITES.mushroomEnemy;
-    const w = Math.round(sprite.width * this.scale * (1 + this.grow * 0.5));
-    const h = Math.round(sprite.height * this.scale * (1 + this.grow * 0.5));
-    ctx.drawImage(sprite, sx - Math.round(w / 2), Math.round(sy + 7 - h), w, h);
-
-    const topY = Math.round(sy + 7 - h);
+    const cv = Creatures.mushroom(Math.round(16 * this.scale), 1 + this.grow * 0.5, this.hurtFlash > 0, true);
+    const topY = Creatures.blit(ctx, cv, sx, sy);
     if (this.warn > 0) this.drawWarning(ctx, sx, topY, 1 - this.warn / 0.6);
   }
 }

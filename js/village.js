@@ -330,7 +330,7 @@ const Village = {
 
   drawNpc(ctx, cam, npc) {
     const sx = Math.round(npc.x - cam.x), sy = Math.round(npc.y - cam.y);
-    fillCircle(ctx, sx, sy + 1, 5, 'rgba(0,0,0,0.28)');
+    fillEllipse(ctx, sx + 1, sy + 1, 5, 2.1, 'rgba(10,12,20,0.3)');
     // 가끔 고개를 끄덕인다
     const t = World.time % 3.2;
     const base = (SPRITES.alchemist && SPRITES.alchemist[0]) || SPRITES.merchant[0];
@@ -344,7 +344,7 @@ const Village = {
 
   drawStash(ctx, cam, c) {
     const sx = Math.round(c.x - cam.x), sy = Math.round(c.y - cam.y);
-    fillCircle(ctx, sx, sy + 1, 7, 'rgba(0,0,0,0.28)');
+    fillEllipse(ctx, sx + 1, sy + 1, 7, 2.9, 'rgba(10,12,20,0.3)');
     ctx.drawImage(SPRITES.chest[0], sx + c.ox, sy + c.oy);
     if (Math.floor(World.time * 2) % 2 === 0) {
       ctx.fillStyle = '#ffffff';

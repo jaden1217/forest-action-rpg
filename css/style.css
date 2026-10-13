@@ -23,12 +23,13 @@ html, body {
   box-shadow: 0 12px 40px rgba(0, 0, 0, .6);
 }
 
+/* 크기는 Game.fitScreen 이 정한다 — 창에 들어가는 **가장 큰 정수 배율**을 기기 픽셀 기준으로 고른다.
+   예전처럼 max-width 로 줄이면 2.6배 같은 비정수 배율이 되어 도트가 들쭉날쭉해지고,
+   가로·세로가 따로 줄면 도트가 직사각형이 된다 (pixel-art 지침의 CRITICAL 항목) */
 #game, #ui {
   display: block;
-  width: 1152px;   /* 384 * 3 */
+  width: 1152px;   /* 384 * 3 — 스크립트가 덮어쓰기 전 기본값 */
   height: 648px;   /* 216 * 3 */
-  max-width: calc(100vw - 24px);
-  max-height: calc(100vh - 90px);
   image-rendering: pixelated;
   image-rendering: crisp-edges;
   cursor: none;   /* 조준점은 게임이 캔버스 안에 직접 그린다 */

@@ -150,23 +150,16 @@ class Yeti extends Enemy {
   }
 
   drawBody(ctx, sx, sy) {
-    const flash = this.hurtFlash > 0;
-    const sprite = this.facing >= 0
-      ? (flash ? SPRITES.yetiFlash : SPRITES.yeti)
-      : (flash ? SPRITES.yetiLeftFlash : SPRITES.yetiLeft);
+    const frame = this.state === 'wind' ? 0 : Math.floor(this.stepTime * 6) % 4;
+    const pose = this.state === 'wind' ? 'wind' : 'walk';
+    const W = Math.round(16 * this.scale * this.hitSX), H = Math.round(22 * this.scale * this.hitSY);
+    let cv = Creatures.yeti(W, H, frame, pose, this.hurtFlash > 0);
+    if (this.facing < 0) cv = Creatures.flip(cv);
 
-    // 치켜들 때는 몸이 뒤로 젖혀진다 (예고 동작)
-    let sxScale = 1, syScale = 1;
-    if (this.state === 'wind') { syScale = 1.08; sxScale = 0.94; }
-
-    const w = Math.round(sprite.width * this.scale * sxScale);
-    const h = Math.round(sprite.height * this.scale * syScale);
     this.drawShadow(ctx, sx, sy, 6.5 * this.scale);
-    ctx.drawImage(sprite, sx - Math.round(w / 2), Math.round(sy + 7 - h), w, h);
-
-    const topY = Math.round(sy + 7 - h + 2);
-    if (this.state === 'wind') this.drawWarning(ctx, sx, topY, 1 - this.timer / CONFIG.yeti.windup);
-    this.drawLabel(ctx, sx, topY);
+    const top = Creatures.blit(ctx, cv, sx, sy) + 2;
+    if (this.state === 'wind') this.drawWarning(ctx, sx, top, 1 - this.timer / CONFIG.yeti.windup);
+    this.drawLabel(ctx, sx, top);
   }
 
   // 날아가는 눈덩이는 몸보다 위에 (머리 위를 넘어오는 게 보여야 한다)

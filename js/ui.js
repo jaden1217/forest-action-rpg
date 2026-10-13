@@ -86,6 +86,20 @@ const UI = {
     this.fx.setTransform(this.FINE, 0, 0, this.FINE, 0, 0);
   },
 
+  /* 화면 배율이 정해지면 고운 레이어의 해상도를 **기기 픽셀과 1:1** 로 맞춘다.
+     그래야 글자도 늘어나지 않고 원본 픽셀로 찍힌다. 글자 배율은 한 칸이 게임 4단위를
+     넘지 않는 정수로 고른다 (넘으면 창 안의 글자가 밖으로 삐져나온다). 3배면 예전과 똑같다. */
+  resizeLayer(scale) {
+    const s = Math.max(2, scale);
+    this.FINE = s;
+    this.TEXT_SCALE = Math.max(1, Math.floor(s * 4 / 6));
+    this.layer.width = CONFIG.VIEW_W * s;
+    this.layer.height = CONFIG.VIEW_H * s;
+    this.fx = this.layer.getContext('2d');
+    this.fx.imageSmoothingEnabled = false;
+    this.fx.setTransform(s, 0, 0, s, 0, 0);
+  },
+
   clearLayer() {
     if (!this.fx) return;
     this.fx.save();

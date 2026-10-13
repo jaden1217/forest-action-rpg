@@ -59,16 +59,14 @@ class Slime extends Enemy {
       stretchX = 1 + 0.16 * k;
     }
 
-    const w = Math.round(16 * this.scale * stretchX);
-    const h = Math.round(16 * this.scale * stretchY);
-
     // 그림자 — 떠 있을수록 작아진다
     const shadowScale = 1 - (-yOff / (6 * this.scale)) * 0.35;
     this.drawShadow(ctx, sx, sy, 5.5 * this.scale * shadowScale);
 
-    const sprite = this.hurtFlash > 0 ? SPRITES.slimeFlash : SPRITES.slime;
-    ctx.drawImage(sprite, sx - Math.round(w / 2), Math.round(sy + yOff + 7 - h), w, h);
-
-    this.drawLabel(ctx, sx, Math.round(sy + yOff - h + 4));
+    // 몸 — 늘어난 크기 그대로 새로 그린다 (Creatures.slime)
+    const w = Math.round(14 * this.scale * stretchX * this.hitSX);
+    const h = Math.round(12 * this.scale * stretchY * this.hitSY);
+    const top = Creatures.blit(ctx, Creatures.slime(w, h, this.hurtFlash > 0), sx, sy, Math.round(-yOff));
+    this.drawLabel(ctx, sx, top + 2);
   }
 }

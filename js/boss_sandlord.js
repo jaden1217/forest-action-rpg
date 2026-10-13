@@ -201,25 +201,17 @@ class SandLord extends Boss {
   }
 
   drawBody(ctx, sx, sy) {
-    // 땅속 — 모래 언덕만 지나간다
+    // 땅속 — 큰 모래 언덕만 지나간다 (들썩이며)
     if (this.underground) {
-      const wob = Math.sin(World.time * 14) * 2;
-      ctx.fillStyle = '#c9b06e';
-      fillCircle(ctx, sx, sy + 3, 13, '#c9b06e');
-      fillCircle(ctx, sx + wob, sy + 1, 9, '#e6d191');
-      fillCircle(ctx, sx - wob, sy + 4, 6, '#b89a5a');
+      const wob = Math.round(Math.sin(World.time * 14) * 2);
+      Creatures.blit(ctx, Creatures.wormMound(Math.round(13 * this.scale)), sx + wob, sy);
       return;
     }
-
-    const sprite = this.hurtFlash > 0 ? SPRITES.wormFlash : SPRITES.worm;
     const stretch = 1 + this.squash * 0.25;
-    const w = Math.round(sprite.width * this.scale * (1 - this.squash * 0.12));
-    const h = Math.round(sprite.height * this.scale * stretch);
+    const W = Math.round(16 * this.scale * (1 - this.squash * 0.12)), H = Math.round(21 * this.scale * stretch);
     this.drawShadow(ctx, sx, sy, 10 * this.scale);
-    ctx.drawImage(sprite, sx - Math.round(w / 2), Math.round(sy + 7 - h), w, h);
-
-    const topY = Math.round(sy + 7 - h + 2);
-    if (this.warn > 0) this.drawWarning(ctx, sx, topY, 1 - this.warn / 0.6);
+    const topY = Creatures.blit(ctx, Creatures.worm(W, H, this.hurtFlash > 0, true), sx, sy);
+    if (this.warn > 0) this.drawWarning(ctx, sx, topY + 2, 1 - this.warn / 0.6);
     this.squash *= 0.9;   // 늘어났던 몸이 서서히 돌아온다
   }
 }

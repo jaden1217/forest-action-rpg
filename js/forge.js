@@ -69,7 +69,7 @@ const Forge = {
 
   drawNpc(ctx, cam, npc) {
     const sx = Math.round(npc.x - cam.x), sy = Math.round(npc.y - cam.y);
-    fillCircle(ctx, sx, sy + 1, 5, 'rgba(0,0,0,0.28)');
+    fillEllipse(ctx, sx + 1, sy + 1, 5, 2.1, 'rgba(10,12,20,0.3)');
     // 4초마다 잠깐 망치질하듯 몸이 숙여진다
     const t = World.time % 2.4;
     const sp = (t > 2.1 && t < 2.3) ? SPRITES.smith[1] : SPRITES.smith[0];
