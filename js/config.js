@@ -196,11 +196,16 @@ const CONFIG = {
        도끼 QUAKE 땅 찍기 / RAGE 광폭화        — 무겁고 넓고, 밀어낸다
 
      위력(damageMult)은 "무기 종류 배수를 뺀 평타" 에 곱한다 (기본 공격 x 무기 레벨 배수).
-     안 그러면 단검(0.7배) 스킬이 도끼(1.55배) 스킬보다 늘 약해진다 — 스킬은 무기 종류와 무관하게
+     안 그러면 단검(0.55배) 스킬이 도끼(1.55배) 스킬보다 늘 약해진다 — 스킬은 무기 종류와 무관하게
      각자의 수치로만 세기가 정해져야 공평하다. */
   skills: {
     buffer: 0.18,          // 스킬 입력도 잠깐 기억해둔다
     keys: ['Q', 'R'],
+    /* 스킬도 그 무기의 평타 성격을 잇는다 —
+         검   이어 치기와 마무리: 강공격은 이어 치기 도중에 쓰면 LINK 로 더 세지고, 회전베기는 마지막에 마무리 일격
+         단검 곧은 찌르기와 급소: 연속 찌르기는 띠 판정으로 마우스를 따라가며 마지막 찌르기가 급소,
+              그림자 밟기 뒤 첫 찌르기는 반드시 급소 (매복)
+         도끼 무게와 밀어내기: 땅 찍기는 맞은 적을 잠깐 기절시키고, 광폭화는 도끼의 약점(느린 손·멈춰 서기·밀림)을 지운다 */
     byWeapon: {
       sword: [
         {
@@ -213,6 +218,8 @@ const CONFIG = {
           hitWindow: [0.14, 0.30],
           lunge: 95,           // 휘두르며 앞으로 밀고 나간다
           knockMult: 2.2,
+          // 이어 치기 도중(평타가 끝나고 comboWindow 안)에 쓰면 연계 — 평타가 휘두르던 쪽에서 이어 베고 더 세다
+          link: { damageMult: 1.4 },
           shake: 4.5,
           color: '#ffb35c',
         },
@@ -227,22 +234,27 @@ const CONFIG = {
           hitInterval: 0.17,   // 도는 동안 이 간격으로 다시 맞는다 (약 9번)
           moveScale: 0.45,     // 도는 동안 평소의 45% 속도로 걸을 수 있다
           knockMult: 1.4,
+          // 다 돌고 나면 마무리 일격 — 둘레를 한 번 더 크게 베어 멀리 날린다 (검의 세 번째 마무리와 같은 성격)
+          finalBurst: { damageMult: 1.8, reachBonus: 26, knockMult: 2.6 },
           shake: 3,
           color: '#7ec8ff',
         },
       ],
       dagger: [
         {
-          // 연속 찌르기 — 한 방향으로 다섯 번 찌른다. 좁지만 한 상대에게 쏟아붓는 위력은 강공격보다 크다
+          /* 연속 찌르기 — 다섯 번 찌른다. 평타처럼 판정이 가는 띠이고, 찌를 때마다 **마우스 쪽으로 다시 겨눈다**
+             (훑으며 찌를 수 있다). 찌르는 동안 걸을 수 있고, 다섯 번째는 반드시 급소 */
           id: 'flurry', name: 'FLURRY', key: 'Q', unlockLevel: 10,
           cooldown: 6.0,
-          damageMult: 1.0,     // 한 번에 1배 x 5번
-          arc: 0.55,
-          reachBonus: 8,
+          damageMult: 1.0,     // 한 번에 1배 x 5번 (마지막은 치명타)
+          lineWidth: 6,
+          reachBonus: 8,       // 단검 22 + 8 = 30
           duration: 0.5,
           hitWindow: [0.04, 0.48],
           hitInterval: 0.1,
-          stepForward: 55,     // 찌르는 동안 앞으로 조금씩 나간다 (px/s)
+          stabs: 5,
+          lastCrit: true,
+          moveScale: 0.6,
           knockMult: 0.5,
           shake: 2,
           color: '#c8ffd8',
@@ -254,11 +266,12 @@ const CONFIG = {
           damageMult: 2.4,
           forceCrit: true,     // 반드시 치명타 (x1.8) — 실질 4.3배
           arc: Math.PI,
-          reachBonus: -6,      // 몸에 스친 적만 (사거리 13 + 적 반지름)
+          reachBonus: -6,      // 몸에 스친 적만 (사거리 16 + 적 반지름)
           duration: 0.26,
           hitWindow: [0, 0.26],
           dashSpeed: 420,      // 0.26초 x 420 = 약 110px
           invuln: true,
+          ambush: 1.5,         // 빠져나온 뒤 이 안에 찌르면 그 찌르기는 반드시 급소 (매복)
           knockMult: 0.4,
           shake: 3,
           color: '#c79ce8',
@@ -271,20 +284,23 @@ const CONFIG = {
           cooldown: 8.0,
           damageMult: 2.4,
           arc: Math.PI,
-          reachBonus: 23,      // 도끼 사거리 23 + 23 = 46 반경
+          reachBonus: 23,      // 도끼 사거리 24 + 23 = 47 반경
           duration: 0.7,
           windup: 0.38,        // 들어올리는 시간 — 이 동안은 무방비
           hitWindow: [0.38, 0.5],
           knockMult: 2.6,
+          stun: 1.3,           // 맞은 적은 이만큼 기절한다 (엘리트는 절반, 보스는 안 걸린다)
           shake: 7,
           color: '#ffb35c',
         },
         {
-          // 광폭화 — 잠깐 공격 속도와 위력이 오른다. 도끼의 느린 손을 한동안 잊게 해준다
+          /* 광폭화 — 도끼의 약점을 한동안 지운다.
+             손이 빨라지고(쿨다운 x1.6, 휘두르기 자체도 x1.45 빠르게) 위력 x1.25,
+             휘두르면서 걸을 수 있고(15% → 55%), 맞아도 밀리지 않는다 */
           id: 'rage', name: 'RAGE', key: 'R', unlockLevel: 20,
           cooldown: 20.0,
           duration: 0.3,       // 발동 동작
-          buff: { time: 7, attackSpeed: 1.6, damageMult: 1.25 },
+          buff: { time: 7, attackSpeed: 1.6, damageMult: 1.25, swingSpeed: 1.45, moveScale: 0.55, steady: true },
           shake: 3,
           color: '#ff6b6b',
         },

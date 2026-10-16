@@ -304,6 +304,45 @@ function makeSweepFrame(angle, sign, k, o) {
   return cv;
 }
 
+/* 도끼 땅 찍기 — 눌린 타원으로 퍼지는 흙먼지 고리와, 안쪽에서 바깥으로 뻗는 갈라진 금.
+   반경을 받아 그 크기로 그린다 (늘려 그리지 않는다). k = 0..3 (퍼짐 → 흩어짐). 반경마다 한 번만 그린다 */
+function quakeRing(radius, k) {
+  return Art.cached('quake:' + radius + ':' + k, () => {
+    const t = k / 3;
+    const W = Math.ceil(radius * 2) + 6, H = Math.ceil(radius * 2 * 0.58) + 6;
+    const cv = makeCanvas(W, H), ctx = cv.getContext('2d');
+    const cx = W / 2, cy = H / 2, r = radius * (0.4 + t * 0.6), thick = 4 - t * 2;
+    const rng = Util.makeRng(radius * 7 + 3);
+    const spokes = [];
+    for (let i = 0; i < 9; i++) spokes.push(i / 9 * Math.PI * 2 + (rng() - 0.5) * 0.4);
+    for (let y = 0; y < H; y++) {
+      for (let x = 0; x < W; x++) {
+        const dx = x + 0.5 - cx, dy = (y + 0.5 - cy) / 0.58;
+        const d = Math.sqrt(dx * dx + dy * dy);
+        // 고리 — 바깥 테두리는 밝은 흙먼지, 안쪽은 어두운 흙
+        if (d >= r - thick && d <= r) {
+          if (t > 0.6 && (x + y) % 2 === 0) continue;
+          ctx.fillStyle = d > r - thick * 0.45 ? '#e8d8b4' : '#9a7f58';
+          ctx.fillRect(x, y, 1, 1);
+          continue;
+        }
+        // 갈라진 금 — 가운데에서 고리 쪽으로, 가는 어두운 선
+        if (k < 3 && d > 5 && d < r - thick) {
+          const a = Math.atan2(dy, dx);
+          for (const s of spokes) {
+            if (Math.abs(Util.angleDiff(a, s + Math.sin(d * 0.35 + s) * 0.08)) * d < 0.6) {
+              ctx.fillStyle = '#4a3a28';
+              ctx.fillRect(x, y, 1, 1);
+              break;
+            }
+          }
+        }
+      }
+    }
+    return cv;
+  });
+}
+
 /* ── 지형 타일 ─────────────────────────────────────────────── */
 
 /* ── 숲 소품 ───────────────────────────────────────────────── */
@@ -1206,18 +1245,24 @@ function buildSprites() {
   /* 무기마다 다른 평타 궤적 — 단검 찌르기(곧은 한 줄), 도끼 휩쓸기(넓고 두꺼운 반원),
      검 마무리 베기(평소보다 넓은 푸른 호). 휩쓰는 것은 휘두르는 쪽마다 따로 [쪽][방향][진행] */
   const CLEAVE = { size: 64, rIn: 10, grow: 2.7, width: 11, thin: 1.7, spread: 1.7, lead: '#ffffff', body: '#f3e6cc', edge: '#c9b28a' };
+  const RAGE = Object.assign({}, CLEAVE, { lead: '#fff2d0', body: '#ffb08a', edge: '#e0503c' });
   const FINISH = { size: 64, rIn: 11, grow: 2.8, width: 9, thin: 1.5, spread: 1.5, lead: '#ffffff', body: '#d8f0ff', edge: '#7ec8ff' };
   SPRITES.thrust = [];
   SPRITES.cleave = [[], []];
+  SPRITES.cleaveRage = [[], []];
   SPRITES.finisher = [[], []];
   for (let i = 0; i < SLASH_DIRS; i++) {
     const a = (i / SLASH_DIRS) * Math.PI * 2;
     SPRITES.thrust.push([0, 1, 2].map(t => makeThrustFrame(a, t)));
     [1, -1].forEach((sign, si) => {
       SPRITES.cleave[si].push([0, 1, 2, 3].map(k => makeSweepFrame(a, sign, k, CLEAVE)));
+      SPRITES.cleaveRage[si].push([0, 1, 2, 3].map(k => makeSweepFrame(a, sign, k, RAGE)));
       SPRITES.finisher[si].push([0, 1, 2, 3].map(k => makeSweepFrame(a, sign, k, FINISH)));
     });
   }
+  // 도끼 땅 찍기 고리 — 처음 쓰는 순간 그리면 그 프레임이 끊기므로 미리 그려 둔다
+  const quake = CONFIG.skills.byWeapon.axe.find(s => s.id === 'quake');
+  for (let k = 0; k < 4; k++) quakeRing(CONFIG.weapons.axe.reach + quake.reachBonus, k);
   SPRITES.spinRing = [0, 0.5, 1].map(makeSpinRing);
 
   /* ── 마무리 손질 — 손으로 찍은 옛 도트의 외곽선을 새 규칙(재질 색 1px)으로 맞춘다.

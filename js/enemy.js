@@ -89,7 +89,9 @@ class Enemy {
     this.hurtFlash = Math.max(0, this.hurtFlash - dt);
     this.showHp = Math.max(0, this.showHp - dt);
 
-    this.think(dt, player);
+    // 기절 (도끼 땅 찍기) — 그동안은 움직이지도 공격하지도 않는다. 밀려나는 것은 그대로
+    if (this.stunTimer > 0) this.stunTimer -= dt;
+    else this.think(dt, player);
 
     // 넉백은 종류와 무관하게 똑같이 밀리고 잦아든다
     if (Math.abs(this.kx) > 0.5 || Math.abs(this.ky) > 0.5) {
@@ -204,6 +206,18 @@ class Enemy {
   get hitSX() { return 1 + (this.hitK || 0) * 0.16; }
   get hitSY() { return 1 - (this.hitK || 0) * 0.14; }
 
+  // 기절 — 머리 위를 노란 별 셋이 납작하게 돈다 (앞으로 올 때 밝고 크게)
+  drawStunStars(ctx, sx, y) {
+    for (let i = 0; i < 3; i++) {
+      const a = World.time * 6 + i * Math.PI * 2 / 3;
+      const x = Math.round(sx + Math.cos(a) * 7), yy = Math.round(y + Math.sin(a) * 2);
+      const front = Math.sin(a) > 0;
+      ctx.fillStyle = front ? '#ffe066' : '#b8902c';
+      ctx.fillRect(x, yy, 1, 1);
+      if (front) { ctx.fillRect(x - 1, yy, 3, 1); ctx.fillRect(x, yy - 1, 1, 3); }
+    }
+  }
+
   // 발밑 그림자 — 납작한 타원, 빛 반대편으로 한 칸 (둥근 원은 공처럼 떠 보인다)
   drawShadow(ctx, sx, sy, radius) {
     fillEllipse(ctx, sx + 1, sy + 6, radius, Math.max(1.5, radius * 0.42), 'rgba(10,12,20,0.32)');
@@ -212,6 +226,7 @@ class Enemy {
   // 레벨 표시와 체력바 — 모든 몬스터가 같은 자리에 같은 모양으로 띄운다
   drawLabel(ctx, sx, topY) {
     const pal = this.palette;
+    if (this.stunTimer > 0) this.drawStunStars(ctx, sx, topY - (this.elite ? 15 : 8));
     // 엘리트는 별과 접두사가 한 줄 더 붙으므로 상태이상 표를 그만큼 위로 올린다
     Status.drawMarks(ctx, this, sx, topY - (this.elite ? 7 : 0));
     if (this.elite) Elite.drawName(ctx, this, sx, topY - 12);
