@@ -96,8 +96,8 @@ class Player {
     this.spinAngle = 0;        // 회전베기 연출용
     this.buff = null;          // 광폭화 같은 한시 강화 { id, timeLeft, time, attackSpeed, damageMult, swingSpeed, moveScale, steady }
     this.auraTick = 0;
-    this.skillMult = 1;        // 이번 스킬의 위력 배수 (검 강공격의 LINK)
-    this.skillDir = 1;         // 이번 스킬을 휘두르는 쪽 (LINK 는 평타가 휘두르던 쪽에서 이어 벤다)
+    this.lift = 0;             // 몸이 땅에서 뜬 높이 (거인의 일격 — 뛰어오른 동안)
+    this.skillData = null;     // 스킬 하나가 쓰는 동안 들고 다니는 것 (SkillKit 이 쓴다)
     this.ambush = 0;           // 그림자 밟기 뒤 남은 매복 시간 — 이 안의 첫 찌르기는 반드시 급소
   }
 
@@ -246,10 +246,26 @@ class Player {
       if (Math.random() < dt * 14) FX.burst(this.x + Util.rand(-5, 5), this.y - Util.rand(2, 9), 1, ['#c79ce8', '#ffffff'], { speed: 6, life: 0.35, gravity: -24, size: 1 });
     }
 
+    if (this.activeSkill !== 'titan') this.lift = 0;
     // ── 쓰는 중
     if (this.activeSkill) {
       const spec = this.skillSpec(this.activeSkill);
       const elapsed = spec.duration - this.skillTimer;
+      const kit = SkillKit[spec.id];
+      if (kit && kit.tick) {
+        kit.tick(this, spec, elapsed, dt, enemies);
+        if (this.weaponGrowing && this.activeSkill) {
+          const t = this.skillTipAngle(spec, elapsed);
+          FX.burst(this.x + Math.cos(t) * 22, this.y - 1 + Math.sin(t) * 22, 2, CONFIG.weapons.rainbow, { speed: 22, life: 0.35, gravity: -10, size: 1 });
+        }
+        this.skillTimer -= dt;
+        if (this.activeSkill && this.skillTimer <= 0) {
+          this.activeSkill = null;
+          if (kit.end) kit.end(this, spec, enemies);
+          this.finishSkill(spec, enemies);
+        }
+        return;
+      }
 
       if (spec.id === 'spin') this.spinAngle += dt * 20;
       if (this.weaponGrowing) {
@@ -297,7 +313,7 @@ class Player {
           reachBonus: spec.reachBonus,
           arc: spec.arc,
           line: spec.lineWidth,
-          damageMult: spec.damageMult * this.skillMult,
+          damageMult: spec.damageMult,
           knockMult: spec.knockMult,
           forceCrit: spec.forceCrit || (spec.lastCrit && this.skillHits >= spec.stabs),
           stun: spec.stun,
@@ -330,6 +346,8 @@ class Player {
       return;
     }
     if (this.skillCooldowns[spec.id] > 0) return;   // 쿨다운이 풀리면 버퍼로 바로 나간다
+    const kitCheck = SkillKit[spec.id];
+    if (kitCheck && kitCheck.canStart && !kitCheck.canStart(this, spec, enemies)) { this.skillQueued = null; return; }
 
     this.skillQueued = null;
     this.activeSkill = spec.id;
@@ -343,17 +361,10 @@ class Player {
     this.spinAngle = 0;
     this.attackTimer = 0;
     this.cooldown = Math.max(this.cooldown, spec.duration);   // 스킬 직후 평타가 바로 안 나가게
-    /* 검 강공격 LINK — 이어 치기 도중(평타가 끝나고 comboWindow 안)에 쓰면 평타가 휘두르던 쪽에서
-       이어 베고 위력이 오른다. 평타 → 평타 → Q 가 검의 손맛이다 */
-    this.skillMult = 1;
-    this.skillDir = 1;
-    if (spec.link && this.comboStep >= 1 && this.comboIdle <= CONFIG.weapons.comboWindow) {
-      this.skillMult = spec.link.damageMult;
-      this.skillDir = this.comboStep % 2 === 0 ? 1 : -1;
-      FX.number(this.x, this.y - 26, 'LINK', '#7ec8ff', true);
-      FX.addShake(1.5);
-    }
     this.comboStep = 0;      // 스킬을 쓰면 평타 이어 치기는 처음부터
+    this.skillData = {};
+    const kit = SkillKit[spec.id];
+    if (kit && kit.start) kit.start(this, spec, enemies);
     if (spec.buff) {
       // 광폭화 — 한동안 손이 빨라지고 위력이 오르고, 휘두르며 걷고, 밀리지 않는다
       this.buff = Object.assign({ id: spec.id, timeLeft: spec.buff.time }, spec.buff);
@@ -397,7 +408,8 @@ class Player {
   // 스킬을 쓰는 동안 무기 끝이 향한 각도 (연출용)
   skillTipAngle(spec, elapsed) {
     if (spec.id === 'spin') return this.spinAngle;
-    if (spec.id === 'heavy') return this.swingAngle + this.skillDir * (-1.6 + (elapsed / spec.duration) * 3.2);
+    const kit = SkillKit[spec.id];
+    if (kit && kit.tip) return kit.tip(this, spec, elapsed);
     if (spec.id === 'quake') return elapsed < spec.windup ? this.swingAngle - 1.3 : this.swingAngle + 0.4;
     return this.swingAngle;
   }
@@ -449,7 +461,8 @@ class Player {
     if (Input.potionPressed()) this.potionQueued = true;
     if (Input.dashPressed()) this.dashQueued = CONFIG.dash.buffer;
     const skill = Input.skillPressed();
-    if (skill) { this.skillQueued = skill; this.skillQueueTime = CONFIG.skills.buffer; }
+    const menu = typeof Game !== 'undefined' && Game.paused && Game.paused();
+    if (skill && !menu) { this.skillQueued = skill; this.skillQueueTime = CONFIG.skills.buffer; }
   }
 
   // 마우스가 가리키는 곳을 향한 각도. 마우스를 안 쓰면 걸어간 방향을 유지한다.
@@ -550,6 +563,7 @@ class Player {
     this.updateAim(ix, iy);
     this.updateDash(dt, ix, iy);
     this.updateSkills(dt, enemies);
+    PlayerShots.update(dt, this, enemies);   // 날아가는 검기·비수
 
     if (this.dashTimer > 0) {
       // 대시 중에는 이동 입력과 넉백을 무시하고 정해진 방향으로만 미끄러진다
@@ -697,25 +711,25 @@ class Player {
        knockMult   넉백 배수
        line        찌르기 — 부채꼴 대신 겨눈 쪽으로 뻗은 띠 (이 값이 띠의 반폭)
        radial      맞은 적을 휘두른 방향이 아니라 내게서 바깥쪽으로 날린다 (도끼 휩쓸기)
-       stun        맞은 적을 이만큼 기절시킨다 (엘리트는 절반, 보스는 안 걸린다) */
+       stun        맞은 적을 이만큼 기절시킨다 (엘리트는 절반, 보스는 안 걸린다)
+       origin      판정의 중심 (기본은 내 자리 — 대지 가르기는 찍은 자리를 중심으로 쓴다)
+       reach       사거리를 무기와 무관하게 이 값으로 (reachBonus 대신) */
   resolveHits(enemies, opts) {
-    const c = CONFIG.player;
     const w = this.weaponSpec();
     const base = this.swingAngle;   // 휘두르기 시작할 때 고정한 마우스 방향
     const ids = (opts && opts.ids) || this.hitIds;
-    const reach = w.reach + ((opts && opts.reachBonus) || 0);
+    const reach = (opts && opts.reach !== undefined) ? opts.reach : w.reach + ((opts && opts.reachBonus) || 0);
     const arc = (opts && opts.arc !== undefined) ? opts.arc : w.arc;
-    const dmgMult = (opts && opts.damageMult) || 1;
-    const knockMult = (opts && opts.knockMult) || 1;
     const omni = arc >= Math.PI;    // 사방을 다 때리는 기술인가
+    const ox = (opts && opts.origin) ? opts.origin.x : this.x, oy = (opts && opts.origin) ? opts.origin.y : this.y;
 
     for (const s of enemies) {
       if (s.dead || ids.has(s.id)) continue;
       // 보스는 몸통 상자(그림자 제외)까지의 거리로, 일반 몬스터는 중심 원으로 잰다
-      const hc = s.hitCenter ? s.hitCenter() : s;   // (c 는 CONFIG.player — 이름을 겹치면 치명타가 사라진다)
-      const dx = hc.x - this.x, dy = hc.y - this.y;
+      const hc = s.hitCenter ? s.hitCenter() : s;
+      const dx = hc.x - ox, dy = hc.y - oy;
       const d = Math.sqrt(dx * dx + dy * dy);
-      const gap = s.hitDistance ? s.hitDistance(this.x, this.y) : d - s.radius;
+      const gap = s.hitDistance ? s.hitDistance(ox, oy) : d - s.radius;
       if (gap > reach) continue;
       const toEnemy = Math.atan2(dy, dx);
       if (opts && opts.line) {
@@ -727,62 +741,69 @@ class Player {
       } else if (!omni && d > 3 && Math.abs(Util.angleDiff(toEnemy, base)) > arc) continue;
 
       ids.add(s.id);
-      const crit = (opts && opts.forceCrit) || Math.random() < this.critChance();   // 치명타율은 무기와 무관하게 동일
-      // 스킬은 무기 종류 배수를 뺀 기준값으로 — 단검 스킬이 도끼 스킬보다 약하지 않게
-      const dmgBase = (opts && opts.skill) ? this.skillBase() : this.attackDamage();
-      let dmg = Math.round((dmgBase + Util.randInt(-1, 1)) * dmgMult);
-      if (crit) dmg = Math.round(dmg * this.critMult());
-      // OVERLOAD — 스킬만 더 세진다
-      if (opts && opts.skill && this.has('overload')) dmg = Math.round(dmg * this.uniq('overload').mult);
-      // EXECUTIONER — 빈사의 적을 끝낸다
-      if (this.has('executioner') && s.maxHp && s.hp / s.maxHp <= this.uniq('executioner').ratio) {
-        dmg = Math.round(dmg * this.uniq('executioner').mult);
-      }
-      /* 무기에 박힌 속성 — 추가 피해를 주고 그 속성의 상태이상을 건다.
-         추가 피해는 몬스터마다 다르다 (버섯은 불에 약하고, 선인장은 불에 강하다) */
-      const elId = this.weaponElement, el = elId && CONFIG.forge.elements[elId];
-      if (el) {
-        const aff = Forge.affinity(s.TYPE, elId);
-        const bonus = Math.max(1, Math.round(dmg * CONFIG.forge.bonus * aff));
-        dmg += bonus;
-        if (Math.random() < el.chance) Status.apply(s, el.status, dmg, this);
-        FX.burst(s.x, s.y - 4, aff >= 1.5 ? 6 : 3, [el.color, '#ffffff'], { speed: 34, life: 0.3, gravity: 10, size: 1 });
-        // 약점이면 한 번씩 알려준다 — "얘한테는 불" 이 눈에 보이게
-        if (aff >= 1.5 && Math.random() < 0.34) FX.number(s.x, s.y - 22 - s.radius, 'WEAK', el.color);
-      }
-
-      dmg = Math.max(1, dmg);
       // 사방 공격·휩쓸기는 바깥쪽으로, 베는 공격은 휘두른 방향으로 날린다
-      const push = (omni || (opts && opts.radial)) ? toEnemy : base;
-      s.takeHit(dmg, push, crit, this, knockMult);
-      if (opts && opts.stun && !s.dead && !s.isBoss) s.stunTimer = Math.max(s.stunTimer || 0, opts.stun * (s.elite ? 0.5 : 1));
-      this.sinceCombat = 0;   // 때리는 중에도 자연 회복은 멈춘다
-      /* 장비에 붙은 FIERY / FROSTY / SHOCKING / VENOMOUS 가 확률로 상태이상을 건다.
-         세기는 '이 일격의 피해' 기준이라 레벨이 올라도 따로 손볼 것이 없다 */
-      for (const key in CONFIG.affixes.list) {
-        const spec = CONFIG.affixes.list[key];
-        if (!spec.status) continue;
-        const chance = this.stat(key);
-        if (chance > 0 && Math.random() < chance / 100) Status.apply(s, spec.status, dmg, this);
-      }
-      // MOMENTUM — 치명타가 터지면 모든 스킬 쿨다운이 조금씩 당겨진다
-      if (crit && this.has('momentum')) {
-        const cut = this.uniq('momentum').cut;
-        for (const k in this.skillCooldowns) this.skillCooldowns[k] = Math.max(0, this.skillCooldowns[k] - cut);
-      }
-      // 흡혈(VAMPIRIC) — 때린 만큼 조금 돌려받는다. 체력이 가득이면 아무 일도 없다
-      const leech = this.stat('lifesteal');
-      if (leech > 0 && this.hp < this.maxHp) {
-        const healed = Math.max(1, Math.round(dmg * leech / 100));
-        this.hp = Math.min(this.maxHp, this.hp + healed);
-        if (Math.random() < 0.3) FX.burst(this.x, this.y - 2, 2, ['#ff6b6b', '#ffd0d0'], { speed: 14, life: 0.3, gravity: -20, size: 1 });
-      }
-      // 처치 > 치명타 > 보통 순으로 화면이 더 오래 멈춘다. 카메라도 휘두른 쪽으로 살짝 밀린다
-      const fx = CONFIG.fx;
-      FX.freeze(s.dead ? fx.hitStopKill : (crit ? fx.hitStopCrit : fx.hitStop));
-      FX.addShake(s.dead ? 3 : (crit ? 2.4 : 1.3));
-      FX.addKick(omni ? toEnemy : base, fx.kick * (crit ? 1.6 : 1));
+      this.strike(s, (omni || (opts && opts.radial)) ? toEnemy : base, opts);
     }
+  }
+
+  /* 한 적을 때린다 — 평타·스킬·던진 비수·검기가 모두 여기로 온다.
+     치명타, 무기 속성, 고유 효과, 장비 옵션의 상태이상, 흡혈, 화면 멈춤까지 한 자리에서. push 는 날려 보낼 방향 */
+  strike(s, push, opts) {
+    const dmgMult = (opts && opts.damageMult) || 1;
+    const knockMult = (opts && opts.knockMult) || 1;
+    const crit = (opts && opts.forceCrit) || Math.random() < this.critChance();   // 치명타율은 무기와 무관하게 동일
+    // 스킬은 무기 종류 배수를 뺀 기준값으로 — 단검 스킬이 도끼 스킬보다 약하지 않게
+    const dmgBase = (opts && opts.skill) ? this.skillBase() : this.attackDamage();
+    let dmg = Math.round((dmgBase + Util.randInt(-1, 1)) * dmgMult);
+    if (crit) dmg = Math.round(dmg * this.critMult());
+    // OVERLOAD — 스킬만 더 세진다
+    if (opts && opts.skill && this.has('overload')) dmg = Math.round(dmg * this.uniq('overload').mult);
+    // EXECUTIONER — 빈사의 적을 끝낸다
+    if (this.has('executioner') && s.maxHp && s.hp / s.maxHp <= this.uniq('executioner').ratio) {
+      dmg = Math.round(dmg * this.uniq('executioner').mult);
+    }
+    /* 무기에 박힌 속성 — 추가 피해를 주고 그 속성의 상태이상을 건다.
+       추가 피해는 몬스터마다 다르다 (버섯은 불에 약하고, 선인장은 불에 강하다) */
+    const elId = this.weaponElement, el = elId && CONFIG.forge.elements[elId];
+    if (el) {
+      const aff = Forge.affinity(s.TYPE, elId);
+      const bonus = Math.max(1, Math.round(dmg * CONFIG.forge.bonus * aff));
+      dmg += bonus;
+      if (Math.random() < el.chance) Status.apply(s, el.status, dmg, this);
+      FX.burst(s.x, s.y - 4, aff >= 1.5 ? 6 : 3, [el.color, '#ffffff'], { speed: 34, life: 0.3, gravity: 10, size: 1 });
+      // 약점이면 한 번씩 알려준다 — "얘한테는 불" 이 눈에 보이게
+      if (aff >= 1.5 && Math.random() < 0.34) FX.number(s.x, s.y - 22 - s.radius, 'WEAK', el.color);
+    }
+
+    dmg = Math.max(1, dmg);
+    s.takeHit(dmg, push, crit, this, knockMult);
+    if (opts && opts.stun && !s.dead && !s.isBoss) s.stunTimer = Math.max(s.stunTimer || 0, opts.stun * (s.elite ? 0.5 : 1));
+    this.sinceCombat = 0;   // 때리는 중에도 자연 회복은 멈춘다
+    /* 장비에 붙은 FIERY / FROSTY / SHOCKING / VENOMOUS 가 확률로 상태이상을 건다.
+       세기는 '이 일격의 피해' 기준이라 레벨이 올라도 따로 손볼 것이 없다 */
+    for (const key in CONFIG.affixes.list) {
+      const spec = CONFIG.affixes.list[key];
+      if (!spec.status) continue;
+      const chance = this.stat(key);
+      if (chance > 0 && Math.random() < chance / 100) Status.apply(s, spec.status, dmg, this);
+    }
+    // MOMENTUM — 치명타가 터지면 모든 스킬 쿨다운이 조금씩 당겨진다
+    if (crit && this.has('momentum')) {
+      const cut = this.uniq('momentum').cut;
+      for (const k in this.skillCooldowns) this.skillCooldowns[k] = Math.max(0, this.skillCooldowns[k] - cut);
+    }
+    // 흡혈(VAMPIRIC) — 때린 만큼 조금 돌려받는다. 체력이 가득이면 아무 일도 없다
+    const leech = this.stat('lifesteal');
+    if (leech > 0 && this.hp < this.maxHp) {
+      const healed = Math.max(1, Math.round(dmg * leech / 100));
+      this.hp = Math.min(this.maxHp, this.hp + healed);
+      if (Math.random() < 0.3) FX.burst(this.x, this.y - 2, 2, ['#ff6b6b', '#ffd0d0'], { speed: 14, life: 0.3, gravity: -20, size: 1 });
+    }
+    // 처치 > 치명타 > 보통 순으로 화면이 더 오래 멈춘다. 카메라도 휘두른 쪽으로 살짝 밀린다
+    const fx = CONFIG.fx;
+    FX.freeze(s.dead ? fx.hitStopKill : (crit ? fx.hitStopCrit : fx.hitStop));
+    FX.addShake(s.dead ? 3 : (crit ? 2.4 : 1.3));
+    FX.addKick(push, fx.kick * (crit ? 1.6 : 1));
   }
 
   takeDamage(amount, fromX, fromY) {
@@ -862,6 +883,8 @@ class Player {
       this.xpNeed = CONFIG.levelUp.xpNeed(this.level);
       this.syncWeaponLevel();
       FX.number(this.x, this.y - 22, 'LEVEL UP', '#ffe066', true);
+      const opened = this.currentSkills().find(s => s.unlockLevel === this.level);
+      if (opened) FX.number(this.x, this.y - 34, 'NEW SKILL ' + opened.key + ' ' + opened.name, opened.color, true);
       FX.ring(this.x, this.y + 4, 10, '#ffe066');
       Sound.play('levelup');
       FX.burst(this.x, this.y, 26, ['#ffe066', '#ffffff', '#9be564'], { speed: 60, life: 0.8, gravity: 40 });
@@ -1000,8 +1023,10 @@ class Player {
 
     // 그림자 — 납작한 타원, 빛 반대편으로 한 칸
     fillEllipse(ctx, sx + 1, sy + 7, 5, 2, 'rgba(10,12,20,0.32)');
-    // 땅 찍기 고리는 바닥에 생기는 것이라 몸보다 먼저 (몸 위로 선이 지나가지 않게)
+    // 땅 찍기 고리·갈라진 땅처럼 바닥에 생기는 것은 몸보다 먼저 (몸 위로 선이 지나가지 않게)
     if (this.activeSkill === 'quake') this.drawQuakeRing(ctx, sx, sy);
+    const groundKit = this.activeSkill && SkillKit[this.activeSkill];
+    if (groundKit && groundKit.ground) groundKit.ground(this, ctx, sx, sy, this.skillSpec(this.activeSkill));
 
     /* 걸음 네 장 — 딛기(0)·지나기(1)·딛기(2)·지나기(3). 한 장에 약 0.1초.
        서 있을 땐 다리를 모은 지나기 자세(1)로 선다 */
@@ -1020,7 +1045,7 @@ class Player {
       ctx.drawImage(tinted(set[facing][frame], '#ff6b6b'), sx - 8 + o, sy - PLAYER_TOP + bob);
       ctx.globalAlpha = 1;
     }
-    ctx.drawImage(set[facing][frame], sx - 8, sy - PLAYER_TOP + bob);
+    ctx.drawImage(set[facing][frame], sx - 8, sy - PLAYER_TOP + bob - this.lift);
     ctx.globalAlpha = 1;
 
     if (this.activeSkill) this.drawSkill(ctx, sx, sy);
@@ -1045,6 +1070,8 @@ class Player {
 
   drawSkill(ctx, sx, sy) {
     const spec = this.skillSpec(this.activeSkill);
+    const kit = SkillKit[spec.id];
+    if (kit && kit.draw) { kit.draw(this, ctx, sx, sy - this.lift, spec, spec.duration - this.skillTimer); return; }
     const p = 1 - this.skillTimer / spec.duration;      // 0 -> 1
     const fi = Util.clamp(Math.floor(p * 3), 0, 2);
     const sw = this.weaponSprite();
@@ -1132,8 +1159,8 @@ class Player {
     const arc = SPRITES.heavySlash[slashIndex(this.swingAngle)][fi];
     if (grow) this.drawRainbowGlow(ctx, arc, sx, sy, 1.22);
     ctx.drawImage(arc, sx - Math.floor(arc.width / 2), sy - Math.floor(arc.height / 2));
-    const a = this.swingAngle + this.skillDir * (-1.6 + p * 3.2);
-    if (grow) this.drawAfterimages(ctx, sx, sy, sw, a, -25, 0.5 * this.skillDir);
+    const a = this.swingAngle - 1.6 + p * 3.2;
+    if (grow) this.drawAfterimages(ctx, sx, sy, sw, a, -25, 0.5);
     ctx.save();
     ctx.translate(sx, sy - 1);
     ctx.rotate(a + Math.PI / 2);

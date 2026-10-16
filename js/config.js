@@ -188,38 +188,42 @@ const CONFIG = {
     buffer: 0.18,        // 대시 입력도 잠깐 기억해둔다
   },
 
-  /* 스킬 — 평타 말고 따로 쓰는 공격 수단. 쿨다운이 있고 플레이어 레벨로 열린다 (Q 10레벨, R 20레벨).
+  /* 스킬 — 평타 말고 따로 쓰는 공격 수단. 쿨다운이 있고 플레이어 레벨로 열린다.
+       Q 10레벨 · R 20레벨 · X 30레벨 · C 40레벨
 
-     무기마다 자기한테 어울리는 스킬 둘을 따로 가진다.
-       검   HEAVY 강공격 / SPIN 회전베기      — 균형
-       단검 FLURRY 연속 찌르기 / SHADOW 그림자 밟기 — 빠르고 좁고, 치명타
-       도끼 QUAKE 땅 찍기 / RAGE 광폭화        — 무겁고 넓고, 밀어낸다
+     무기마다 자기한테 어울리는 스킬 넷을 따로 가진다. 스킬도 그 무기 평타의 성격을 잇는다.
+       검   CROSS 십자베기 / SPIN 회전베기 / WAVE 검기 / STORM 검무        — 좌우로 베고, 마무리가 크다
+       단검 FLURRY 연속 찌르기 / SHADOW 그림자 밟기 / KNIVES 비수 / REAPER 사신 — 곧게, 급소(치명타), 빠르게 파고든다
+       도끼 QUAKE 땅 찍기 / RAGE 광폭화 / RIFT 대지 가르기 / TITAN 거인의 일격 — 무겁게, 넓게, 기절과 밀어내기
+
+     **높은 레벨 스킬일수록 세다.** 한 대상이 한 번에 받는 위력(아래 damageMult 들을 합친 것)이
+     10 < 20 < 30 < 40 레벨 순으로 커지도록 맞췄다 — 대신 쿨다운도 길어진다.
+                 10레벨       20레벨              30레벨          40레벨
+       검        3.8          7.5                 11              16
+       단검      5.8          7.5 (매복 포함)      최대 12         최대 17
+       도끼      2.4 + 기절   약 10 (6초 동안)      15              20 + 기절
 
      위력(damageMult)은 "무기 종류 배수를 뺀 평타" 에 곱한다 (기본 공격 x 무기 레벨 배수).
      안 그러면 단검(0.55배) 스킬이 도끼(1.55배) 스킬보다 늘 약해진다 — 스킬은 무기 종류와 무관하게
-     각자의 수치로만 세기가 정해져야 공평하다. */
+     각자의 수치로만 세기가 정해져야 공평하다.
+     움직임이 특별한 스킬(phases·launchAt·strikes·leap 등)은 js/skills.js 의 SkillKit 이 굴린다. */
   skills: {
     buffer: 0.18,          // 스킬 입력도 잠깐 기억해둔다
-    keys: ['Q', 'R'],
-    /* 스킬도 그 무기의 평타 성격을 잇는다 —
-         검   이어 치기와 마무리: 강공격은 이어 치기 도중에 쓰면 LINK 로 더 세지고, 회전베기는 마지막에 마무리 일격
-         단검 곧은 찌르기와 급소: 연속 찌르기는 띠 판정으로 마우스를 따라가며 마지막 찌르기가 급소,
-              그림자 밟기 뒤 첫 찌르기는 반드시 급소 (매복)
-         도끼 무게와 밀어내기: 땅 찍기는 맞은 적을 잠깐 기절시키고, 광폭화는 도끼의 약점(느린 손·멈춰 서기·밀림)을 지운다 */
+    keys: ['Q', 'R', 'X', 'C'],
     byWeapon: {
       sword: [
         {
-          id: 'heavy', name: 'HEAVY', key: 'Q', unlockLevel: 10,
+          // 십자베기 — 누르기만 하면 넓게 두 번 벤다: 한쪽에서 베고, 반대쪽에서 되받아 더 세게. 벨 때마다 앞으로 파고든다
+          id: 'cross', name: 'CROSS', key: 'Q', unlockLevel: 10,
           cooldown: 6.0,
-          damageMult: 2.6,
-          arc: 1.5,            // 평타(0.95)보다 훨씬 넓게 벤다
+          arc: 1.5,            // 평타(0.95)보다 훨씬 넓게
           reachBonus: 6,
-          duration: 0.42,
-          hitWindow: [0.14, 0.30],
-          lunge: 95,           // 휘두르며 앞으로 밀고 나간다
-          knockMult: 2.2,
-          // 이어 치기 도중(평타가 끝나고 comboWindow 안)에 쓰면 연계 — 평타가 휘두르던 쪽에서 이어 베고 더 세다
-          link: { damageMult: 1.4 },
+          duration: 0.58,
+          lunge: 110,
+          phases: [
+            { at: [0.05, 0.21], dir: 1, damageMult: 1.5, knockMult: 1.2 },
+            { at: [0.29, 0.47], dir: -1, damageMult: 2.3, knockMult: 2.4 },   // 되받아 베기 — 1.5 + 2.3 = 3.8
+          ],
           shake: 4.5,
           color: '#ffb35c',
         },
@@ -234,8 +238,38 @@ const CONFIG = {
           hitInterval: 0.17,   // 도는 동안 이 간격으로 다시 맞는다 (약 9번)
           moveScale: 0.45,     // 도는 동안 평소의 45% 속도로 걸을 수 있다
           knockMult: 1.4,
-          // 다 돌고 나면 마무리 일격 — 둘레를 한 번 더 크게 베어 멀리 날린다 (검의 세 번째 마무리와 같은 성격)
+          // 다 돌고 나면 마무리 일격 — 둘레를 한 번 더 크게 베어 멀리 날린다 (0.63 x 9 + 1.8 = 7.5)
           finalBurst: { damageMult: 1.8, reachBonus: 26, knockMult: 2.6 },
+          shake: 3,
+          color: '#7ec8ff',
+        },
+        {
+          // 검기 — 크게 한 번 휘둘러 초승달 검기를 날린다. 멀리(180px) 날아가며 닿는 적을 전부 벤다 (x11)
+          id: 'wave', name: 'WAVE', key: 'X', unlockLevel: 30,
+          cooldown: 13,
+          damageMult: 11,
+          duration: 0.38,
+          launchAt: 0.12,
+          shot: { kind: 'wave', speed: 280, range: 180, halfWidth: 20, depth: 7, pierce: true, knockMult: 1.8 },
+          shake: 5,
+          color: '#7ec8ff',
+        },
+        {
+          /* 검무 — 1초 동안 좌우로 몰아 베고(열 번, 마우스를 따라간다) 마지막에 크게 마무리 (0.9 x 10 + 7 = 16).
+             베는 동안 천천히 걸을 수 있다 */
+          id: 'storm', name: 'STORM', key: 'C', unlockLevel: 40,
+          cooldown: 18,
+          damageMult: 0.9,
+          arc: 1.2,
+          reachBonus: 10,
+          duration: 1.32,
+          hitWindow: [0.04, 0.98],
+          hitInterval: 0.09,
+          slashes: 10,         // 정확히 열 번 (프레임에 따라 하나 더 끼거나 빠지지 않게)
+          aimFollow: true,
+          moveScale: 0.3,
+          knockMult: 0.5,
+          finale: { at: 1.04, damageMult: 7, arc: 1.6, reachBonus: 16, knockMult: 3 },
           shake: 3,
           color: '#7ec8ff',
         },
@@ -243,10 +277,10 @@ const CONFIG = {
       dagger: [
         {
           /* 연속 찌르기 — 다섯 번 찌른다. 평타처럼 판정이 가는 띠이고, 찌를 때마다 **마우스 쪽으로 다시 겨눈다**
-             (훑으며 찌를 수 있다). 찌르는 동안 걸을 수 있고, 다섯 번째는 반드시 급소 */
+             (훑으며 찌를 수 있다). 찌르는 동안 걸을 수 있고, 다섯 번째는 반드시 급소 (1 x 4 + 1.8 = 5.8) */
           id: 'flurry', name: 'FLURRY', key: 'Q', unlockLevel: 10,
           cooldown: 6.0,
-          damageMult: 1.0,     // 한 번에 1배 x 5번 (마지막은 치명타)
+          damageMult: 1.0,
           lineWidth: 6,
           reachBonus: 8,       // 단검 22 + 8 = 30
           duration: 0.5,
@@ -263,8 +297,8 @@ const CONFIG = {
           // 그림자 밟기 — 겨냥한 쪽으로 순간 이동하듯 파고들며 지나친 적을 전부 치명타로 벤다. 지나가는 동안 무적
           id: 'shadow', name: 'SHADOW', key: 'R', unlockLevel: 20,
           cooldown: 9.0,
-          damageMult: 2.4,
-          forceCrit: true,     // 반드시 치명타 (x1.8) — 실질 4.3배
+          damageMult: 3.6,
+          forceCrit: true,     // 반드시 치명타 (x1.8) — 실질 6.5배, 매복 찌르기까지 약 7.5
           arc: Math.PI,
           reachBonus: -6,      // 몸에 스친 적만 (사거리 16 + 적 반지름)
           duration: 0.26,
@@ -273,6 +307,38 @@ const CONFIG = {
           invuln: true,
           ambush: 1.5,         // 빠져나온 뒤 이 안에 찌르면 그 찌르기는 반드시 급소 (매복)
           knockMult: 0.4,
+          shake: 3,
+          color: '#c79ce8',
+        },
+        {
+          /* 비수 — 부채꼴로 다섯 자루를 던진다. 비수는 급소만 노린다 (전부 치명타 2.2 x 1.8 = 4).
+             처음 닿은 적에서 멈추고, 한 적은 한 번에 세 자루까지만 맞는다 (최대 12) */
+          id: 'knives', name: 'KNIVES', key: 'X', unlockLevel: 30,
+          cooldown: 12,
+          damageMult: 2.2,
+          forceCrit: true,
+          duration: 0.3,
+          launchAt: 0.08,
+          shot: { kind: 'knife', count: 5, spread: 0.16, speed: 340, range: 165, radius: 3, perTarget: 3, knockMult: 0.5 },
+          moveScale: 0.6,
+          shake: 2,
+          color: '#c8ffd8',
+        },
+        {
+          /* 사신 — 둘레 120 안의 적에게 차례로 순간 이동하며 일곱 번 벤다. 전부 급소, 그동안 무적.
+             한 적은 세 번까지 (보스 하나면 2.8 x 1.8 x 3 + 마지막 일격 x1.4 = 약 17), 끝나면 매복 */
+          id: 'reaper', name: 'REAPER', key: 'C', unlockLevel: 40,
+          cooldown: 18,
+          damageMult: 2.8,
+          forceCrit: true,
+          range: 120,
+          strikes: 7,
+          perTarget: 3,
+          stepTime: 0.09,
+          finalMult: 1.4,
+          duration: 0.8,       // 실제 길이는 벨 횟수로 다시 정한다
+          ambush: 1.5,
+          knockMult: 0.3,
           shake: 3,
           color: '#c79ce8',
         },
@@ -295,13 +361,46 @@ const CONFIG = {
         },
         {
           /* 광폭화 — 도끼의 약점을 한동안 지운다.
-             손이 빨라지고(쿨다운 x1.6, 휘두르기 자체도 x1.45 빠르게) 위력 x1.25,
-             휘두르면서 걸을 수 있고(15% → 55%), 맞아도 밀리지 않는다 */
+             손이 빨라지고(쿨다운 x1.5, 휘두르기 자체도 x1.4 빠르게) 위력 x1.2,
+             휘두르면서 걸을 수 있고(15% → 55%), 맞아도 밀리지 않는다.
+             6초 내내 휘두르면 평소보다 약 10 만큼 더 넣는다 (30레벨 스킬보다 약하게 맞췄다) */
           id: 'rage', name: 'RAGE', key: 'R', unlockLevel: 20,
           cooldown: 20.0,
           duration: 0.3,       // 발동 동작
-          buff: { time: 7, attackSpeed: 1.6, damageMult: 1.25, swingSpeed: 1.45, moveScale: 0.55, steady: true },
+          buff: { time: 6, attackSpeed: 1.5, damageMult: 1.2, swingSpeed: 1.4, moveScale: 0.55, steady: true },
           shake: 3,
+          color: '#ff6b6b',
+        },
+        {
+          /* 대지 가르기 — 들어올렸다 내리찍으면 겨눈 쪽으로 땅이 150px 갈라지며 솟는다.
+             찍은 자리 둘레(반경 30)는 x5, 갈라진 금 위의 적은 x10 을 맞고 1.6초 기절 (찍은 자리 앞이면 둘 다 — 15) */
+          id: 'rift', name: 'RIFT', key: 'X', unlockLevel: 30,
+          cooldown: 14,
+          damageMult: 10,
+          windup: 0.3,
+          slam: { damageMult: 5, radius: 30 },
+          length: 150,
+          halfWidth: 14,
+          travel: 0.4,         // 금이 끝까지 가는 데 걸리는 시간
+          stun: 1.6,
+          duration: 0.85,
+          knockMult: 0.6,
+          shake: 6,
+          color: '#ffb35c',
+        },
+        {
+          /* 거인의 일격 — 마우스 쪽(최대 120px)으로 뛰어올라 내리찍는다. 공중에선 무적,
+             착지하면 반경 64 안 전부 x20, 2초 기절, 크게 날린다 */
+          id: 'titan', name: 'TITAN', key: 'C', unlockLevel: 40,
+          cooldown: 22,
+          damageMult: 20,
+          leap: 120,
+          air: 0.45,
+          radius: 64,
+          stun: 2.0,
+          duration: 0.72,
+          knockMult: 3,
+          shake: 10,
           color: '#ff6b6b',
         },
       ],

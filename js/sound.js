@@ -120,6 +120,19 @@ const Sound = {
   /* ── 효과음 목록 ────────────────────────────────────────── */
   SFX: {
     swing(S)   { S.noise({ dur: 0.09, from: 2200, to: 500, gain: 0.16, q: 0.8 }); },
+    // 30·40레벨 스킬과 검 십자베기
+    cross(S)   { S.noise({ dur: 0.16, from: 1800, to: 300, gain: 0.22, q: 0.8 }); },
+    wave(S)    { S.noise({ dur: 0.3, from: 3000, to: 400, gain: 0.22, q: 0.6 });
+                 S.tone({ freq: 660, slide: 1320, type: 'triangle', dur: 0.22, gain: 0.1, delay: 0.1 }); },
+    storm(S)   { for (let i = 0; i < 6; i++) S.noise({ dur: 0.07, from: 2400, to: 600, gain: 0.12, q: 0.9, delay: i * 0.16 }); },
+    knives(S)  { for (let i = 0; i < 5; i++) S.noise({ dur: 0.05, from: 4800, to: 2000, gain: 0.1, q: 1.6, delay: 0.06 + i * 0.02 }); },
+    reaper(S)  { S.noise({ dur: 0.22, filter: 'highpass', from: 3000, to: 300, gain: 0.18 });
+                 S.tone({ freq: 220, slide: 110, type: 'sawtooth', dur: 0.5, gain: 0.08, lowpass: 800 }); },
+    rift(S)    { S.tone({ freq: 60, slide: 35, type: 'sine', dur: 0.7, gain: 0.5, delay: 0.3 });
+                 S.noise({ dur: 0.6, filter: 'lowpass', from: 500, to: 80, gain: 0.35, delay: 0.3 }); },
+    titan(S)   { S.tone({ freq: 140, slide: 320, type: 'triangle', dur: 0.4, gain: 0.12 }); },
+    titanLand(S) { S.tone({ freq: 55, slide: 28, type: 'sine', dur: 0.9, gain: 0.6 });
+                 S.noise({ dur: 0.7, filter: 'lowpass', from: 700, to: 60, gain: 0.45 }); },
     // 무기마다 평타 소리가 다르다 — 단검은 짧고 높게, 검 마무리는 길게, 도끼는 낮고 무겁게
     stab(S)    { S.noise({ dur: 0.05, from: 4200, to: 1600, gain: 0.13, q: 1.4 }); },
     swingBig(S) { S.noise({ dur: 0.15, from: 2000, to: 280, gain: 0.2, q: 0.8 }); },

@@ -304,6 +304,39 @@ function makeSweepFrame(angle, sign, k, o) {
   return cv;
 }
 
+/* 검기 — 날아가는 초승달. 진행 방향으로 볼록하고, 두 끝으로 갈수록 가늘어진다 (16방향) */
+function makeWaveShot(angle) {
+  const S = 44, cv = makeCanvas(S, S), ctx = cv.getContext('2d');
+  // 호의 중심은 뒤쪽에 둔다 — 볼록한 앞면이 그림 가운데쯤(판정 자리)에 온다
+  const cx = S / 2 - Math.cos(angle) * 9, cy = S / 2 - Math.sin(angle) * 9;
+  for (let y = 0; y < S; y++) {
+    for (let x = 0; x < S; x++) {
+      const dx = x + 0.5 - cx, dy = y + 0.5 - cy;
+      const d = Math.sqrt(dx * dx + dy * dy);
+      const da = Math.abs(Util.angleDiff(Math.atan2(dy, dx), angle));
+      if (da > 1.25) continue;
+      const inner = 8 + da * 2.6, outer = 14 - da * 1.4;
+      if (d < inner || d > outer) continue;
+      if (da > 0.95 && (x + y) % 2 === 0) continue;          // 두 끝은 격자로 풀린다
+      ctx.fillStyle = d > outer - 1.6 ? '#ffffff' : (da > 0.8 ? '#7ec8ff' : '#bfe6ff');
+      ctx.fillRect(x, y, 1, 1);
+    }
+  }
+  return cv;
+}
+
+// 비수 — 칼날(밝은 강철) 넷 + 손잡이 둘. 각도마다 한 줄로 찍는다 (16방향)
+function makeKnife(angle) {
+  const S = 13, cv = makeCanvas(S, S), ctx = cv.getContext('2d');
+  const ux = Math.cos(angle), uy = Math.sin(angle);
+  for (let t = -3; t <= 4; t++) {
+    const x = Math.round(S / 2 - 0.5 + ux * t), y = Math.round(S / 2 - 0.5 + uy * t);
+    ctx.fillStyle = t <= -2 ? '#6b4a2a' : (t >= 3 ? '#ffffff' : '#c9d3de');
+    ctx.fillRect(x, y, 1, 1);
+  }
+  return cv;
+}
+
 /* 도끼 땅 찍기 — 눌린 타원으로 퍼지는 흙먼지 고리와, 안쪽에서 바깥으로 뻗는 갈라진 금.
    반경을 받아 그 크기로 그린다 (늘려 그리지 않는다). k = 0..3 (퍼짐 → 흩어짐). 반경마다 한 번만 그린다 */
 function quakeRing(radius, k) {
@@ -1263,6 +1296,19 @@ function buildSprites() {
   // 도끼 땅 찍기 고리 — 처음 쓰는 순간 그리면 그 프레임이 끊기므로 미리 그려 둔다
   const quake = CONFIG.skills.byWeapon.axe.find(s => s.id === 'quake');
   for (let k = 0; k < 4; k++) quakeRing(CONFIG.weapons.axe.reach + quake.reachBonus, k);
+  // 대지 가르기(찍은 자리)·거인의 일격(착지) 고리도
+  for (const s of CONFIG.skills.byWeapon.axe) {
+    const r = s.slam ? s.slam.radius : (s.id === 'titan' ? s.radius : 0);
+    if (r) for (let k = 0; k < 4; k++) quakeRing(r, k);
+  }
+  // 날아가는 것 — 검기와 비수 (16방향)
+  SPRITES.waveShot = [];
+  SPRITES.knife = [];
+  for (let i = 0; i < SLASH_DIRS; i++) {
+    const a = (i / SLASH_DIRS) * Math.PI * 2;
+    SPRITES.waveShot.push(makeWaveShot(a));
+    SPRITES.knife.push(makeKnife(a));
+  }
   SPRITES.spinRing = [0, 0.5, 1].map(makeSpinRing);
 
   /* ── 마무리 손질 — 손으로 찍은 옛 도트의 외곽선을 새 규칙(재질 색 1px)으로 맞춘다.

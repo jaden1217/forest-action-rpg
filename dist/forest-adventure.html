@@ -154,7 +154,7 @@ html, body {
 }
 
 </style>
-<!-- built 2026-10-16 14:35 by tools/build.js -->
+<!-- built 2026-10-16 14:53 by tools/build.js -->
 </head>
 <body>
   <div id="stage">
@@ -169,6 +169,8 @@ html, body {
     <span><b>Shift</b> 대시 (2회 충전)</span>
     <span><b>Q</b> 무기 스킬 1 <span style="opacity:.6">Lv10</span></span>
     <span><b>R</b> 무기 스킬 2 <span style="opacity:.6">Lv20</span></span>
+    <span><b>X</b> 무기 스킬 3 <span style="opacity:.6">Lv30</span></span>
+    <span><b>C</b> 무기 스킬 4 <span style="opacity:.6">Lv40</span></span>
     <span><b>E</b> 포션</span>
     <span><b>I</b> 인벤토리 <span style="opacity:.6">Space 사용 · X 버리기</span></span>
     <span><b>F</b> 무기 줍기 / 동굴 / 상점 / 의뢰 / 대장간 / 연금 / 창고 / 보물 / 비석</span>
@@ -371,38 +373,42 @@ const CONFIG = {
     buffer: 0.18,        // 대시 입력도 잠깐 기억해둔다
   },
 
-  /* 스킬 — 평타 말고 따로 쓰는 공격 수단. 쿨다운이 있고 플레이어 레벨로 열린다 (Q 10레벨, R 20레벨).
+  /* 스킬 — 평타 말고 따로 쓰는 공격 수단. 쿨다운이 있고 플레이어 레벨로 열린다.
+       Q 10레벨 · R 20레벨 · X 30레벨 · C 40레벨
 
-     무기마다 자기한테 어울리는 스킬 둘을 따로 가진다.
-       검   HEAVY 강공격 / SPIN 회전베기      — 균형
-       단검 FLURRY 연속 찌르기 / SHADOW 그림자 밟기 — 빠르고 좁고, 치명타
-       도끼 QUAKE 땅 찍기 / RAGE 광폭화        — 무겁고 넓고, 밀어낸다
+     무기마다 자기한테 어울리는 스킬 넷을 따로 가진다. 스킬도 그 무기 평타의 성격을 잇는다.
+       검   CROSS 십자베기 / SPIN 회전베기 / WAVE 검기 / STORM 검무        — 좌우로 베고, 마무리가 크다
+       단검 FLURRY 연속 찌르기 / SHADOW 그림자 밟기 / KNIVES 비수 / REAPER 사신 — 곧게, 급소(치명타), 빠르게 파고든다
+       도끼 QUAKE 땅 찍기 / RAGE 광폭화 / RIFT 대지 가르기 / TITAN 거인의 일격 — 무겁게, 넓게, 기절과 밀어내기
+
+     **높은 레벨 스킬일수록 세다.** 한 대상이 한 번에 받는 위력(아래 damageMult 들을 합친 것)이
+     10 < 20 < 30 < 40 레벨 순으로 커지도록 맞췄다 — 대신 쿨다운도 길어진다.
+                 10레벨       20레벨              30레벨          40레벨
+       검        3.8          7.5                 11              16
+       단검      5.8          7.5 (매복 포함)      최대 12         최대 17
+       도끼      2.4 + 기절   약 10 (6초 동안)      15              20 + 기절
 
      위력(damageMult)은 "무기 종류 배수를 뺀 평타" 에 곱한다 (기본 공격 x 무기 레벨 배수).
      안 그러면 단검(0.55배) 스킬이 도끼(1.55배) 스킬보다 늘 약해진다 — 스킬은 무기 종류와 무관하게
-     각자의 수치로만 세기가 정해져야 공평하다. */
+     각자의 수치로만 세기가 정해져야 공평하다.
+     움직임이 특별한 스킬(phases·launchAt·strikes·leap 등)은 js/skills.js 의 SkillKit 이 굴린다. */
   skills: {
     buffer: 0.18,          // 스킬 입력도 잠깐 기억해둔다
-    keys: ['Q', 'R'],
-    /* 스킬도 그 무기의 평타 성격을 잇는다 —
-         검   이어 치기와 마무리: 강공격은 이어 치기 도중에 쓰면 LINK 로 더 세지고, 회전베기는 마지막에 마무리 일격
-         단검 곧은 찌르기와 급소: 연속 찌르기는 띠 판정으로 마우스를 따라가며 마지막 찌르기가 급소,
-              그림자 밟기 뒤 첫 찌르기는 반드시 급소 (매복)
-         도끼 무게와 밀어내기: 땅 찍기는 맞은 적을 잠깐 기절시키고, 광폭화는 도끼의 약점(느린 손·멈춰 서기·밀림)을 지운다 */
+    keys: ['Q', 'R', 'X', 'C'],
     byWeapon: {
       sword: [
         {
-          id: 'heavy', name: 'HEAVY', key: 'Q', unlockLevel: 10,
+          // 십자베기 — 누르기만 하면 넓게 두 번 벤다: 한쪽에서 베고, 반대쪽에서 되받아 더 세게. 벨 때마다 앞으로 파고든다
+          id: 'cross', name: 'CROSS', key: 'Q', unlockLevel: 10,
           cooldown: 6.0,
-          damageMult: 2.6,
-          arc: 1.5,            // 평타(0.95)보다 훨씬 넓게 벤다
+          arc: 1.5,            // 평타(0.95)보다 훨씬 넓게
           reachBonus: 6,
-          duration: 0.42,
-          hitWindow: [0.14, 0.30],
-          lunge: 95,           // 휘두르며 앞으로 밀고 나간다
-          knockMult: 2.2,
-          // 이어 치기 도중(평타가 끝나고 comboWindow 안)에 쓰면 연계 — 평타가 휘두르던 쪽에서 이어 베고 더 세다
-          link: { damageMult: 1.4 },
+          duration: 0.58,
+          lunge: 110,
+          phases: [
+            { at: [0.05, 0.21], dir: 1, damageMult: 1.5, knockMult: 1.2 },
+            { at: [0.29, 0.47], dir: -1, damageMult: 2.3, knockMult: 2.4 },   // 되받아 베기 — 1.5 + 2.3 = 3.8
+          ],
           shake: 4.5,
           color: '#ffb35c',
         },
@@ -417,8 +423,38 @@ const CONFIG = {
           hitInterval: 0.17,   // 도는 동안 이 간격으로 다시 맞는다 (약 9번)
           moveScale: 0.45,     // 도는 동안 평소의 45% 속도로 걸을 수 있다
           knockMult: 1.4,
-          // 다 돌고 나면 마무리 일격 — 둘레를 한 번 더 크게 베어 멀리 날린다 (검의 세 번째 마무리와 같은 성격)
+          // 다 돌고 나면 마무리 일격 — 둘레를 한 번 더 크게 베어 멀리 날린다 (0.63 x 9 + 1.8 = 7.5)
           finalBurst: { damageMult: 1.8, reachBonus: 26, knockMult: 2.6 },
+          shake: 3,
+          color: '#7ec8ff',
+        },
+        {
+          // 검기 — 크게 한 번 휘둘러 초승달 검기를 날린다. 멀리(180px) 날아가며 닿는 적을 전부 벤다 (x11)
+          id: 'wave', name: 'WAVE', key: 'X', unlockLevel: 30,
+          cooldown: 13,
+          damageMult: 11,
+          duration: 0.38,
+          launchAt: 0.12,
+          shot: { kind: 'wave', speed: 280, range: 180, halfWidth: 20, depth: 7, pierce: true, knockMult: 1.8 },
+          shake: 5,
+          color: '#7ec8ff',
+        },
+        {
+          /* 검무 — 1초 동안 좌우로 몰아 베고(열 번, 마우스를 따라간다) 마지막에 크게 마무리 (0.9 x 10 + 7 = 16).
+             베는 동안 천천히 걸을 수 있다 */
+          id: 'storm', name: 'STORM', key: 'C', unlockLevel: 40,
+          cooldown: 18,
+          damageMult: 0.9,
+          arc: 1.2,
+          reachBonus: 10,
+          duration: 1.32,
+          hitWindow: [0.04, 0.98],
+          hitInterval: 0.09,
+          slashes: 10,         // 정확히 열 번 (프레임에 따라 하나 더 끼거나 빠지지 않게)
+          aimFollow: true,
+          moveScale: 0.3,
+          knockMult: 0.5,
+          finale: { at: 1.04, damageMult: 7, arc: 1.6, reachBonus: 16, knockMult: 3 },
           shake: 3,
           color: '#7ec8ff',
         },
@@ -426,10 +462,10 @@ const CONFIG = {
       dagger: [
         {
           /* 연속 찌르기 — 다섯 번 찌른다. 평타처럼 판정이 가는 띠이고, 찌를 때마다 **마우스 쪽으로 다시 겨눈다**
-             (훑으며 찌를 수 있다). 찌르는 동안 걸을 수 있고, 다섯 번째는 반드시 급소 */
+             (훑으며 찌를 수 있다). 찌르는 동안 걸을 수 있고, 다섯 번째는 반드시 급소 (1 x 4 + 1.8 = 5.8) */
           id: 'flurry', name: 'FLURRY', key: 'Q', unlockLevel: 10,
           cooldown: 6.0,
-          damageMult: 1.0,     // 한 번에 1배 x 5번 (마지막은 치명타)
+          damageMult: 1.0,
           lineWidth: 6,
           reachBonus: 8,       // 단검 22 + 8 = 30
           duration: 0.5,
@@ -446,8 +482,8 @@ const CONFIG = {
           // 그림자 밟기 — 겨냥한 쪽으로 순간 이동하듯 파고들며 지나친 적을 전부 치명타로 벤다. 지나가는 동안 무적
           id: 'shadow', name: 'SHADOW', key: 'R', unlockLevel: 20,
           cooldown: 9.0,
-          damageMult: 2.4,
-          forceCrit: true,     // 반드시 치명타 (x1.8) — 실질 4.3배
+          damageMult: 3.6,
+          forceCrit: true,     // 반드시 치명타 (x1.8) — 실질 6.5배, 매복 찌르기까지 약 7.5
           arc: Math.PI,
           reachBonus: -6,      // 몸에 스친 적만 (사거리 16 + 적 반지름)
           duration: 0.26,
@@ -456,6 +492,38 @@ const CONFIG = {
           invuln: true,
           ambush: 1.5,         // 빠져나온 뒤 이 안에 찌르면 그 찌르기는 반드시 급소 (매복)
           knockMult: 0.4,
+          shake: 3,
+          color: '#c79ce8',
+        },
+        {
+          /* 비수 — 부채꼴로 다섯 자루를 던진다. 비수는 급소만 노린다 (전부 치명타 2.2 x 1.8 = 4).
+             처음 닿은 적에서 멈추고, 한 적은 한 번에 세 자루까지만 맞는다 (최대 12) */
+          id: 'knives', name: 'KNIVES', key: 'X', unlockLevel: 30,
+          cooldown: 12,
+          damageMult: 2.2,
+          forceCrit: true,
+          duration: 0.3,
+          launchAt: 0.08,
+          shot: { kind: 'knife', count: 5, spread: 0.16, speed: 340, range: 165, radius: 3, perTarget: 3, knockMult: 0.5 },
+          moveScale: 0.6,
+          shake: 2,
+          color: '#c8ffd8',
+        },
+        {
+          /* 사신 — 둘레 120 안의 적에게 차례로 순간 이동하며 일곱 번 벤다. 전부 급소, 그동안 무적.
+             한 적은 세 번까지 (보스 하나면 2.8 x 1.8 x 3 + 마지막 일격 x1.4 = 약 17), 끝나면 매복 */
+          id: 'reaper', name: 'REAPER', key: 'C', unlockLevel: 40,
+          cooldown: 18,
+          damageMult: 2.8,
+          forceCrit: true,
+          range: 120,
+          strikes: 7,
+          perTarget: 3,
+          stepTime: 0.09,
+          finalMult: 1.4,
+          duration: 0.8,       // 실제 길이는 벨 횟수로 다시 정한다
+          ambush: 1.5,
+          knockMult: 0.3,
           shake: 3,
           color: '#c79ce8',
         },
@@ -478,13 +546,46 @@ const CONFIG = {
         },
         {
           /* 광폭화 — 도끼의 약점을 한동안 지운다.
-             손이 빨라지고(쿨다운 x1.6, 휘두르기 자체도 x1.45 빠르게) 위력 x1.25,
-             휘두르면서 걸을 수 있고(15% → 55%), 맞아도 밀리지 않는다 */
+             손이 빨라지고(쿨다운 x1.5, 휘두르기 자체도 x1.4 빠르게) 위력 x1.2,
+             휘두르면서 걸을 수 있고(15% → 55%), 맞아도 밀리지 않는다.
+             6초 내내 휘두르면 평소보다 약 10 만큼 더 넣는다 (30레벨 스킬보다 약하게 맞췄다) */
           id: 'rage', name: 'RAGE', key: 'R', unlockLevel: 20,
           cooldown: 20.0,
           duration: 0.3,       // 발동 동작
-          buff: { time: 7, attackSpeed: 1.6, damageMult: 1.25, swingSpeed: 1.45, moveScale: 0.55, steady: true },
+          buff: { time: 6, attackSpeed: 1.5, damageMult: 1.2, swingSpeed: 1.4, moveScale: 0.55, steady: true },
           shake: 3,
+          color: '#ff6b6b',
+        },
+        {
+          /* 대지 가르기 — 들어올렸다 내리찍으면 겨눈 쪽으로 땅이 150px 갈라지며 솟는다.
+             찍은 자리 둘레(반경 30)는 x5, 갈라진 금 위의 적은 x10 을 맞고 1.6초 기절 (찍은 자리 앞이면 둘 다 — 15) */
+          id: 'rift', name: 'RIFT', key: 'X', unlockLevel: 30,
+          cooldown: 14,
+          damageMult: 10,
+          windup: 0.3,
+          slam: { damageMult: 5, radius: 30 },
+          length: 150,
+          halfWidth: 14,
+          travel: 0.4,         // 금이 끝까지 가는 데 걸리는 시간
+          stun: 1.6,
+          duration: 0.85,
+          knockMult: 0.6,
+          shake: 6,
+          color: '#ffb35c',
+        },
+        {
+          /* 거인의 일격 — 마우스 쪽(최대 120px)으로 뛰어올라 내리찍는다. 공중에선 무적,
+             착지하면 반경 64 안 전부 x20, 2초 기절, 크게 날린다 */
+          id: 'titan', name: 'TITAN', key: 'C', unlockLevel: 40,
+          cooldown: 22,
+          damageMult: 20,
+          leap: 120,
+          air: 0.45,
+          radius: 64,
+          stun: 2.0,
+          duration: 0.72,
+          knockMult: 3,
+          shake: 10,
           color: '#ff6b6b',
         },
       ],
@@ -3807,6 +3908,39 @@ function makeSweepFrame(angle, sign, k, o) {
   return cv;
 }
 
+/* 검기 — 날아가는 초승달. 진행 방향으로 볼록하고, 두 끝으로 갈수록 가늘어진다 (16방향) */
+function makeWaveShot(angle) {
+  const S = 44, cv = makeCanvas(S, S), ctx = cv.getContext('2d');
+  // 호의 중심은 뒤쪽에 둔다 — 볼록한 앞면이 그림 가운데쯤(판정 자리)에 온다
+  const cx = S / 2 - Math.cos(angle) * 9, cy = S / 2 - Math.sin(angle) * 9;
+  for (let y = 0; y < S; y++) {
+    for (let x = 0; x < S; x++) {
+      const dx = x + 0.5 - cx, dy = y + 0.5 - cy;
+      const d = Math.sqrt(dx * dx + dy * dy);
+      const da = Math.abs(Util.angleDiff(Math.atan2(dy, dx), angle));
+      if (da > 1.25) continue;
+      const inner = 8 + da * 2.6, outer = 14 - da * 1.4;
+      if (d < inner || d > outer) continue;
+      if (da > 0.95 && (x + y) % 2 === 0) continue;          // 두 끝은 격자로 풀린다
+      ctx.fillStyle = d > outer - 1.6 ? '#ffffff' : (da > 0.8 ? '#7ec8ff' : '#bfe6ff');
+      ctx.fillRect(x, y, 1, 1);
+    }
+  }
+  return cv;
+}
+
+// 비수 — 칼날(밝은 강철) 넷 + 손잡이 둘. 각도마다 한 줄로 찍는다 (16방향)
+function makeKnife(angle) {
+  const S = 13, cv = makeCanvas(S, S), ctx = cv.getContext('2d');
+  const ux = Math.cos(angle), uy = Math.sin(angle);
+  for (let t = -3; t <= 4; t++) {
+    const x = Math.round(S / 2 - 0.5 + ux * t), y = Math.round(S / 2 - 0.5 + uy * t);
+    ctx.fillStyle = t <= -2 ? '#6b4a2a' : (t >= 3 ? '#ffffff' : '#c9d3de');
+    ctx.fillRect(x, y, 1, 1);
+  }
+  return cv;
+}
+
 /* 도끼 땅 찍기 — 눌린 타원으로 퍼지는 흙먼지 고리와, 안쪽에서 바깥으로 뻗는 갈라진 금.
    반경을 받아 그 크기로 그린다 (늘려 그리지 않는다). k = 0..3 (퍼짐 → 흩어짐). 반경마다 한 번만 그린다 */
 function quakeRing(radius, k) {
@@ -4766,6 +4900,19 @@ function buildSprites() {
   // 도끼 땅 찍기 고리 — 처음 쓰는 순간 그리면 그 프레임이 끊기므로 미리 그려 둔다
   const quake = CONFIG.skills.byWeapon.axe.find(s => s.id === 'quake');
   for (let k = 0; k < 4; k++) quakeRing(CONFIG.weapons.axe.reach + quake.reachBonus, k);
+  // 대지 가르기(찍은 자리)·거인의 일격(착지) 고리도
+  for (const s of CONFIG.skills.byWeapon.axe) {
+    const r = s.slam ? s.slam.radius : (s.id === 'titan' ? s.radius : 0);
+    if (r) for (let k = 0; k < 4; k++) quakeRing(r, k);
+  }
+  // 날아가는 것 — 검기와 비수 (16방향)
+  SPRITES.waveShot = [];
+  SPRITES.knife = [];
+  for (let i = 0; i < SLASH_DIRS; i++) {
+    const a = (i / SLASH_DIRS) * Math.PI * 2;
+    SPRITES.waveShot.push(makeWaveShot(a));
+    SPRITES.knife.push(makeKnife(a));
+  }
   SPRITES.spinRing = [0, 0.5, 1].map(makeSpinRing);
 
   /* ── 마무리 손질 — 손으로 찍은 옛 도트의 외곽선을 새 규칙(재질 색 1px)으로 맞춘다.
@@ -5227,6 +5374,19 @@ const Sound = {
   /* ── 효과음 목록 ────────────────────────────────────────── */
   SFX: {
     swing(S)   { S.noise({ dur: 0.09, from: 2200, to: 500, gain: 0.16, q: 0.8 }); },
+    // 30·40레벨 스킬과 검 십자베기
+    cross(S)   { S.noise({ dur: 0.16, from: 1800, to: 300, gain: 0.22, q: 0.8 }); },
+    wave(S)    { S.noise({ dur: 0.3, from: 3000, to: 400, gain: 0.22, q: 0.6 });
+                 S.tone({ freq: 660, slide: 1320, type: 'triangle', dur: 0.22, gain: 0.1, delay: 0.1 }); },
+    storm(S)   { for (let i = 0; i < 6; i++) S.noise({ dur: 0.07, from: 2400, to: 600, gain: 0.12, q: 0.9, delay: i * 0.16 }); },
+    knives(S)  { for (let i = 0; i < 5; i++) S.noise({ dur: 0.05, from: 4800, to: 2000, gain: 0.1, q: 1.6, delay: 0.06 + i * 0.02 }); },
+    reaper(S)  { S.noise({ dur: 0.22, filter: 'highpass', from: 3000, to: 300, gain: 0.18 });
+                 S.tone({ freq: 220, slide: 110, type: 'sawtooth', dur: 0.5, gain: 0.08, lowpass: 800 }); },
+    rift(S)    { S.tone({ freq: 60, slide: 35, type: 'sine', dur: 0.7, gain: 0.5, delay: 0.3 });
+                 S.noise({ dur: 0.6, filter: 'lowpass', from: 500, to: 80, gain: 0.35, delay: 0.3 }); },
+    titan(S)   { S.tone({ freq: 140, slide: 320, type: 'triangle', dur: 0.4, gain: 0.12 }); },
+    titanLand(S) { S.tone({ freq: 55, slide: 28, type: 'sine', dur: 0.9, gain: 0.6 });
+                 S.noise({ dur: 0.7, filter: 'lowpass', from: 700, to: 60, gain: 0.45 }); },
     // 무기마다 평타 소리가 다르다 — 단검은 짧고 높게, 검 마무리는 길게, 도끼는 낮고 무겁게
     stab(S)    { S.noise({ dur: 0.05, from: 4200, to: 1600, gain: 0.13, q: 1.4 }); },
     swingBig(S) { S.noise({ dur: 0.15, from: 2000, to: 280, gain: 0.2, q: 0.8 }); },
@@ -6847,8 +7007,8 @@ class Player {
     this.spinAngle = 0;        // 회전베기 연출용
     this.buff = null;          // 광폭화 같은 한시 강화 { id, timeLeft, time, attackSpeed, damageMult, swingSpeed, moveScale, steady }
     this.auraTick = 0;
-    this.skillMult = 1;        // 이번 스킬의 위력 배수 (검 강공격의 LINK)
-    this.skillDir = 1;         // 이번 스킬을 휘두르는 쪽 (LINK 는 평타가 휘두르던 쪽에서 이어 벤다)
+    this.lift = 0;             // 몸이 땅에서 뜬 높이 (거인의 일격 — 뛰어오른 동안)
+    this.skillData = null;     // 스킬 하나가 쓰는 동안 들고 다니는 것 (SkillKit 이 쓴다)
     this.ambush = 0;           // 그림자 밟기 뒤 남은 매복 시간 — 이 안의 첫 찌르기는 반드시 급소
   }
 
@@ -6997,10 +7157,26 @@ class Player {
       if (Math.random() < dt * 14) FX.burst(this.x + Util.rand(-5, 5), this.y - Util.rand(2, 9), 1, ['#c79ce8', '#ffffff'], { speed: 6, life: 0.35, gravity: -24, size: 1 });
     }
 
+    if (this.activeSkill !== 'titan') this.lift = 0;
     // ── 쓰는 중
     if (this.activeSkill) {
       const spec = this.skillSpec(this.activeSkill);
       const elapsed = spec.duration - this.skillTimer;
+      const kit = SkillKit[spec.id];
+      if (kit && kit.tick) {
+        kit.tick(this, spec, elapsed, dt, enemies);
+        if (this.weaponGrowing && this.activeSkill) {
+          const t = this.skillTipAngle(spec, elapsed);
+          FX.burst(this.x + Math.cos(t) * 22, this.y - 1 + Math.sin(t) * 22, 2, CONFIG.weapons.rainbow, { speed: 22, life: 0.35, gravity: -10, size: 1 });
+        }
+        this.skillTimer -= dt;
+        if (this.activeSkill && this.skillTimer <= 0) {
+          this.activeSkill = null;
+          if (kit.end) kit.end(this, spec, enemies);
+          this.finishSkill(spec, enemies);
+        }
+        return;
+      }
 
       if (spec.id === 'spin') this.spinAngle += dt * 20;
       if (this.weaponGrowing) {
@@ -7048,7 +7224,7 @@ class Player {
           reachBonus: spec.reachBonus,
           arc: spec.arc,
           line: spec.lineWidth,
-          damageMult: spec.damageMult * this.skillMult,
+          damageMult: spec.damageMult,
           knockMult: spec.knockMult,
           forceCrit: spec.forceCrit || (spec.lastCrit && this.skillHits >= spec.stabs),
           stun: spec.stun,
@@ -7081,6 +7257,8 @@ class Player {
       return;
     }
     if (this.skillCooldowns[spec.id] > 0) return;   // 쿨다운이 풀리면 버퍼로 바로 나간다
+    const kitCheck = SkillKit[spec.id];
+    if (kitCheck && kitCheck.canStart && !kitCheck.canStart(this, spec, enemies)) { this.skillQueued = null; return; }
 
     this.skillQueued = null;
     this.activeSkill = spec.id;
@@ -7094,17 +7272,10 @@ class Player {
     this.spinAngle = 0;
     this.attackTimer = 0;
     this.cooldown = Math.max(this.cooldown, spec.duration);   // 스킬 직후 평타가 바로 안 나가게
-    /* 검 강공격 LINK — 이어 치기 도중(평타가 끝나고 comboWindow 안)에 쓰면 평타가 휘두르던 쪽에서
-       이어 베고 위력이 오른다. 평타 → 평타 → Q 가 검의 손맛이다 */
-    this.skillMult = 1;
-    this.skillDir = 1;
-    if (spec.link && this.comboStep >= 1 && this.comboIdle <= CONFIG.weapons.comboWindow) {
-      this.skillMult = spec.link.damageMult;
-      this.skillDir = this.comboStep % 2 === 0 ? 1 : -1;
-      FX.number(this.x, this.y - 26, 'LINK', '#7ec8ff', true);
-      FX.addShake(1.5);
-    }
     this.comboStep = 0;      // 스킬을 쓰면 평타 이어 치기는 처음부터
+    this.skillData = {};
+    const kit = SkillKit[spec.id];
+    if (kit && kit.start) kit.start(this, spec, enemies);
     if (spec.buff) {
       // 광폭화 — 한동안 손이 빨라지고 위력이 오르고, 휘두르며 걷고, 밀리지 않는다
       this.buff = Object.assign({ id: spec.id, timeLeft: spec.buff.time }, spec.buff);
@@ -7148,7 +7319,8 @@ class Player {
   // 스킬을 쓰는 동안 무기 끝이 향한 각도 (연출용)
   skillTipAngle(spec, elapsed) {
     if (spec.id === 'spin') return this.spinAngle;
-    if (spec.id === 'heavy') return this.swingAngle + this.skillDir * (-1.6 + (elapsed / spec.duration) * 3.2);
+    const kit = SkillKit[spec.id];
+    if (kit && kit.tip) return kit.tip(this, spec, elapsed);
     if (spec.id === 'quake') return elapsed < spec.windup ? this.swingAngle - 1.3 : this.swingAngle + 0.4;
     return this.swingAngle;
   }
@@ -7200,7 +7372,8 @@ class Player {
     if (Input.potionPressed()) this.potionQueued = true;
     if (Input.dashPressed()) this.dashQueued = CONFIG.dash.buffer;
     const skill = Input.skillPressed();
-    if (skill) { this.skillQueued = skill; this.skillQueueTime = CONFIG.skills.buffer; }
+    const menu = typeof Game !== 'undefined' && Game.paused && Game.paused();
+    if (skill && !menu) { this.skillQueued = skill; this.skillQueueTime = CONFIG.skills.buffer; }
   }
 
   // 마우스가 가리키는 곳을 향한 각도. 마우스를 안 쓰면 걸어간 방향을 유지한다.
@@ -7301,6 +7474,7 @@ class Player {
     this.updateAim(ix, iy);
     this.updateDash(dt, ix, iy);
     this.updateSkills(dt, enemies);
+    PlayerShots.update(dt, this, enemies);   // 날아가는 검기·비수
 
     if (this.dashTimer > 0) {
       // 대시 중에는 이동 입력과 넉백을 무시하고 정해진 방향으로만 미끄러진다
@@ -7448,25 +7622,25 @@ class Player {
        knockMult   넉백 배수
        line        찌르기 — 부채꼴 대신 겨눈 쪽으로 뻗은 띠 (이 값이 띠의 반폭)
        radial      맞은 적을 휘두른 방향이 아니라 내게서 바깥쪽으로 날린다 (도끼 휩쓸기)
-       stun        맞은 적을 이만큼 기절시킨다 (엘리트는 절반, 보스는 안 걸린다) */
+       stun        맞은 적을 이만큼 기절시킨다 (엘리트는 절반, 보스는 안 걸린다)
+       origin      판정의 중심 (기본은 내 자리 — 대지 가르기는 찍은 자리를 중심으로 쓴다)
+       reach       사거리를 무기와 무관하게 이 값으로 (reachBonus 대신) */
   resolveHits(enemies, opts) {
-    const c = CONFIG.player;
     const w = this.weaponSpec();
     const base = this.swingAngle;   // 휘두르기 시작할 때 고정한 마우스 방향
     const ids = (opts && opts.ids) || this.hitIds;
-    const reach = w.reach + ((opts && opts.reachBonus) || 0);
+    const reach = (opts && opts.reach !== undefined) ? opts.reach : w.reach + ((opts && opts.reachBonus) || 0);
     const arc = (opts && opts.arc !== undefined) ? opts.arc : w.arc;
-    const dmgMult = (opts && opts.damageMult) || 1;
-    const knockMult = (opts && opts.knockMult) || 1;
     const omni = arc >= Math.PI;    // 사방을 다 때리는 기술인가
+    const ox = (opts && opts.origin) ? opts.origin.x : this.x, oy = (opts && opts.origin) ? opts.origin.y : this.y;
 
     for (const s of enemies) {
       if (s.dead || ids.has(s.id)) continue;
       // 보스는 몸통 상자(그림자 제외)까지의 거리로, 일반 몬스터는 중심 원으로 잰다
-      const hc = s.hitCenter ? s.hitCenter() : s;   // (c 는 CONFIG.player — 이름을 겹치면 치명타가 사라진다)
-      const dx = hc.x - this.x, dy = hc.y - this.y;
+      const hc = s.hitCenter ? s.hitCenter() : s;
+      const dx = hc.x - ox, dy = hc.y - oy;
       const d = Math.sqrt(dx * dx + dy * dy);
-      const gap = s.hitDistance ? s.hitDistance(this.x, this.y) : d - s.radius;
+      const gap = s.hitDistance ? s.hitDistance(ox, oy) : d - s.radius;
       if (gap > reach) continue;
       const toEnemy = Math.atan2(dy, dx);
       if (opts && opts.line) {
@@ -7478,62 +7652,69 @@ class Player {
       } else if (!omni && d > 3 && Math.abs(Util.angleDiff(toEnemy, base)) > arc) continue;
 
       ids.add(s.id);
-      const crit = (opts && opts.forceCrit) || Math.random() < this.critChance();   // 치명타율은 무기와 무관하게 동일
-      // 스킬은 무기 종류 배수를 뺀 기준값으로 — 단검 스킬이 도끼 스킬보다 약하지 않게
-      const dmgBase = (opts && opts.skill) ? this.skillBase() : this.attackDamage();
-      let dmg = Math.round((dmgBase + Util.randInt(-1, 1)) * dmgMult);
-      if (crit) dmg = Math.round(dmg * this.critMult());
-      // OVERLOAD — 스킬만 더 세진다
-      if (opts && opts.skill && this.has('overload')) dmg = Math.round(dmg * this.uniq('overload').mult);
-      // EXECUTIONER — 빈사의 적을 끝낸다
-      if (this.has('executioner') && s.maxHp && s.hp / s.maxHp <= this.uniq('executioner').ratio) {
-        dmg = Math.round(dmg * this.uniq('executioner').mult);
-      }
-      /* 무기에 박힌 속성 — 추가 피해를 주고 그 속성의 상태이상을 건다.
-         추가 피해는 몬스터마다 다르다 (버섯은 불에 약하고, 선인장은 불에 강하다) */
-      const elId = this.weaponElement, el = elId && CONFIG.forge.elements[elId];
-      if (el) {
-        const aff = Forge.affinity(s.TYPE, elId);
-        const bonus = Math.max(1, Math.round(dmg * CONFIG.forge.bonus * aff));
-        dmg += bonus;
-        if (Math.random() < el.chance) Status.apply(s, el.status, dmg, this);
-        FX.burst(s.x, s.y - 4, aff >= 1.5 ? 6 : 3, [el.color, '#ffffff'], { speed: 34, life: 0.3, gravity: 10, size: 1 });
-        // 약점이면 한 번씩 알려준다 — "얘한테는 불" 이 눈에 보이게
-        if (aff >= 1.5 && Math.random() < 0.34) FX.number(s.x, s.y - 22 - s.radius, 'WEAK', el.color);
-      }
-
-      dmg = Math.max(1, dmg);
       // 사방 공격·휩쓸기는 바깥쪽으로, 베는 공격은 휘두른 방향으로 날린다
-      const push = (omni || (opts && opts.radial)) ? toEnemy : base;
-      s.takeHit(dmg, push, crit, this, knockMult);
-      if (opts && opts.stun && !s.dead && !s.isBoss) s.stunTimer = Math.max(s.stunTimer || 0, opts.stun * (s.elite ? 0.5 : 1));
-      this.sinceCombat = 0;   // 때리는 중에도 자연 회복은 멈춘다
-      /* 장비에 붙은 FIERY / FROSTY / SHOCKING / VENOMOUS 가 확률로 상태이상을 건다.
-         세기는 '이 일격의 피해' 기준이라 레벨이 올라도 따로 손볼 것이 없다 */
-      for (const key in CONFIG.affixes.list) {
-        const spec = CONFIG.affixes.list[key];
-        if (!spec.status) continue;
-        const chance = this.stat(key);
-        if (chance > 0 && Math.random() < chance / 100) Status.apply(s, spec.status, dmg, this);
-      }
-      // MOMENTUM — 치명타가 터지면 모든 스킬 쿨다운이 조금씩 당겨진다
-      if (crit && this.has('momentum')) {
-        const cut = this.uniq('momentum').cut;
-        for (const k in this.skillCooldowns) this.skillCooldowns[k] = Math.max(0, this.skillCooldowns[k] - cut);
-      }
-      // 흡혈(VAMPIRIC) — 때린 만큼 조금 돌려받는다. 체력이 가득이면 아무 일도 없다
-      const leech = this.stat('lifesteal');
-      if (leech > 0 && this.hp < this.maxHp) {
-        const healed = Math.max(1, Math.round(dmg * leech / 100));
-        this.hp = Math.min(this.maxHp, this.hp + healed);
-        if (Math.random() < 0.3) FX.burst(this.x, this.y - 2, 2, ['#ff6b6b', '#ffd0d0'], { speed: 14, life: 0.3, gravity: -20, size: 1 });
-      }
-      // 처치 > 치명타 > 보통 순으로 화면이 더 오래 멈춘다. 카메라도 휘두른 쪽으로 살짝 밀린다
-      const fx = CONFIG.fx;
-      FX.freeze(s.dead ? fx.hitStopKill : (crit ? fx.hitStopCrit : fx.hitStop));
-      FX.addShake(s.dead ? 3 : (crit ? 2.4 : 1.3));
-      FX.addKick(omni ? toEnemy : base, fx.kick * (crit ? 1.6 : 1));
+      this.strike(s, (omni || (opts && opts.radial)) ? toEnemy : base, opts);
     }
+  }
+
+  /* 한 적을 때린다 — 평타·스킬·던진 비수·검기가 모두 여기로 온다.
+     치명타, 무기 속성, 고유 효과, 장비 옵션의 상태이상, 흡혈, 화면 멈춤까지 한 자리에서. push 는 날려 보낼 방향 */
+  strike(s, push, opts) {
+    const dmgMult = (opts && opts.damageMult) || 1;
+    const knockMult = (opts && opts.knockMult) || 1;
+    const crit = (opts && opts.forceCrit) || Math.random() < this.critChance();   // 치명타율은 무기와 무관하게 동일
+    // 스킬은 무기 종류 배수를 뺀 기준값으로 — 단검 스킬이 도끼 스킬보다 약하지 않게
+    const dmgBase = (opts && opts.skill) ? this.skillBase() : this.attackDamage();
+    let dmg = Math.round((dmgBase + Util.randInt(-1, 1)) * dmgMult);
+    if (crit) dmg = Math.round(dmg * this.critMult());
+    // OVERLOAD — 스킬만 더 세진다
+    if (opts && opts.skill && this.has('overload')) dmg = Math.round(dmg * this.uniq('overload').mult);
+    // EXECUTIONER — 빈사의 적을 끝낸다
+    if (this.has('executioner') && s.maxHp && s.hp / s.maxHp <= this.uniq('executioner').ratio) {
+      dmg = Math.round(dmg * this.uniq('executioner').mult);
+    }
+    /* 무기에 박힌 속성 — 추가 피해를 주고 그 속성의 상태이상을 건다.
+       추가 피해는 몬스터마다 다르다 (버섯은 불에 약하고, 선인장은 불에 강하다) */
+    const elId = this.weaponElement, el = elId && CONFIG.forge.elements[elId];
+    if (el) {
+      const aff = Forge.affinity(s.TYPE, elId);
+      const bonus = Math.max(1, Math.round(dmg * CONFIG.forge.bonus * aff));
+      dmg += bonus;
+      if (Math.random() < el.chance) Status.apply(s, el.status, dmg, this);
+      FX.burst(s.x, s.y - 4, aff >= 1.5 ? 6 : 3, [el.color, '#ffffff'], { speed: 34, life: 0.3, gravity: 10, size: 1 });
+      // 약점이면 한 번씩 알려준다 — "얘한테는 불" 이 눈에 보이게
+      if (aff >= 1.5 && Math.random() < 0.34) FX.number(s.x, s.y - 22 - s.radius, 'WEAK', el.color);
+    }
+
+    dmg = Math.max(1, dmg);
+    s.takeHit(dmg, push, crit, this, knockMult);
+    if (opts && opts.stun && !s.dead && !s.isBoss) s.stunTimer = Math.max(s.stunTimer || 0, opts.stun * (s.elite ? 0.5 : 1));
+    this.sinceCombat = 0;   // 때리는 중에도 자연 회복은 멈춘다
+    /* 장비에 붙은 FIERY / FROSTY / SHOCKING / VENOMOUS 가 확률로 상태이상을 건다.
+       세기는 '이 일격의 피해' 기준이라 레벨이 올라도 따로 손볼 것이 없다 */
+    for (const key in CONFIG.affixes.list) {
+      const spec = CONFIG.affixes.list[key];
+      if (!spec.status) continue;
+      const chance = this.stat(key);
+      if (chance > 0 && Math.random() < chance / 100) Status.apply(s, spec.status, dmg, this);
+    }
+    // MOMENTUM — 치명타가 터지면 모든 스킬 쿨다운이 조금씩 당겨진다
+    if (crit && this.has('momentum')) {
+      const cut = this.uniq('momentum').cut;
+      for (const k in this.skillCooldowns) this.skillCooldowns[k] = Math.max(0, this.skillCooldowns[k] - cut);
+    }
+    // 흡혈(VAMPIRIC) — 때린 만큼 조금 돌려받는다. 체력이 가득이면 아무 일도 없다
+    const leech = this.stat('lifesteal');
+    if (leech > 0 && this.hp < this.maxHp) {
+      const healed = Math.max(1, Math.round(dmg * leech / 100));
+      this.hp = Math.min(this.maxHp, this.hp + healed);
+      if (Math.random() < 0.3) FX.burst(this.x, this.y - 2, 2, ['#ff6b6b', '#ffd0d0'], { speed: 14, life: 0.3, gravity: -20, size: 1 });
+    }
+    // 처치 > 치명타 > 보통 순으로 화면이 더 오래 멈춘다. 카메라도 휘두른 쪽으로 살짝 밀린다
+    const fx = CONFIG.fx;
+    FX.freeze(s.dead ? fx.hitStopKill : (crit ? fx.hitStopCrit : fx.hitStop));
+    FX.addShake(s.dead ? 3 : (crit ? 2.4 : 1.3));
+    FX.addKick(push, fx.kick * (crit ? 1.6 : 1));
   }
 
   takeDamage(amount, fromX, fromY) {
@@ -7613,6 +7794,8 @@ class Player {
       this.xpNeed = CONFIG.levelUp.xpNeed(this.level);
       this.syncWeaponLevel();
       FX.number(this.x, this.y - 22, 'LEVEL UP', '#ffe066', true);
+      const opened = this.currentSkills().find(s => s.unlockLevel === this.level);
+      if (opened) FX.number(this.x, this.y - 34, 'NEW SKILL ' + opened.key + ' ' + opened.name, opened.color, true);
       FX.ring(this.x, this.y + 4, 10, '#ffe066');
       Sound.play('levelup');
       FX.burst(this.x, this.y, 26, ['#ffe066', '#ffffff', '#9be564'], { speed: 60, life: 0.8, gravity: 40 });
@@ -7751,8 +7934,10 @@ class Player {
 
     // 그림자 — 납작한 타원, 빛 반대편으로 한 칸
     fillEllipse(ctx, sx + 1, sy + 7, 5, 2, 'rgba(10,12,20,0.32)');
-    // 땅 찍기 고리는 바닥에 생기는 것이라 몸보다 먼저 (몸 위로 선이 지나가지 않게)
+    // 땅 찍기 고리·갈라진 땅처럼 바닥에 생기는 것은 몸보다 먼저 (몸 위로 선이 지나가지 않게)
     if (this.activeSkill === 'quake') this.drawQuakeRing(ctx, sx, sy);
+    const groundKit = this.activeSkill && SkillKit[this.activeSkill];
+    if (groundKit && groundKit.ground) groundKit.ground(this, ctx, sx, sy, this.skillSpec(this.activeSkill));
 
     /* 걸음 네 장 — 딛기(0)·지나기(1)·딛기(2)·지나기(3). 한 장에 약 0.1초.
        서 있을 땐 다리를 모은 지나기 자세(1)로 선다 */
@@ -7771,7 +7956,7 @@ class Player {
       ctx.drawImage(tinted(set[facing][frame], '#ff6b6b'), sx - 8 + o, sy - PLAYER_TOP + bob);
       ctx.globalAlpha = 1;
     }
-    ctx.drawImage(set[facing][frame], sx - 8, sy - PLAYER_TOP + bob);
+    ctx.drawImage(set[facing][frame], sx - 8, sy - PLAYER_TOP + bob - this.lift);
     ctx.globalAlpha = 1;
 
     if (this.activeSkill) this.drawSkill(ctx, sx, sy);
@@ -7796,6 +7981,8 @@ class Player {
 
   drawSkill(ctx, sx, sy) {
     const spec = this.skillSpec(this.activeSkill);
+    const kit = SkillKit[spec.id];
+    if (kit && kit.draw) { kit.draw(this, ctx, sx, sy - this.lift, spec, spec.duration - this.skillTimer); return; }
     const p = 1 - this.skillTimer / spec.duration;      // 0 -> 1
     const fi = Util.clamp(Math.floor(p * 3), 0, 2);
     const sw = this.weaponSprite();
@@ -7883,8 +8070,8 @@ class Player {
     const arc = SPRITES.heavySlash[slashIndex(this.swingAngle)][fi];
     if (grow) this.drawRainbowGlow(ctx, arc, sx, sy, 1.22);
     ctx.drawImage(arc, sx - Math.floor(arc.width / 2), sy - Math.floor(arc.height / 2));
-    const a = this.swingAngle + this.skillDir * (-1.6 + p * 3.2);
-    if (grow) this.drawAfterimages(ctx, sx, sy, sw, a, -25, 0.5 * this.skillDir);
+    const a = this.swingAngle - 1.6 + p * 3.2;
+    if (grow) this.drawAfterimages(ctx, sx, sy, sw, a, -25, 0.5);
     ctx.save();
     ctx.translate(sx, sy - 1);
     ctx.rotate(a + Math.PI / 2);
@@ -8042,6 +8229,445 @@ class Player {
     this.drawHeldWeapon(ctx, sx, sy - 1, a, 21);
   }
 }
+
+</script>
+  <script>
+// ── js/skills.js
+'use strict';
+
+/* 움직임이 특별한 스킬 — 두 번 베기, 날아가는 검기·비수, 순간 이동 연쇄, 갈라지는 땅, 뛰어올라 찍기.
+
+   단순한 스킬(회전베기·연속 찌르기·그림자 밟기·땅 찍기·광폭화)은 player.js 의 공통 처리로 굴러가고,
+   여기 있는 것만 SkillKit[id] 의 고리를 따로 쓴다. 고리는 전부 고를 수 있다:
+     canStart(p, spec, enemies)        나갈 수 있는가 (false 면 쿨다운도 안 쓴다)
+     start(p, spec, enemies)           발동하는 순간 (p.skillData 는 빈 상자로 와 있다)
+     tick(p, spec, elapsed, dt, enemies) 쓰는 동안 매 프레임 — 판정·이동
+     tip(p, spec, elapsed)             무기 끝 각도 (성장 무기의 무지개 알갱이 자리)
+     draw(p, ctx, sx, sy, spec, elapsed) 몸 위에 그릴 것 (무기·궤적)
+     ground(p, ctx, sx, sy, spec)      몸보다 먼저 바닥에 그릴 것 (갈라진 땅·착지 표시)
+     end(p, spec, enemies)             끝까지 갔을 때
+
+   위력은 모두 config 의 damageMult 들이 정한다 (CONFIG.skills 위 표 참고 — 10 < 20 < 30 < 40 레벨). */
+
+const SkillKit = {};
+
+// 휘두르는 비율 q(0~1)로 무기 각도를 — 한쪽 끝에서 반대쪽 끝까지 반각 half 만큼
+function swingAt(p, dir, q, half) { return p.swingAngle + dir * (-half + 2 * half * Util.clamp(q, 0, 1)); }
+
+// 그 자리에 발을 디딜 수 있는가 (물·바위·나무·맵 끝)
+function standable(p, x, y) {
+  const ox = p.x, oy = p.y;
+  p.x = x; p.y = y;
+  const ok = !World.blocked(p.feetBox);
+  p.x = ox; p.y = oy;
+  return ok;
+}
+
+/* ── 검 Q · 십자베기 — 누르기만 하면 넓게 두 번 (한쪽에서, 반대쪽에서 되받아 더 세게) ── */
+SkillKit.cross = {
+  phase(spec, elapsed) {
+    for (let i = spec.phases.length - 1; i >= 0; i--) if (elapsed >= spec.phases[i].at[0] - 0.05) return i;
+    return 0;
+  },
+  progress(spec, elapsed, i) {
+    const ph = spec.phases[i];
+    return Util.clamp((elapsed - ph.at[0] + 0.05) / (ph.at[1] - ph.at[0] + 0.05), 0, 1);
+  },
+  start(p) { p.skillData.ids = [new Set(), new Set()]; },
+  tick(p, spec, elapsed, dt, enemies) {
+    spec.phases.forEach((ph, i) => {
+      if (elapsed < ph.at[0] || elapsed > ph.at[1]) return;
+      // 벨 때마다 앞으로 파고든다
+      if (elapsed < ph.at[0] + 0.1) p.moveWithCollision(Math.cos(p.swingAngle) * spec.lunge * dt, Math.sin(p.swingAngle) * spec.lunge * dt);
+      if (!p.skillData['began' + i]) {
+        p.skillData['began' + i] = true;
+        if (i > 0) { Sound.play('heavy'); FX.addShake(3); }
+      }
+      p.resolveHits(enemies, { ids: p.skillData.ids[i], reachBonus: spec.reachBonus, arc: spec.arc,
+        damageMult: ph.damageMult, knockMult: ph.knockMult, skill: true });
+    });
+  },
+  tip(p, spec, elapsed) {
+    const i = this.phase(spec, elapsed);
+    return swingAt(p, spec.phases[i].dir, this.progress(spec, elapsed, i), 1.6);
+  },
+  draw(p, ctx, sx, sy, spec, elapsed) {
+    const i = this.phase(spec, elapsed), q = this.progress(spec, elapsed, i), dir = spec.phases[i].dir;
+    if (elapsed < spec.phases[i].at[1] + 0.06) {
+      const arc = SPRITES.heavySlash[slashIndex(p.swingAngle)][Math.min(2, Math.floor(q * 3))];
+      if (p.weaponGrowing) p.drawRainbowGlow(ctx, arc, sx, sy, 1.22);
+      ctx.drawImage(arc, sx - (arc.width >> 1), sy - (arc.height >> 1));
+    }
+    const a = swingAt(p, dir, q, 1.6);
+    if (p.weaponGrowing) p.drawAfterimages(ctx, sx, sy, p.weaponSprite(), a, -25, 0.5 * dir);
+    p.drawHeldWeapon(ctx, sx, sy - 1, a, 25);
+  },
+};
+
+/* ── 검 X · 검기 — 크게 휘둘러 초승달 검기를 날린다 ── */
+SkillKit.wave = {
+  tick(p, spec, elapsed) {
+    if (p.skillData.fired || elapsed < spec.launchAt) return;
+    p.skillData.fired = true;
+    PlayerShots.fire(p, spec, p.swingAngle);
+    FX.burst(p.x + Math.cos(p.swingAngle) * 14, p.y - 1 + Math.sin(p.swingAngle) * 14, 10, ['#ffffff', '#7ec8ff'], { speed: 60, life: 0.3, gravity: 0, size: 1 });
+  },
+  q(spec, elapsed) { return Util.clamp(elapsed / (spec.launchAt + 0.05), 0, 1); },
+  tip(p, spec, elapsed) { return swingAt(p, 1, 1 - Math.pow(1 - this.q(spec, elapsed), 2), 1.5); },
+  draw(p, ctx, sx, sy, spec, elapsed) {
+    const a = this.tip(p, spec, elapsed);
+    const k = p.sweepFrame(Util.angleDiff(a, p.swingAngle), 1.5, elapsed > spec.launchAt + 0.14);
+    if (k >= 0) {
+      const arc = SPRITES.finisher[0][slashIndex(p.swingAngle)][k];
+      if (p.weaponGrowing) p.drawRainbowGlow(ctx, arc, sx, sy, 1.2);
+      ctx.drawImage(arc, sx - (arc.width >> 1), sy - (arc.height >> 1));
+    }
+    p.drawHeldWeapon(ctx, sx, sy - 1, a, 22);
+  },
+};
+
+/* ── 검 C · 검무 — 1초 동안 좌우로 몰아 베고(마우스를 따라간다) 마지막에 크게 마무리 ── */
+SkillKit.storm = {
+  start(p) { Object.assign(p.skillData, { ids: new Set(), hits: 0, timer: 0, dir: 1, at: 0 }); },
+  tick(p, spec, elapsed, dt, enemies) {
+    const d = p.skillData;
+    if (elapsed >= spec.hitWindow[0] && elapsed <= spec.hitWindow[1]) {
+      d.timer -= dt;
+      if (d.timer <= 0 && d.hits < spec.slashes) {
+        d.timer = spec.hitInterval;
+        d.hits++;
+        d.ids = new Set();
+        d.dir = d.hits % 2 ? 1 : -1;      // 번갈아 반대쪽에서
+        d.at = elapsed;
+        p.swingAngle = p.aim;              // 벨 때마다 마우스 쪽으로
+        if (d.hits % 2) Sound.play('swing');
+      }
+      p.resolveHits(enemies, { ids: d.ids, reachBonus: spec.reachBonus, arc: spec.arc,
+        damageMult: spec.damageMult, knockMult: spec.knockMult, skill: true });
+    }
+    const f = spec.finale;
+    if (!d.finale && elapsed >= f.at) {
+      d.finale = true;
+      p.swingAngle = p.aim;
+      p.resolveHits(enemies, { ids: new Set(), reachBonus: f.reachBonus, arc: f.arc,
+        damageMult: f.damageMult, knockMult: f.knockMult, skill: true });
+      const r = p.weaponSpec().reach + f.reachBonus;
+      FX.ring(p.x + Math.cos(p.swingAngle) * 10, p.y + Math.sin(p.swingAngle) * 10, r * 0.7, '#7ec8ff');
+      FX.burst(p.x, p.y, 16, ['#ffffff', '#7ec8ff'], { speed: 90, life: 0.35, gravity: 0, size: 1 });
+      FX.addShake(6);
+      Sound.play('swingBig');
+    }
+  },
+  tip(p, spec, elapsed) {
+    const d = p.skillData, f = spec.finale;
+    if (elapsed >= f.at - 0.05) return swingAt(p, 1, (elapsed - f.at + 0.05) / 0.2, 1.6);
+    return swingAt(p, d.dir, (elapsed - d.at) / spec.hitInterval, 1.1);
+  },
+  draw(p, ctx, sx, sy, spec, elapsed) {
+    const d = p.skillData, f = spec.finale, a = this.tip(p, spec, elapsed);
+    let arc = null;
+    if (elapsed >= f.at - 0.05) {
+      const k = p.sweepFrame(Util.angleDiff(a, p.swingAngle), 1.5, elapsed > f.at + 0.18);
+      if (k >= 0) arc = SPRITES.finisher[0][slashIndex(p.swingAngle)][k];
+    } else if (d.hits > 0 && elapsed <= spec.hitWindow[1] + 0.05) {
+      const q = Util.clamp((elapsed - d.at) / spec.hitInterval, 0, 0.99);
+      arc = SPRITES.slash[slashIndex(p.swingAngle)][Math.floor(q * 3)];
+    }
+    if (arc) {
+      if (p.weaponGrowing) p.drawRainbowGlow(ctx, arc, sx, sy, 1.2);
+      ctx.drawImage(arc, sx - (arc.width >> 1), sy - (arc.height >> 1));
+    }
+    if (p.weaponGrowing) p.drawAfterimages(ctx, sx, sy, p.weaponSprite(), a, -21, 0.45 * d.dir);
+    p.drawHeldWeapon(ctx, sx, sy - 1, a, 21);
+  },
+};
+
+/* ── 단검 X · 비수 — 부채꼴로 다섯 자루를 던진다 ── */
+SkillKit.knives = {
+  tick(p, spec, elapsed) {
+    if (p.skillData.fired || elapsed < spec.launchAt) return;
+    p.skillData.fired = true;
+    p.swingAngle = p.aim;
+    PlayerShots.fire(p, spec, p.swingAngle);
+  },
+  draw(p, ctx, sx, sy, spec, elapsed) {
+    // 손을 뒤로 젖혔다가 앞으로 뿌린다
+    const q = Util.clamp(elapsed / spec.duration, 0, 1);
+    const out = q < 0.3 ? -4 * (q / 0.3) : -4 + 14 * Math.min(1, (q - 0.3) / 0.25);
+    const base = p.swingAngle;
+    p.drawHeldWeapon(ctx, Math.round(sx + Math.cos(base) * out), Math.round(sy - 1 + Math.sin(base) * out), base, 14);
+  },
+};
+
+/* ── 단검 C · 사신 — 둘레의 적에게 차례로 순간 이동하며 벤다. 전부 급소, 그동안 무적 ── */
+SkillKit.reaper = {
+  targets(p, spec, enemies) {
+    return enemies.filter(e => !e.dead && Util.dist(e.x, e.y, p.x, p.y) <= spec.range)
+      .sort((a, b) => Util.dist(a.x, a.y, p.x, p.y) - Util.dist(b.x, b.y, p.x, p.y));
+  },
+  canStart(p, spec, enemies) {
+    if (this.targets(p, spec, enemies).length) return true;
+    FX.number(p.x, p.y - 22, 'NO TARGET', '#8f9aa8');   // 벨 적이 없으면 나가지 않는다 (쿨다운도 그대로)
+    return false;
+  },
+  start(p, spec, enemies) {
+    // 칠 순서 — 가까운 적부터 한 바퀴, 남으면 다시 처음부터 (한 적은 perTarget 번까지)
+    const list = this.targets(p, spec, enemies).slice(0, spec.strikes);
+    const plan = [];
+    for (let round = 0; round < spec.perTarget && plan.length < spec.strikes; round++) {
+      for (const e of list) { if (plan.length < spec.strikes) plan.push(e); }
+    }
+    Object.assign(p.skillData, { plan, next: 0, timer: 0.02, flash: 0 });
+    p.skillTimer = plan.length * spec.stepTime + 0.14;   // 실제 길이는 벨 횟수로
+  },
+  tick(p, spec, elapsed, dt) {
+    const d = p.skillData;
+    p.dashIFrames = Math.max(p.dashIFrames, 0.08);       // 그동안 무적
+    d.flash = Math.max(0, d.flash - dt);
+    d.timer -= dt;
+    if (d.timer > 0) return;
+    d.timer = spec.stepTime;
+    // 이미 쓰러진 적은 건너뛴다
+    while (d.next < d.plan.length && d.plan[d.next].dead) d.next++;
+    if (d.next >= d.plan.length) return;
+    const e = d.plan[d.next++], last = d.next >= d.plan.length;
+    // 적 너머로 — 내가 오던 쪽 반대편, 몸에서 한 뼘. 디딜 수 없으면 이쪽 편에
+    const a = Math.atan2(e.y - p.y, e.x - p.x), r = (e.radius || 6) + 7;
+    let nx = e.x + Math.cos(a) * r, ny = e.y + Math.sin(a) * r;
+    if (!standable(p, nx, ny)) { nx = e.x - Math.cos(a) * r; ny = e.y - Math.sin(a) * r; }
+    if (standable(p, nx, ny)) {
+      // 지나온 자리에 잔상 세 장
+      for (let k = 1; k <= 3; k++) p.trail.push({ x: p.x + (nx - p.x) * k / 4, y: p.y + (ny - p.y) * k / 4, life: 0.26, facing: p.facing });
+      p.x = nx; p.y = ny;
+    }
+    p.swingAngle = Math.atan2(e.y - p.y, e.x - p.x);
+    p.facing = Player.facingFromAngle(p.swingAngle);
+    p.strike(e, p.swingAngle, { damageMult: spec.damageMult * (last ? spec.finalMult : 1), forceCrit: true,
+      knockMult: spec.knockMult, skill: true });
+    FX.burst(e.x, e.y - 4, last ? 14 : 7, ['#c79ce8', '#ffffff', '#5a3f7a'], { speed: last ? 70 : 45, life: 0.3, gravity: 0, size: 1 });
+    if (last) { FX.addShake(4); FX.ring(e.x, e.y + 2, 14, '#c79ce8'); }
+    Sound.play('stab');
+    d.flash = 0.08;
+  },
+  draw(p, ctx, sx, sy) {
+    const d = p.skillData, base = p.swingAngle;
+    if (d.flash > 0) {
+      const tr = tinted(SPRITES.thrust[slashIndex(base)][1], '#e8c8ff');
+      ctx.drawImage(tr, sx - tr.width / 2, sy - tr.height / 2);
+    }
+    const out = d.flash > 0 ? 12 : 4;
+    p.drawHeldWeapon(ctx, Math.round(sx + Math.cos(base) * out), Math.round(sy - 1 + Math.sin(base) * out), base, 14);
+  },
+};
+
+/* ── 도끼 X · 대지 가르기 — 내리찍으면 겨눈 쪽으로 땅이 갈라지며 솟는다. 금 위의 적은 기절 ── */
+SkillKit.rift = {
+  start(p) { Object.assign(p.skillData, { ids: new Set(), slammed: false, seed: Math.random() * 100 }); },
+  slamPoint(p) { return { x: p.x + Math.cos(p.swingAngle) * 14, y: p.y + 2 + Math.sin(p.swingAngle) * 14 }; },
+  tick(p, spec, elapsed, dt, enemies) {
+    const d = p.skillData;
+    if (elapsed < spec.windup) return;
+    if (!d.slammed) {
+      d.slammed = true;
+      d.slamAt = elapsed;
+      const o = this.slamPoint(p);
+      p.resolveHits(enemies, { ids: new Set(), origin: o, reach: spec.slam.radius, arc: Math.PI,
+        damageMult: spec.slam.damageMult, knockMult: 1.2, stun: spec.stun, radial: true, skill: true });
+      FX.addShake(spec.shake);
+      FX.burst(o.x, o.y, 16, ['#b39a72', '#8f7854', '#e8d8b4'], { speed: 60, life: 0.45, gravity: 40, size: 1 });
+    }
+    // 금이 앞으로 뻗어 나간다 — 지금까지 뻗은 곳 안의 적은 금에 한 번씩 맞는다
+    const prog = Util.clamp((elapsed - spec.windup) / spec.travel, 0, 1);
+    p.resolveHits(enemies, { ids: d.ids, line: spec.halfWidth, reach: 14 + spec.length * prog,
+      damageMult: spec.damageMult, knockMult: spec.knockMult, stun: spec.stun, skill: true });
+    if (prog < 1) {
+      const r = 14 + spec.length * prog;
+      FX.burst(p.x + Math.cos(p.swingAngle) * r, p.y + 2 + Math.sin(p.swingAngle) * r, 2,
+        ['#e8d8b4', '#9a7f58', '#ffb35c'], { speed: 30, life: 0.4, gravity: 60, size: 1 });
+    }
+  },
+  tip(p, spec, elapsed) {
+    return elapsed < spec.windup ? p.swingAngle - 1.3 - (elapsed / spec.windup) * 0.6 : p.swingAngle + 0.4;
+  },
+  // 갈라진 땅 — 원본 해상도로 한 칸씩. 뻗어 나간 만큼만, 끝나면 옅어진다
+  ground(p, ctx, sx, sy, spec) {
+    const d = p.skillData, elapsed = spec.duration - p.skillTimer;
+    if (!d.slammed) return;
+    const prog = Util.clamp((elapsed - spec.windup) / spec.travel, 0, 1);
+    const ux = Math.cos(p.swingAngle), uy = Math.sin(p.swingAngle), nx = -uy, ny = ux;
+    const fade = Util.clamp((spec.duration - elapsed) / 0.2, 0, 1);
+    ctx.globalAlpha = fade;
+    // 찍은 자리 둘레 — 작은 갈라진 고리
+    const ringK = Math.min(3, Math.floor((elapsed - d.slamAt) / 0.07));
+    const o = this.slamPoint(p), ring = quakeRing(spec.slam.radius, ringK);
+    ctx.drawImage(ring, Math.round(o.x - p.x + sx) - (ring.width >> 1), Math.round(o.y - p.y + sy) - (ring.height >> 1));
+    const len = 14 + spec.length * prog;
+    for (let t = 14; t < len; t++) {
+      const w = Math.sin(t * 0.42 + d.seed) * 2 + Math.sin(t * 1.3 + d.seed * 2) * 0.8;
+      const x = Math.round(sx + ux * t + nx * w), y = Math.round(sy + 2 + uy * t + ny * w);
+      const hot = t > len - 24;                         // 막 갈라진 앞부분은 달아올라 있다
+      ctx.fillStyle = '#2e2116'; ctx.fillRect(x, y, 2, 1);
+      ctx.fillStyle = hot ? '#ffb35c' : '#7a5f40'; ctx.fillRect(x, y - 1, 1, 1);
+      // 가지 금
+      if ((Math.floor(t) + Math.floor(d.seed)) % 17 === 0) {
+        const side = (Math.floor(t / 17) % 2) ? 1 : -1;
+        for (let b = 1; b <= 5; b++) { ctx.fillStyle = '#3a2a1c'; ctx.fillRect(Math.round(x + nx * side * b + ux * b * 0.6), Math.round(y + ny * side * b + uy * b * 0.6), 1, 1); }
+      }
+    }
+    ctx.globalAlpha = 1;
+  },
+  draw(p, ctx, sx, sy, spec, elapsed) {
+    const up = elapsed < spec.windup;
+    const lift = up ? -Math.round((elapsed / spec.windup) * 6) : 0;
+    p.drawHeldWeapon(ctx, sx, sy - 1 + lift, this.tip(p, spec, elapsed), 24);
+  },
+};
+
+/* ── 도끼 C · 거인의 일격 — 마우스 쪽으로 뛰어올라 내리찍는다. 공중에선 무적 ── */
+SkillKit.titan = {
+  start(p, spec) {
+    // 내릴 자리 — 마우스 쪽(최대 leap). 디딜 수 없는 자리(물·바위·맵 끝)면 가까이 당긴다
+    let a = p.aim, dist = spec.leap;
+    if (Input.mouse.used && typeof Game !== 'undefined') {
+      const t = Input.aimWorld(Game.cam);
+      a = Math.atan2(t.y - p.y, t.x - p.x);
+      dist = Math.min(spec.leap, Util.dist(t.x, t.y, p.x, p.y));
+    }
+    let tx = p.x, ty = p.y;
+    for (let r = dist; r >= 0; r -= 6) {
+      const x = p.x + Math.cos(a) * r, y = p.y + Math.sin(a) * r;
+      if (standable(p, x, y)) { tx = x; ty = y; break; }
+    }
+    p.swingAngle = a;
+    p.facing = Player.facingFromAngle(a);
+    Object.assign(p.skillData, { from: { x: p.x, y: p.y }, to: { x: tx, y: ty }, landed: false });
+  },
+  tick(p, spec, elapsed, dt, enemies) {
+    const d = p.skillData;
+    if (elapsed < spec.air) {
+      const q = elapsed / spec.air;
+      p.x = d.from.x + (d.to.x - d.from.x) * q;
+      p.y = d.from.y + (d.to.y - d.from.y) * q;
+      p.lift = Math.round(Math.sin(Math.PI * q) * 28);
+      p.dashIFrames = Math.max(p.dashIFrames, 0.08);     // 공중에선 무적
+      return;
+    }
+    if (d.landed) return;
+    d.landed = true;
+    d.landAt = elapsed;
+    p.x = d.to.x; p.y = d.to.y; p.lift = 0;
+    p.dashIFrames = Math.max(p.dashIFrames, 0.15);
+    p.resolveHits(enemies, { ids: new Set(), arc: Math.PI, reach: spec.radius, damageMult: spec.damageMult,
+      knockMult: spec.knockMult, stun: spec.stun, skill: true });
+    FX.addShake(spec.shake);
+    FX.freeze(0.08);
+    FX.flash('#ffb35c', 0.16, 0.22);
+    for (let i = 0; i < 12; i++) {
+      const b = i / 12 * Math.PI * 2;
+      FX.burst(p.x + Math.cos(b) * spec.radius * 0.6, p.y + 2 + Math.sin(b) * spec.radius * 0.35, 3,
+        ['#b39a72', '#e8d8b4', '#8f7854'], { speed: 40, life: 0.5, gravity: 50, size: 1 });
+    }
+    Sound.play('titanLand');
+  },
+  tip(p, spec, elapsed) { return elapsed < spec.air ? -Math.PI / 2 - 0.3 : p.swingAngle + 0.5; },
+  ground(p, ctx, sx, sy, spec) {
+    const d = p.skillData, elapsed = spec.duration - p.skillTimer;
+    if (!d.landed) {
+      // 내릴 자리 표시 — 점선 타원 (얼마나 넓게 찍는지 미리 보인다)
+      const cx = Math.round(d.to.x - p.x + sx), cy = Math.round(d.to.y - p.y + sy + 4);
+      const rx = spec.radius, ry = spec.radius * 0.58;
+      fillEllipse(ctx, cx, cy, rx, ry, 'rgba(255,140,60,0.12)');
+      // 테두리는 끊긴 선 (네 칸 칠하고 두 칸 비우기), 천천히 돈다
+      ctx.fillStyle = '#ffb35c';
+      const n = Math.round(Math.PI * (rx + ry) * 1.1), turn = Math.floor(elapsed * 30);
+      for (let i = 0; i < n; i++) {
+        if ((i + turn) % 6 >= 4) continue;
+        const b = i / n * Math.PI * 2;
+        ctx.fillRect(Math.round(cx + Math.cos(b) * rx), Math.round(cy + Math.sin(b) * ry), 1, 1);
+      }
+      return;
+    }
+    const k = Math.min(3, Math.floor((elapsed - d.landAt) / 0.06));
+    const ring = quakeRing(spec.radius, k);
+    ctx.drawImage(ring, sx - (ring.width >> 1), sy + 4 - (ring.height >> 1));
+  },
+  draw(p, ctx, sx, sy, spec, elapsed) {
+    // 공중에선 도끼를 머리 위로, 내린 뒤엔 앞으로 내리친 자세
+    p.drawHeldWeapon(ctx, sx, sy - 1, this.tip(p, spec, elapsed), 24);
+  },
+};
+
+/* ── 날아가는 것 — 검기(꿰뚫는다)와 비수(처음 닿은 적에서 멈춘다) ── */
+const PlayerShots = {
+  list: [],
+
+  reset() { this.list.length = 0; },
+
+  fire(p, spec, angle) {
+    const s = spec.shot;
+    const opts = { damageMult: spec.damageMult, forceCrit: !!spec.forceCrit, knockMult: s.knockMult, skill: true };
+    const make = (a) => ({ kind: s.kind, spec, opts, angle: a, x: p.x + Math.cos(a) * 9, y: p.y - 1 + Math.sin(a) * 9,
+      travelled: 0, ids: new Set() });
+    if (s.kind === 'wave') { this.list.push(make(angle)); return; }
+    // 비수 — 부채꼴로. 한 적이 한 번에 맞는 수는 perTarget 까지 (한 묶음이 장부를 같이 쓴다)
+    const volley = new Map();
+    for (let i = 0; i < s.count; i++) {
+      const sh = make(angle + (i - (s.count - 1) / 2) * s.spread);
+      sh.volley = volley;
+      this.list.push(sh);
+    }
+  },
+
+  update(dt, player, enemies) {
+    for (let i = this.list.length - 1; i >= 0; i--) {
+      const sh = this.list[i], s = sh.spec.shot;
+      const ux = Math.cos(sh.angle), uy = Math.sin(sh.angle);
+      const step = s.speed * dt;
+      sh.x += ux * step; sh.y += uy * step; sh.travelled += step;
+      let gone = sh.travelled >= s.range || sh.x < 0 || sh.y < 0 || sh.x > World.w || sh.y > World.h;
+      // 비수는 나무·바위에 박힌다 (발 높이 기준). 검기는 그대로 지나간다
+      if (!gone && sh.kind === 'knife' && World.blocked({ x: sh.x - 1, y: sh.y + 2, w: 2, h: 2 })) gone = true;
+      if (!gone) {
+        for (const e of enemies) {
+          if (e.dead || sh.ids.has(e.id)) continue;
+          const hc = e.hitCenter ? e.hitCenter() : e;
+          const dx = hc.x - sh.x, dy = hc.y - sh.y, r = e.radius || 6;
+          if (sh.kind === 'wave') {
+            const along = Math.abs(dx * ux + dy * uy), side = Math.abs(-dx * uy + dy * ux);
+            if (e.hitDistance ? e.hitDistance(sh.x, sh.y) > s.depth + 6 : (along > s.depth + r || side > s.halfWidth + r)) continue;
+          } else {
+            const gap = e.hitDistance ? e.hitDistance(sh.x, sh.y) : Math.sqrt(dx * dx + dy * dy) - r;
+            if (gap > s.radius) continue;
+          }
+          if (sh.volley) {
+            const n = sh.volley.get(e.id) || 0;
+            if (n >= s.perTarget) continue;
+            sh.volley.set(e.id, n + 1);
+          }
+          sh.ids.add(e.id);
+          player.strike(e, sh.angle, sh.opts);
+          if (!s.pierce) { gone = true; break; }
+        }
+      }
+      if (gone) {
+        FX.burst(sh.x, sh.y, sh.kind === 'wave' ? 8 : 3, sh.kind === 'wave' ? ['#ffffff', '#7ec8ff'] : ['#e8eef5', '#9aa6b4'],
+          { speed: 30, life: 0.25, gravity: 0, size: 1 });
+        this.list.splice(i, 1);
+      }
+    }
+  },
+
+  draw(ctx, cam) {
+    for (const sh of this.list) {
+      const set = sh.kind === 'wave' ? SPRITES.waveShot : SPRITES.knife;
+      const spr = set[slashIndex(sh.angle)];
+      // 검기는 끝에 갈수록 옅어진다
+      if (sh.kind === 'wave') ctx.globalAlpha = Util.clamp((sh.spec.shot.range - sh.travelled) / 50, 0.25, 1);
+      ctx.drawImage(spr, Math.round(sh.x - cam.x) - (spr.width >> 1), Math.round(sh.y - cam.y) - (spr.height >> 1));
+      ctx.globalAlpha = 1;
+    }
+  },
+};
 
 </script>
   <script>
@@ -15232,6 +15858,19 @@ const UI = {
 
 const PATCH_NOTES = [
   {
+    date: '2026-10-24',
+    notes: [
+      '30레벨(X)·40레벨(C) 무기 스킬이 생겼다 — 무기마다 둘씩, 모두 여섯',
+      '검: 검기(초승달 검기를 날려 줄줄이 벤다) · 검무(열 번 몰아 베고 크게 마무리)',
+      '단검: 비수(부채꼴로 다섯 자루, 전부 급소) · 사신(둘레의 적에게 순간 이동하며 일곱 번, 무적)',
+      '도끼: 대지 가르기(땅이 갈라지며 솟고 기절) · 거인의 일격(뛰어올라 내리찍기, 공중에선 무적)',
+      '높은 레벨 스킬일수록 세다 — 10 < 20 < 30 < 40레벨 순으로 위력을 맞췄다',
+      '검 Q 는 이제 십자베기 — 누르기만 하면 넓게 두 번 벤다 (이어 치기 타이밍이 필요 없다)',
+      '그림자 밟기가 세지고(x2.4 → x3.6), 광폭화는 6초로 조금 짧아졌다',
+      '레벨업으로 새 스킬이 열리면 머리 위에 알려준다',
+    ],
+  },
+  {
     date: '2026-10-23',
     notes: [
       '무기 스킬도 무기 성격에 맞게 다듬었다',
@@ -15696,6 +16335,7 @@ const Game = {
     FX.reset();
     Items.reset();
     Projectiles.reset();
+    PlayerShots.reset();
     Ambient.reset();
     Shop.reset();
     Quests.reset();
@@ -15948,6 +16588,7 @@ const Game = {
       drops: Items.drops.slice(),
     };
     Projectiles.reset();
+    PlayerShots.reset();
     FX.reset();
     Items.reset();
 
@@ -16075,6 +16716,7 @@ const Game = {
     World.initArena(this.seed + 7777 + caveIndex * 131, caveIndex);
     Items.reset();
     Projectiles.reset();
+    PlayerShots.reset();
     FX.reset();
     this.enemies = [];
     this.respawnQueue = [];
@@ -16114,6 +16756,7 @@ const Game = {
     this.enemies = o.enemies;
     this.respawnQueue = o.respawnQueue;
     Projectiles.reset();
+    PlayerShots.reset();
     FX.reset();
     Items.reset();
     for (const d of o.drops) Items.drops.push(d);
@@ -16405,6 +17048,7 @@ const Game = {
     }
 
     Projectiles.draw(ctx, cam);   // 탄은 캐릭터 위로 지나간다
+    PlayerShots.draw(ctx, cam);   // 내가 날린 검기·비수도
     FX.drawRings(ctx, cam);
     FX.drawParticles(ctx, cam);
     FX.drawSparks(ctx, cam);

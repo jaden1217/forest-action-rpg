@@ -120,6 +120,7 @@ const Game = {
     FX.reset();
     Items.reset();
     Projectiles.reset();
+    PlayerShots.reset();
     Ambient.reset();
     Shop.reset();
     Quests.reset();
@@ -372,6 +373,7 @@ const Game = {
       drops: Items.drops.slice(),
     };
     Projectiles.reset();
+    PlayerShots.reset();
     FX.reset();
     Items.reset();
 
@@ -499,6 +501,7 @@ const Game = {
     World.initArena(this.seed + 7777 + caveIndex * 131, caveIndex);
     Items.reset();
     Projectiles.reset();
+    PlayerShots.reset();
     FX.reset();
     this.enemies = [];
     this.respawnQueue = [];
@@ -538,6 +541,7 @@ const Game = {
     this.enemies = o.enemies;
     this.respawnQueue = o.respawnQueue;
     Projectiles.reset();
+    PlayerShots.reset();
     FX.reset();
     Items.reset();
     for (const d of o.drops) Items.drops.push(d);
@@ -829,6 +833,7 @@ const Game = {
     }
 
     Projectiles.draw(ctx, cam);   // 탄은 캐릭터 위로 지나간다
+    PlayerShots.draw(ctx, cam);   // 내가 날린 검기·비수도
     FX.drawRings(ctx, cam);
     FX.drawParticles(ctx, cam);
     FX.drawSparks(ctx, cam);
