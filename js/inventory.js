@@ -506,6 +506,7 @@ const Inventory = {
       const wd = player.damageWith(s.weapon, lv, s.growing);
       const d = wd - dmg;
       line('DMG ' + wd + ' RNG ' + w.reach, '#f0d9b5');
+      if (w.blurb) line(w.blurb, '#c8d0d8');   // 평타가 어떻게 생겼는지 (찌르기·베기·휩쓸기)
       line((d >= 0 ? '+' : '') + d + ' VS EQUIPPED', d > 0 ? '#9be564' : (d < 0 ? '#c05a5a' : '#7fa86a'));
       line('SPD ' + UI.speedWord(w.cooldown) + ' DPS ' + Math.round(wd / w.cooldown), '#7fa86a');
       const be = s.element && CONFIG.forge.elements[s.element];

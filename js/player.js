@@ -56,6 +56,9 @@ class Player {
     this.cooldown = 0;
     this.attackBuffer = 0;     // 쿨다운 중에 누른 공격을 잠깐 기억해둔다
     this.hitIds = new Set();   // 한 번 휘둘렀을 때 같은 적을 여러 번 때리지 않도록
+    this.swing = null;         // 지금 휘두르는 평타 { dir 휘두르는 쪽, finisher 검 마무리, crit 단검 급소 }
+    this.comboStep = 0;        // 이어 치기에서 다음이 몇 번째인가 (무기의 combo 칸만큼 돈다)
+    this.comboIdle = 9;        // 마지막 평타가 끝난 뒤 흐른 시간 — comboWindow 를 넘기면 첫 타부터
     this.invuln = 0;
     this.kx = 0; this.ky = 0;  // 넉백 속도
     this.walkTime = 0;
@@ -509,7 +512,7 @@ class Player {
       // 회전베기 0.45 — 돌면서 천천히 자리를 옮긴다). 평타 중에는 속도가 크게 줄어든다
       const speedScale = this.activeSkill
         ? (this.skillSpec(this.activeSkill).moveScale || 0)
-        : (this.attackTimer > 0 ? 0.35 : 1);
+        : (this.attackTimer > 0 ? this.weaponSpec().moveScale : 1);   // 단검은 찌르며 걷고, 도끼는 휘두르면 멈춰 선다
       const walk = c.speed * this.speedMult() * Status.speedScale(this);   // 장비·빙결·빙판이 걸음을 바꾼다
       this.onSlick = 0;    // 이번 프레임 몫은 썼다 (설인이 다음 프레임에 다시 세운다)
       const vx = ix * walk * speedScale + this.kx;
@@ -548,30 +551,65 @@ class Player {
 
     // ── 공격 (사거리/속도/판정은 장착 무기 기준)
     const w = this.weaponSpec();
+    // 휘두르는 도중에 무기가 바뀌면(바닥 무기 줍기·인벤토리) 그 휘두르기는 거기서 끝난다 — 모양이 다른 무기다
+    if (this.attackTimer > 0 && this.swing && this.swing.weapon !== this.weapon) this.attackTimer = 0;
     this.attackBuffer = Math.max(0, this.attackBuffer - dt);
     // 버퍼에 남은 입력이 있거나 공격키를 계속 누르고 있으면 쿨다운이 풀리는 즉시 이어서 휘두른다
     const wantsAttack = this.attackBuffer > 0 || Input.attackHeld();
     if (wantsAttack && this.cooldown <= 0 && this.attackTimer <= 0 && this.dashTimer <= 0 && !this.activeSkill) {
+      // 이어 치기 — 쉬지 않고 휘두르면 1타 → 2타 → 3타. 잠깐 멈추면 다시 1타부터
+      const combo = w.combo || 1;
+      if (this.comboIdle > CONFIG.weapons.comboWindow) this.comboStep = 0;
+      const step = this.comboStep % combo, last = combo > 1 && step === combo - 1;
+      this.comboStep = step + 1;
+      this.swing = {
+        weapon: this.weapon,
+        dir: step % 2 === 0 ? 1 : -1,               // 번갈아 반대쪽에서 휘두른다 (단검은 손을 바꿔 찌른다)
+        finisher: !!(w.finisher && last),           // 검 — 세 번째는 마무리 베기
+        crit: w.style === 'thrust' && last,         // 단검 — 세 번째는 급소
+      };
       this.attackTimer = w.duration;
-      this.cooldown = w.cooldown / this.attackSpeedMult();   // 광폭화와 QUICK 옵션만큼 손이 빨라진다
+      const cd = w.cooldown * (this.swing.finisher ? w.finisher.cooldownMult : 1);
+      this.cooldown = cd / this.attackSpeedMult();   // 광폭화와 QUICK 옵션만큼 손이 빨라진다
       this.hitIds = new Set();
       this.attackBuffer = 0;
       this.swingAngle = this.aim;   // 휘두르는 동안에는 이 각도로 고정된다
-      Sound.play('swing');
+      // 도끼는 들어올릴 때가 아니라 내려 휩쓸 때 소리가 난다 (아래)
+      if (w.style === 'thrust') Sound.play('stab');
+      else if (w.style === 'slash') Sound.play(this.swing.finisher ? 'swingBig' : 'swing');
     }
 
     if (this.attackTimer > 0) {
       const elapsed = w.duration - this.attackTimer;
+      const sw = this.swing || {};
       if (elapsed >= w.hitWindow[0] && elapsed <= w.hitWindow[1]) {
-        this.resolveHits(enemies);
+        // 검 마무리는 베면서 앞으로 한 걸음 내디딘다
+        if (sw.finisher) this.moveWithCollision(Math.cos(this.swingAngle) * w.finisher.lunge * dt, Math.sin(this.swingAngle) * w.finisher.lunge * dt);
+        this.resolveHits(enemies, this.swingHitOpts(w));
+      }
+      // 도끼 — 휩쓸기가 시작되는 순간 바람 소리, 땅이 살짝 울리고 앞에 흙먼지 (빗나가도 무게가 느껴지게)
+      if (w.style === 'cleave' && !sw.swept && elapsed >= w.windup) {
+        sw.swept = true;
+        Sound.play('cleave');
+        FX.addShake(1.1);
+        FX.burst(this.x + Math.cos(this.swingAngle) * 14, this.y + 5 + Math.sin(this.swingAngle) * 10, 5,
+          ['#b39a72', '#8f7854', '#d8c8a8'], { speed: 30, life: 0.34, gravity: 30, size: 1 });
+      }
+      // 단검 급소 — 칼끝에서 금빛이 튄다
+      if (sw.crit && !sw.sparked && elapsed >= w.hitWindow[0]) {
+        sw.sparked = true;
+        const tip = this.weaponTip();
+        FX.burst(tip.x, tip.y, 6, ['#ffe066', '#ffffff', '#ffb35c'], { speed: 40, life: 0.26, gravity: 0, size: 1 });
       }
       // 성장 무기는 칼끝에서 무지개 알갱이가 흩날린다
       if (this.weaponGrowing) {
-        const a = this.swingAngle - 1.15 + (1 - this.attackTimer / w.duration) * 2.3;
-        FX.burst(this.x + Math.cos(a) * 20, this.y - 1 + Math.sin(a) * 20, 2, CONFIG.weapons.rainbow,
-          { speed: 18, life: 0.32, gravity: -10, size: 1 });
+        const tip = this.weaponTip();
+        FX.burst(tip.x, tip.y, 2, CONFIG.weapons.rainbow, { speed: 18, life: 0.32, gravity: -10, size: 1 });
       }
       this.attackTimer -= dt;
+      if (this.attackTimer <= 0) this.comboIdle = 0;
+    } else {
+      this.comboIdle += dt;
     }
 
     // ── 포션 마시기 (E / Q / H)
@@ -606,7 +644,9 @@ class Player {
        reachBonus  사거리 추가
        arc         판정 반각. Math.PI 이상이면 사방 전체
        damageMult  평타 대비 배수
-       knockMult   넉백 배수 */
+       knockMult   넉백 배수
+       line        찌르기 — 부채꼴 대신 겨눈 쪽으로 뻗은 띠 (이 값이 띠의 반폭)
+       radial      맞은 적을 휘두른 방향이 아니라 내게서 바깥쪽으로 날린다 (도끼 휩쓸기) */
   resolveHits(enemies, opts) {
     const c = CONFIG.player;
     const w = this.weaponSpec();
@@ -627,7 +667,13 @@ class Player {
       const gap = s.hitDistance ? s.hitDistance(this.x, this.y) : d - s.radius;
       if (gap > reach) continue;
       const toEnemy = Math.atan2(dy, dx);
-      if (!omni && d > 3 && Math.abs(Util.angleDiff(toEnemy, base)) > arc) continue;
+      if (opts && opts.line) {
+        // 찌르기 — 내 뒤쪽이거나 띠 옆으로 비껴 있으면 안 맞는다
+        const along = dx * Math.cos(base) + dy * Math.sin(base);
+        const side = Math.abs(-dx * Math.sin(base) + dy * Math.cos(base));
+        const r = s.radius || 6;
+        if (along < -r || side > opts.line + r) continue;
+      } else if (!omni && d > 3 && Math.abs(Util.angleDiff(toEnemy, base)) > arc) continue;
 
       ids.add(s.id);
       const crit = (opts && opts.forceCrit) || Math.random() < this.critChance();   // 치명타율은 무기와 무관하게 동일
@@ -655,8 +701,9 @@ class Player {
       }
 
       dmg = Math.max(1, dmg);
-      // 사방 공격은 바깥쪽으로, 베는 공격은 휘두른 방향으로 날린다
-      s.takeHit(dmg, omni ? toEnemy : base, crit, this, knockMult);
+      // 사방 공격·휩쓸기는 바깥쪽으로, 베는 공격은 휘두른 방향으로 날린다
+      const push = (omni || (opts && opts.radial)) ? toEnemy : base;
+      s.takeHit(dmg, push, crit, this, knockMult);
       this.sinceCombat = 0;   // 때리는 중에도 자연 회복은 멈춘다
       /* 장비에 붙은 FIERY / FROSTY / SHOCKING / VENOMOUS 가 확률로 상태이상을 건다.
          세기는 '이 일격의 피해' 기준이라 레벨이 올라도 따로 손볼 것이 없다 */
@@ -1069,27 +1116,122 @@ class Player {
     ctx.globalAlpha = 1;
   }
 
+  /* ── 평타 — 무기마다 모양이 다르다 (CONFIG.weapons 의 style) ── */
+
+  // 평타 판정 옵션 (resolveHits 의 opts) — 단검은 띠, 검 마무리는 넓고 세게, 도끼는 바깥으로 튕긴다
+  swingHitOpts(w) {
+    const s = this.swing || {};
+    if (w.style === 'thrust') return { line: w.lineWidth, forceCrit: s.crit };
+    if (w.style === 'cleave') return { radial: true };
+    if (s.finisher) {
+      const f = w.finisher;
+      return { arc: f.arc, reachBonus: f.reachBonus, damageMult: f.damageMult, knockMult: f.knockMult };
+    }
+    return undefined;
+  }
+
+  // 지금 이 순간 무기가 가리키는 각도
+  swingWeaponAngle() {
+    const w = this.weaponSpec(), s = this.swing || { dir: 1 }, base = this.swingAngle;
+    const elapsed = w.duration - this.attackTimer;
+    if (w.style === 'thrust') return base;
+    if (w.style === 'cleave') {
+      // 들어올리기 — 휘두를 쪽 반대편 뒤로 천천히 끌어올린다
+      if (elapsed < w.windup) return base - s.dir * (1.5 + 0.4 * (elapsed / w.windup));
+      // 휩쓸기 — 처음에 확 나가서 70% 지점에서 끝까지 간다 (그 뒤는 따라 도는 여운)
+      const q = Util.clamp((elapsed - w.windup) / ((w.duration - w.windup) * 0.7), 0, 1);
+      return base + s.dir * (-1.9 + 3.6 * (1 - Math.pow(1 - q, 3)));
+    }
+    const half = s.finisher ? 1.45 : 1.15;
+    let p = Util.clamp(elapsed / w.duration, 0, 1);
+    if (s.finisher) p = 1 - (1 - p) * (1 - p);   // 마무리는 처음에 확 나간다
+    return base + s.dir * (-half + p * half * 2);
+  }
+
+  // 찌르기 — 무기가 몸에서 얼마나 나가 있는가 (빠르게 뻗고 천천히 거둔다)
+  thrustOut() {
+    const w = this.weaponSpec(), p = 1 - this.attackTimer / w.duration;
+    const k = p < 0.35 ? p / 0.35 : Math.max(0, 1 - (p - 0.35) / 0.65);
+    return 2 + 12 * k;
+  }
+
+  // 칼끝 자리 (불꽃·무지개 알갱이를 뿌리는 곳)
+  weaponTip() {
+    const w = this.weaponSpec();
+    const a = this.swingWeaponAngle();
+    const r = w.style === 'thrust' ? this.thrustOut() + 12 : 20;
+    return { x: this.x + Math.cos(a) * r, y: this.y - 1 + Math.sin(a) * r };
+  }
+
+  /* 휩쓰는 궤적(도끼·검 마무리)의 몇 번째 장을 쓸까 — 궤적 앞머리가 칼날을 앞지르지 않는 가장 큰 장.
+     wr 은 칼날이 지금 겨냥에서 얼마나 돌았는가(휘두르는 쪽 기준), spread 는 궤적 그림의 반각.
+     다 휘두른 뒤(done)엔 사라지는 장(3). 아직 궤적이 생길 만큼 못 돌았으면 -1 */
+  sweepFrame(wr, spread, done) {
+    if (done) return 3;
+    const prog = [0.4, 0.72, 1];
+    for (let k = 2; k >= 0; k--) if (-spread + 2 * spread * prog[k] <= wr + 0.1) return k;
+    return -1;
+  }
+
   drawSwing(ctx, sx, sy) {
     const w = this.weaponSpec();
     const p = 1 - this.attackTimer / w.duration;   // 0 -> 1
-    const base = this.swingAngle;
+    if (w.style === 'thrust') this.drawThrust(ctx, sx, sy, w, p);
+    else if (w.style === 'cleave') this.drawCleave(ctx, sx, sy, w);
+    else this.drawSlash(ctx, sx, sy, w, p);
+  }
 
-    // 궤적 — 16방향 중 겨냥과 가장 가까운 것을 쓴다
-    const fi = Util.clamp(Math.floor(p * 3), 0, 2);
-    const arc = SPRITES.slash[slashIndex(base)][fi];
-    const grow = this.weaponGrowing;
-    // 성장 무기는 궤적 둘레가 무지개로 빛나고 잔상이 따라온다
-    if (grow) this.drawRainbowGlow(ctx, arc, sx, sy, 1.25);
-    ctx.drawImage(arc, sx - arc.width / 2, sy - arc.height / 2);
-
-    // 무기를 부채꼴을 따라 휘두른다
-    const a = base - 1.15 + p * 2.3;
+  // 손에 든 무기를 a 방향으로, 몸 중심에서 out 만큼 떨어뜨려 그린다
+  drawHeldWeapon(ctx, x, y, a, lift) {
     const sw = this.weaponSprite();
-    if (grow) this.drawAfterimages(ctx, sx, sy, sw, a, -20, 0.42);
     ctx.save();
-    ctx.translate(sx, sy - 1);
+    ctx.translate(x, y);
     ctx.rotate(a + Math.PI / 2);
-    ctx.drawImage(sw, -Math.floor(sw.width / 2), -20);
+    ctx.drawImage(sw, -Math.floor(sw.width / 2), -lift);
     ctx.restore();
+  }
+
+  // 검 — 번갈아 베기. 세 번째(마무리)는 더 넓은 푸른 호가 칼날을 따라 자란다
+  drawSlash(ctx, sx, sy, w, p) {
+    const s = this.swing || { dir: 1 }, base = this.swingAngle, grow = this.weaponGrowing;
+    const a = this.swingWeaponAngle();
+    let arc = SPRITES.slash[slashIndex(base)][Util.clamp(Math.floor(p * 3), 0, 2)];
+    if (s.finisher) {
+      const k = this.sweepFrame(s.dir * Util.angleDiff(a, base), 1.5, p > 0.85);
+      arc = k >= 0 ? SPRITES.finisher[s.dir > 0 ? 0 : 1][slashIndex(base)][k] : null;
+    }
+    // 성장 무기는 궤적 둘레가 무지개로 빛나고 잔상이 따라온다
+    if (arc && grow) this.drawRainbowGlow(ctx, arc, sx, sy, 1.25);
+    if (arc) ctx.drawImage(arc, sx - arc.width / 2, sy - arc.height / 2);
+    if (grow) this.drawAfterimages(ctx, sx, sy, this.weaponSprite(), a, -20, 0.42 * s.dir);
+    this.drawHeldWeapon(ctx, sx, sy - 1, a, 20);
+  }
+
+  // 단검 — 곧게 찌른다. 찌를 때마다 손을 바꾸고(좌우로 두 칸), 급소 찌르기는 궤적이 금빛
+  drawThrust(ctx, sx, sy, w, p) {
+    const s = this.swing || { dir: 1 }, base = this.swingAngle;
+    const px = Math.round(-Math.sin(base) * 2 * s.dir), py = Math.round(Math.cos(base) * 2 * s.dir);
+    let tr = SPRITES.thrust[slashIndex(base)][p < 0.25 ? 0 : (p < 0.6 ? 1 : 2)];
+    if (s.crit) tr = tinted(tr, '#ffe066');
+    if (this.weaponGrowing) this.drawRainbowGlow(ctx, tr, sx + px, sy + py, 1.2);
+    ctx.drawImage(tr, sx + px - tr.width / 2, sy + py - tr.height / 2);
+    const out = this.thrustOut();
+    this.drawHeldWeapon(ctx, Math.round(sx + px + Math.cos(base) * out), Math.round(sy - 1 + py + Math.sin(base) * out), base, 14);
+  }
+
+  // 도끼 — 들어올리는 동안은 궤적 없이 칼날만 뒤로, 휩쓸 때 넓고 두꺼운 호가 칼날을 따라 자란다
+  drawCleave(ctx, sx, sy, w) {
+    const s = this.swing || { dir: 1 }, base = this.swingAngle;
+    const elapsed = w.duration - this.attackTimer;
+    const a = this.swingWeaponAngle();
+    const k = elapsed < w.windup ? -1
+      : this.sweepFrame(s.dir * Util.angleDiff(a, base), 1.7, (elapsed - w.windup) / (w.duration - w.windup) > 0.85);
+    if (k >= 0) {
+      const arc = SPRITES.cleave[s.dir > 0 ? 0 : 1][slashIndex(base)][k];
+      if (this.weaponGrowing) this.drawRainbowGlow(ctx, arc, sx, sy, 1.2);
+      ctx.drawImage(arc, sx - arc.width / 2, sy - arc.height / 2);
+      if (this.weaponGrowing) this.drawAfterimages(ctx, sx, sy, this.weaponSprite(), a, -21, 0.5 * s.dir);
+    }
+    this.drawHeldWeapon(ctx, sx, sy - 1, a, 21);
   }
 }

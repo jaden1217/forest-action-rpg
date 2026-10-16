@@ -253,6 +253,57 @@ function makeSlashFrame(angle, t) {
   return cv;
 }
 
+/* 단검 찌르기 궤적 — 겨눈 쪽으로 곧게 뻗는 가는 한 줄 (방향별 3프레임: 뻗음 / 다 뻗음 / 사라짐).
+   가운데가 불룩한 바늘 모양이라 부채꼴 궤적과 한눈에 구별된다 */
+function makeThrustFrame(angle, t) {
+  const S = 48, cv = makeCanvas(S, S), ctx = cv.getContext('2d');
+  const cx = S / 2, cy = S / 2, ux = Math.cos(angle), uy = Math.sin(angle);
+  const r0 = [9, 12, 21][t], r1 = [20, 29, 30][t];
+  for (let y = 0; y < S; y++) {
+    for (let x = 0; x < S; x++) {
+      const dx = x + 0.5 - cx, dy = y + 0.5 - cy;
+      const u = dx * ux + dy * uy, v = Math.abs(-dx * uy + dy * ux);
+      if (u < r0 || u > r1) continue;
+      const k = (u - r0) / (r1 - r0);
+      const half = 0.55 + 1.25 * Math.sin(Math.PI * Math.min(1, k * 1.15)) * (t === 2 ? 0.5 : 1);
+      if (v > half) continue;
+      if (t === 2 && k < 0.6 && (x + y) % 2 === 0) continue;   // 사라질 때는 뒤쪽부터 격자로 흐리게
+      ctx.fillStyle = v < 0.75 ? '#ffffff' : '#bfe6ff';
+      ctx.fillRect(x, y, 1, 1);
+    }
+  }
+  return cv;
+}
+
+/* 휩쓰는 궤적 — 칼날이 지나간 만큼만 그려진다 (도끼 휩쓸기, 검 마무리 베기).
+   sign 은 휘두르는 쪽 (+1 시계 방향, -1 반대), k 는 진행 (0~2 자라남, 3 사라짐).
+   앞머리(지금 칼날 자리)가 가장 밝고 꼬리로 갈수록 옅어진다 */
+function makeSweepFrame(angle, sign, k, o) {
+  const S = o.size, cv = makeCanvas(S, S), ctx = cv.getContext('2d');
+  const cx = S / 2, cy = S / 2;
+  const prog = [0.4, 0.72, 1, 1][k];
+  const rIn = o.rIn + k * o.grow, rOut = rIn + o.width - k * o.thin;
+  for (let y = 0; y < S; y++) {
+    for (let x = 0; x < S; x++) {
+      const dx = x + 0.5 - cx, dy = y + 0.5 - cy;
+      const d = Math.sqrt(dx * dx + dy * dy);
+      if (d < rIn || d > rOut) continue;
+      const rel = sign * Util.angleDiff(Math.atan2(dy, dx), angle);      // -spread(시작) .. +spread(끝)
+      const from = -o.spread, to = -o.spread + 2 * o.spread * prog;
+      if (rel < from || rel > to) continue;
+      const lead = (rel - from) / (to - from);                          // 0 꼬리 .. 1 앞머리
+      if (lead < 0.3 && (x + y) % 2 === 0) continue;                    // 꼬리는 격자로 풀린다
+      if (k === 3 && (x + y) % 2 === 0) continue;                       // 사라지는 장
+      const outer = d > rIn + (rOut - rIn) * 0.5;
+      // 앞머리는 바깥쪽 가는 테두리만 밝게 — 통째로 하얗게 칠하면 덩어리져 보인다
+      const front = lead > 0.88 && k < 3 && d > rIn + (rOut - rIn) * 0.4;
+      ctx.fillStyle = front ? o.lead : (outer ? o.edge : o.body);
+      ctx.fillRect(x, y, 1, 1);
+    }
+  }
+  return cv;
+}
+
 /* ── 지형 타일 ─────────────────────────────────────────────── */
 
 /* ── 숲 소품 ───────────────────────────────────────────────── */
@@ -1151,6 +1202,21 @@ function buildSprites() {
     const a = (i / SLASH_DIRS) * Math.PI * 2;
     SPRITES.slash.push([0, 0.5, 1].map(t => makeSlashFrame(a, t)));
     SPRITES.heavySlash.push([0, 0.5, 1].map(t => makeHeavySlashFrame(a, t)));
+  }
+  /* 무기마다 다른 평타 궤적 — 단검 찌르기(곧은 한 줄), 도끼 휩쓸기(넓고 두꺼운 반원),
+     검 마무리 베기(평소보다 넓은 푸른 호). 휩쓰는 것은 휘두르는 쪽마다 따로 [쪽][방향][진행] */
+  const CLEAVE = { size: 64, rIn: 10, grow: 2.7, width: 11, thin: 1.7, spread: 1.7, lead: '#ffffff', body: '#f3e6cc', edge: '#c9b28a' };
+  const FINISH = { size: 64, rIn: 11, grow: 2.8, width: 9, thin: 1.5, spread: 1.5, lead: '#ffffff', body: '#d8f0ff', edge: '#7ec8ff' };
+  SPRITES.thrust = [];
+  SPRITES.cleave = [[], []];
+  SPRITES.finisher = [[], []];
+  for (let i = 0; i < SLASH_DIRS; i++) {
+    const a = (i / SLASH_DIRS) * Math.PI * 2;
+    SPRITES.thrust.push([0, 1, 2].map(t => makeThrustFrame(a, t)));
+    [1, -1].forEach((sign, si) => {
+      SPRITES.cleave[si].push([0, 1, 2, 3].map(k => makeSweepFrame(a, sign, k, CLEAVE)));
+      SPRITES.finisher[si].push([0, 1, 2, 3].map(k => makeSweepFrame(a, sign, k, FINISH)));
+    });
   }
   SPRITES.spinRing = [0, 0.5, 1].map(makeSpinRing);
 

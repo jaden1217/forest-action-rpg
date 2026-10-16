@@ -120,6 +120,11 @@ const Sound = {
   /* ── 효과음 목록 ────────────────────────────────────────── */
   SFX: {
     swing(S)   { S.noise({ dur: 0.09, from: 2200, to: 500, gain: 0.16, q: 0.8 }); },
+    // 무기마다 평타 소리가 다르다 — 단검은 짧고 높게, 검 마무리는 길게, 도끼는 낮고 무겁게
+    stab(S)    { S.noise({ dur: 0.05, from: 4200, to: 1600, gain: 0.13, q: 1.4 }); },
+    swingBig(S) { S.noise({ dur: 0.15, from: 2000, to: 280, gain: 0.2, q: 0.8 }); },
+    cleave(S)  { S.noise({ dur: 0.19, from: 1100, to: 150, gain: 0.24, q: 0.7 });
+                 S.tone({ freq: 120, slide: 55, type: 'triangle', dur: 0.14, gain: 0.12 }); },
     hit(S)     { S.tone({ freq: 190, slide: 70, type: 'sine', dur: 0.09, gain: 0.35 });
                  S.noise({ dur: 0.05, filter: 'lowpass', from: 1000, gain: 0.18 }); },
     crit(S)    { S.SFX.hit(S); S.tone({ freq: 880, slide: 1400, type: 'square', dur: 0.09, gain: 0.08, delay: 0.01 }); },

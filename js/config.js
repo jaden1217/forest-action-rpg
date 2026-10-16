@@ -292,15 +292,31 @@ const CONFIG = {
     },
   },
 
-  /* 무기 3종. 세 무기의 성능은 서로 같다.
-     damageMult / cooldown 이 셋 다 정확히 2.5 라서 초당 데미지가 동일하고,
-     차이는 "한 방이 무거운가 / 자주 때리는가" 뿐이다.
-     사거리와 판정 각도도 어느 하나가 확실히 낫지 않도록 차이를 좁게 잡았다. */
+  /* 무기 3종. 한 상대에게 넣는 초당 데미지는 셋이 거의 같다 (damageMult / cooldown ≈ 2.5).
+     차이는 **평타의 모양**이다 (아래 style 참고) —
+       단검  빠른 찌르기. 한 줄만 맞히지만 세 번째마다 급소(치명타)라 치명타 피해 옵션과 궁합이 좋다
+       검    좌우 번갈아 베기 + 세 번째 마무리 베기. 가장 무난하다
+       도끼  들어올렸다 크게 휩쓸기. 판정이 반원에 가까워 여럿을 한 번에 치고 멀리 밀어낸다 */
   weapons: {
     order: ['dagger', 'sword', 'axe'],
-    dagger: { name: 'DAGGER', damageMult: 0.70, cooldown: 0.28, duration: 0.22, hitWindow: [0.03, 0.16], reach: 19, arc: 0.86, knockMult: 0.70 },
-    sword:  { name: 'SWORD',  damageMult: 1.00, cooldown: 0.40, duration: 0.26, hitWindow: [0.04, 0.20], reach: 21, arc: 0.95, knockMult: 1.00 },
-    axe:    { name: 'AXE',    damageMult: 1.55, cooldown: 0.62, duration: 0.36, hitWindow: [0.06, 0.28], reach: 23, arc: 1.04, knockMult: 1.55 },
+    /* 평타는 무기마다 모양이 다르다 (style). 판정·그림·소리·걸음이 전부 여기서 갈린다.
+       thrust 단검 — 겨눈 쪽으로 곧게 찌른다. 판정은 부채꼴이 아니라 가는 띠(반폭 lineWidth).
+                     찌르는 동안에도 거의 제 속도로 걷고, 이어 찌르면 세 번째는 반드시 치명타 (급소)
+       slash  검   — 오른쪽·왼쪽을 번갈아 벤다. 세 번째는 앞으로 내디디며 넓게 베는 마무리 (finisher)
+       cleave 도끼 — 뒤로 들어올렸다가(windup) 반원 가까이 크게 휩쓴다. 맞은 적은 바깥으로 튕겨 나가고,
+                     휘두르는 동안은 거의 못 걷는다
+       moveScale 휘두르는 동안 걸음 배수 · combo 이어 치기 칸 수 */
+    dagger: { name: 'DAGGER', style: 'thrust', damageMult: 0.55, cooldown: 0.26, duration: 0.18, hitWindow: [0.03, 0.12],
+              reach: 22, arc: 0.86, lineWidth: 5, knockMult: 0.60, moveScale: 0.8, combo: 3,
+              blurb: 'THRUST  3RD STAB CRITS' },
+    sword:  { name: 'SWORD', style: 'slash', damageMult: 1.00, cooldown: 0.40, duration: 0.26, hitWindow: [0.04, 0.20],
+              reach: 21, arc: 0.95, knockMult: 1.00, moveScale: 0.4, combo: 3, blurb: 'SLASH  3RD HIT FINISHER',
+              // 마무리 — 1.3배 위력에 1.3배 쿨다운이라 초당 데미지는 그대로, 대신 넓고 멀리 밀어낸다
+              finisher: { damageMult: 1.3, cooldownMult: 1.3, arc: 1.3, reachBonus: 4, knockMult: 1.8, lunge: 70 } },
+    axe:    { name: 'AXE', style: 'cleave', damageMult: 1.55, cooldown: 0.62, duration: 0.40, windup: 0.12, hitWindow: [0.15, 0.32],
+              reach: 24, arc: 1.45, knockMult: 1.70, moveScale: 0.15, combo: 2,
+              blurb: 'CLEAVE  WIDE KNOCKBACK' },
+    comboWindow: 0.45,   // 공격이 끝나고 이 안에 다시 휘두르면 이어 치기가 이어진다 (넘기면 첫 타부터)
 
     /* 무기 레벨 — 레벨당 +2.5% 로 아주 완만하다 (L1 x1.00 -> L23 x1.55 -> L36 x1.875 -> L60 x2.475).
        바닥 드랍은 몬스터 레벨(최대 23)을 따르고, 성장하는 무기만 그 위로 올라간다.
