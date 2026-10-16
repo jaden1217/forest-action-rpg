@@ -2,6 +2,9 @@
 
 /* 플레이어 — 이동, 무기 휘두르기, 피격, 레벨업 */
 
+// 도트(16x20)를 찍을 때 위로 올리는 양 — 맨 아래 줄(발)이 y+7 에 온다 (예전 16x16 도 발은 같은 자리)
+const PLAYER_TOP = 12;
+
 class Player {
   constructor(x, y) {
     const c = CONFIG.player;
@@ -888,7 +891,7 @@ class Player {
     if (this.trail.length) {
       for (const t of this.trail) {
         ctx.globalAlpha = Util.clamp(t.life / 0.2, 0, 1) * 0.34;
-        ctx.drawImage(SPRITES.player[t.facing][1], Math.round(t.x - cam.x) - 8, Math.round(t.y - cam.y) - 8);
+        ctx.drawImage(SPRITES.player[t.facing][1], Math.round(t.x - cam.x) - 8, Math.round(t.y - cam.y) - PLAYER_TOP);
       }
       ctx.globalAlpha = 1;
     }
@@ -912,10 +915,10 @@ class Player {
     if (this.buff) {
       const o = Math.floor(World.time * 12) % 2 === 0 ? 1 : -1;
       ctx.globalAlpha = 0.6;
-      ctx.drawImage(tinted(set[facing][frame], '#ff6b6b'), sx - 8 + o, sy - 8 + bob, 16, 16);
+      ctx.drawImage(tinted(set[facing][frame], '#ff6b6b'), sx - 8 + o, sy - PLAYER_TOP + bob);
       ctx.globalAlpha = 1;
     }
-    ctx.drawImage(set[facing][frame], sx - 8, sy - 8 + bob);
+    ctx.drawImage(set[facing][frame], sx - 8, sy - PLAYER_TOP + bob);
     ctx.globalAlpha = 1;
 
     if (this.activeSkill) this.drawSkill(ctx, sx, sy);
