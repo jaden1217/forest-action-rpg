@@ -60,11 +60,11 @@ SkillKit.cross = {
     const i = this.phase(spec, elapsed), q = this.progress(spec, elapsed, i), dir = spec.phases[i].dir;
     if (elapsed < spec.phases[i].at[1] + 0.06) {
       const arc = SPRITES.heavySlash[slashIndex(p.swingAngle)][Math.min(2, Math.floor(q * 3))];
-      if (p.weaponGrowing) p.drawRainbowGlow(ctx, arc, sx, sy, 1.22);
+      if (p.weaponLegend) p.drawRainbowGlow(ctx, arc, sx, sy, 1.22);
       ctx.drawImage(arc, sx - (arc.width >> 1), sy - (arc.height >> 1));
     }
     const a = swingAt(p, dir, q, 1.6);
-    if (p.weaponGrowing) p.drawAfterimages(ctx, sx, sy, p.weaponSprite(), a, -25, 0.5 * dir);
+    if (p.weaponLegend) p.drawAfterimages(ctx, sx, sy, p.weaponSprite(), a, -25, 0.5 * dir);
     p.drawHeldWeapon(ctx, sx, sy - 1, a, 25);
   },
 };
@@ -84,7 +84,7 @@ SkillKit.wave = {
     const k = p.sweepFrame(Util.angleDiff(a, p.swingAngle), 1.5, elapsed > spec.launchAt + 0.14);
     if (k >= 0) {
       const arc = SPRITES.finisher[0][slashIndex(p.swingAngle)][k];
-      if (p.weaponGrowing) p.drawRainbowGlow(ctx, arc, sx, sy, 1.2);
+      if (p.weaponLegend) p.drawRainbowGlow(ctx, arc, sx, sy, 1.2);
       ctx.drawImage(arc, sx - (arc.width >> 1), sy - (arc.height >> 1));
     }
     p.drawHeldWeapon(ctx, sx, sy - 1, a, 22);
@@ -139,10 +139,10 @@ SkillKit.storm = {
       arc = SPRITES.slash[slashIndex(p.swingAngle)][Math.floor(q * 3)];
     }
     if (arc) {
-      if (p.weaponGrowing) p.drawRainbowGlow(ctx, arc, sx, sy, 1.2);
+      if (p.weaponLegend) p.drawRainbowGlow(ctx, arc, sx, sy, 1.2);
       ctx.drawImage(arc, sx - (arc.width >> 1), sy - (arc.height >> 1));
     }
-    if (p.weaponGrowing) p.drawAfterimages(ctx, sx, sy, p.weaponSprite(), a, -21, 0.45 * d.dir);
+    if (p.weaponLegend) p.drawAfterimages(ctx, sx, sy, p.weaponSprite(), a, -21, 0.45 * d.dir);
     p.drawHeldWeapon(ctx, sx, sy - 1, a, 21);
   },
 };

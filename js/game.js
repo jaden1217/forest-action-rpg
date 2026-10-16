@@ -559,7 +559,7 @@ const Game = {
     else { p.x = px; p.y = py; p.kx = p.ky = 0; p.invuln = 0.9; }
 
     for (const d of carried) {
-      Items.spawnWeapon(px, py, d.weapon, d.level, { growing: d.growing, pickupDelay: 0.4 });
+      Items.spawnWeapon(px, py, d.weapon, d.level, { legend: d.legend, element: d.element, pickupDelay: 0.4 });
     }
 
     this.boss = null;

@@ -4,7 +4,7 @@
 
 // 몬스터의 최대 레벨 (바닥에 떨어지는 무기도 잡은 몬스터 레벨을 따르므로 여기까지)
 const LEVEL_MAX = 23;
-/* 무기 레벨 표의 끝. 보스가 주는 '성장하는 무기'는 플레이어 레벨을 그대로 따라가므로
+/* 무기 레벨 표의 끝. 보스의 전설 무기(보스 레벨 + 10)와 대장간 강화가
    23을 넘어 계속 세져야 한다. 사막 몬스터(24~40)가 떨구는 무기도 자기 레벨을 그대로 따른다. */
 const WEAPON_LEVEL_MAX = 60;
 
@@ -12,6 +12,39 @@ const WEAPON_LEVEL_MAX = 60;
    몬스터 색은 종류가 정하고(ENEMY_COLORS), 위험도는 이름표 색이 알려준다.
    (1~4 / 5~8 / 9~13 / 14~18 / 19~23 — 숲, 24~29 / 30~35 / 36~ — 사막) */
 const LEVEL_TIER_BREAKS = [4, 8, 13, 18, 23, 29, 35, 41, 48, 54];
+/* 보스의 전설 무기 한 자루 — { key, weapon, level, name, unique }.
+   종류는 그 맵에서 몇 번째 보스인가로 (첫째 단검, 둘째 검, 셋째 도끼), 레벨은 보스 레벨 + 10 */
+function legendSpec(bossKey) {
+  const L = CONFIG.weapons.legends[bossKey], boss = CONFIG.bosses[bossKey];
+  if (!L || !boss) return null;
+  let order = 0;
+  for (const id in CONFIG.maps) {
+    const i = CONFIG.maps[id].caves.findIndex(c => c.boss === bossKey);
+    if (i >= 0) { order = i; break; }
+  }
+  return {
+    key: bossKey, name: L.name, unique: L.unique,
+    weapon: CONFIG.weapons.legendOrder[order] || 'sword',
+    level: Math.min(WEAPON_LEVEL_MAX, boss.level + CONFIG.weapons.legendLevelBonus),
+  };
+}
+
+/* 저장된 무기 칸·바닥 무기의 전설 표식을 읽는다.
+   예전의 '성장 무기'(growing)는 그 종류의 숲 보스 전설로 바꿔 읽는다 (SLIMELORD → SLIME MONARCH 등) */
+function legendKeyOf(s) {
+  if (!s) return null;
+  if (CONFIG.weapons.legends[s.legend]) return s.legend;
+  if (s.growing) return { dagger: 'slime', sword: 'wolf', axe: 'mushroom' }[s.weapon] || null;
+  return null;
+}
+
+// 전설 무기의 레벨 — 예전 성장 무기를 읽을 때는 저장된 레벨과 전설 레벨 중 높은 쪽 (갖고 있던 힘을 잃지 않게)
+function legendLevelOf(s, key) {
+  const L = legendSpec(key);
+  const saved = Math.max(1, Math.round((s && (s.level || s.weaponLevel)) || 1));
+  return (s && s.growing && !s.legend && L) ? Math.max(saved, L.level) : saved;
+}
+
 function levelTier(level) {
   for (let i = 0; i < LEVEL_TIER_BREAKS.length; i++) {
     if (level <= LEVEL_TIER_BREAKS[i]) return i;
@@ -434,7 +467,7 @@ const CONFIG = {
     comboWindow: 0.45,   // 공격이 끝나고 이 안에 다시 휘두르면 이어 치기가 이어진다 (넘기면 첫 타부터)
 
     /* 무기 레벨 — 레벨당 +2.5% 로 아주 완만하다 (L1 x1.00 -> L23 x1.55 -> L36 x1.875 -> L60 x2.475).
-       바닥 드랍은 몬스터 레벨(최대 23)을 따르고, 성장하는 무기만 그 위로 올라간다.
+       바닥 드랍은 몬스터 레벨을 따르고, 보스의 전설 무기는 보스 레벨 + 10 이다.
        이 게임은 무기가 아니라 플레이어 레벨이 중심이므로, 무기는 거들 뿐이다.
        좋은 무기를 주우면 조금 수월해지지만, 진짜로 강해지는 건 레벨업이다. */
     levelMult: (function () {
@@ -443,15 +476,26 @@ const CONFIG = {
       return a;
     })(),
     // 칼날 색 — 레벨이 아니라 색 등급(levelTier)으로 고른다
-    levelColor: ['#c8d0d8', '#8fe0a8', '#7ec8ff', '#c79ce8', '#ffb35c', '#ffb08a', '#f0f4f8', '#b48fd8'],
-    // 성장하는 무기(보스 보상)는 등급색 대신 이 금색으로 표시해 한눈에 구별한다
-    growColor: '#ffd93d',
-    /* 성장하는 무기의 이름 — 어느 보스가 떨구느냐에 따라 다르다.
-       (픽셀 폰트가 대문자뿐이라 게임 안에서는 전부 대문자로 보인다) */
-    growNames: { dagger: 'SLIMELORD', sword: 'WOLFLORD', axe: 'SPORELORD' },
-    // 성장 무기의 고유 효과 (CONFIG.uniques 에서 하나씩) — 전설 장비와 같은 규칙으로 켜진다
-    growUniques: { dagger: 'momentum', sword: 'swiftFoot', axe: 'executioner' },
-    /* 성장하는 무기의 이름표와 바닥 오라에 쓰는 무지개.
+    levelColor: ['#c8d0d8', '#8fe0a8', '#7ec8ff', '#c79ce8', '#ffb35c', '#ffb08a', '#f0f4f8', '#b48fd8', '#9fe8ff', '#7dffe0', '#fff2a0'],
+    /* 보스의 전설 무기 — 보스가 확률로 떨구는 이름 있는 무기.
+       **종류는 그 맵에서 몇 번째 보스인가**가 정한다 (legendOrder: 첫째 단검, 둘째 검, 셋째 도끼),
+       **레벨은 보스 레벨 + legendLevelBonus** 로 고정이다 (예전 '성장 무기'는 내 레벨을 따라 올랐다).
+       이름표가 무지개로 흐르고, 바닥에선 오라가 돌고, 휘두르면 무지개 잔상이 남는 것은 그대로다.
+       이름은 떨군 보스에게서 따 왔고, 고유 효과(CONFIG.uniques)를 하나씩 들고 온다 — 전설 장비와 같은 규칙.
+         GIANT SLIME  → SLIME MONARCH  왕관 쓴 젤리 군주의 독침
+         ALPHA WOLF   → ALPHA HOWL     우두머리의 울음이 깃든 검
+         ELDER SHROOM → ELDER BLIGHT   늙은 버섯의 마름병을 두른 도끼
+         SAND LORD    → SANDLORD FANG  모래의 군주의 이빨 하나 */
+    legendColor: '#ffd93d',          // 이름표를 무지개로 못 쓰는 곳(창고 목록 등)에 쓰는 금색
+    legendOrder: ['dagger', 'sword', 'axe'],
+    legendLevelBonus: 10,
+    legends: {
+      slime:    { name: 'SLIME MONARCH', unique: 'momentum' },
+      wolf:     { name: 'ALPHA HOWL',    unique: 'swiftFoot' },
+      mushroom: { name: 'ELDER BLIGHT',  unique: 'executioner' },
+      sandlord: { name: 'SANDLORD FANG', unique: 'phantom' },
+    },
+    /* 전설 무기의 이름표와 바닥 오라에 쓰는 무지개.
        hsl 로 매끈하게 돌리지 않고 일곱 색을 딱딱 끊어 쓴다 — 도트 그림에는 이쪽이 어울린다 */
     rainbow: ['#ff5c5c', '#ffb35c', '#ffe066', '#7dff8a', '#5cd8ff', '#8f8fff', '#e08fff'],
   },
@@ -1016,7 +1060,7 @@ const CONFIG = {
      체력이 절반 아래로 내려가면 2페이즈 — 빨라지고 패턴이 독해진다.
 
      레벨은 그 동굴 주변 몬스터보다 위로 잡았다 (가까운 동굴 12, 중간 20, 가장자리 30).
-     처치 보상은 포션 6개 확정 + 전리품(trophy) 하나 + 10% 확률로 '성장하는 무기' (weapons.growNames 참고). */
+     처치 보상은 포션 6개 확정 + 전리품(trophy) 하나 + 10% 확률로 그 보스의 전설 무기 (weapons.legends 참고). */
   bosses: {
     // 가까운 동굴 — 거대 슬라임: 느리지만 덩치와 분열로 밀어붙인다
     slime: {
@@ -1029,7 +1073,7 @@ const CONFIG = {
       speed: 26,              // 평소엔 느릿느릿 다가온다
       detect: 260,
       contactCooldown: 1.0,
-      reward: { weapon: 'dagger', chance: 0.10, potions: 6, trophy: 'slimeCore' },
+      reward: { chance: 0.10, potions: 6, trophy: 'slimeCore' },   // 전설 무기 — 숲 첫째: 단검 SLIME MONARCH L22
 
       phase2At: 0.5,
       phase2Speed: 1.35,
@@ -1069,7 +1113,7 @@ const CONFIG = {
       speed: 58,              // 평소에도 플레이어만큼 빠르다
       detect: 300,
       contactCooldown: 0.8,
-      reward: { weapon: 'sword', chance: 0.10, potions: 6, trophy: 'alphaFang' },
+      reward: { chance: 0.10, potions: 6, trophy: 'alphaFang' },   // 숲 둘째: 검 ALPHA HOWL L30
 
       phase2At: 0.5,
       phase2Speed: 1.3,
@@ -1111,7 +1155,7 @@ const CONFIG = {
       speed: 12,              // 뿌리를 끌며 아주 천천히 다가온다 (2페이즈에서 빨라진다)
       detect: 300,
       contactCooldown: 1.0,
-      reward: { weapon: 'axe', chance: 0.10, potions: 6, trophy: 'elderSpore' },
+      reward: { chance: 0.10, potions: 6, trophy: 'elderSpore' },  // 숲 셋째: 도끼 ELDER BLIGHT L40
 
       phase2At: 0.5,
       phase2Speed: 1.3,
@@ -1159,7 +1203,7 @@ const CONFIG = {
       speed: 96,              // 땅속에서는 빠르다 (밖에 나오면 거의 안 움직인다)
       detect: 400,
       contactCooldown: 1.0,
-      reward: { weapon: 'axe', chance: 0.12, potions: 8, trophy: 'lordScale' },
+      reward: { chance: 0.12, potions: 8, trophy: 'lordScale' },   // 사막 첫째: 단검 SANDLORD FANG L56
 
       phase2At: 0.5,
       phase2Speed: 1.3,
@@ -1334,7 +1378,7 @@ const CONFIG = {
 
      수치가 아니라 **규칙을 바꾸는 한 줄**이어야 한다 — +10% 는 옵션이 할 일이고,
      여기서는 '포션을 마시면 무적', '치명타가 쿨다운을 깎는다' 같은 것만 둔다.
-     성장 무기(SLIMELORD 등)도 같은 목록에서 하나씩 가져간다 (weapons.growUniques). */
+     보스의 전설 무기(SLIME MONARCH 등)도 같은 목록에서 하나씩 가져간다 (weapons.legends). */
   uniques: {
     executioner: { name: 'EXECUTIONER', text: 'LOW HP FOES TAKE +50%',      ratio: 0.25, mult: 1.5 },
     thorns:      { name: 'THORNS',      text: 'STRIKE BACK WHEN HURT',      ratio: 0.6, radius: 34 },

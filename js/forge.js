@@ -163,10 +163,10 @@ const Forge = {
       });
     }
     list.push({ id: null, name: 'REMOVE', color: '#8f9aa8', remove: true, ok: !!player.weaponElement });
-    // 강화 — 성장 무기는 레벨을 알아서 따라가므로 필요 없다
+    // 강화 — 전설 무기도 레벨이 고정이라 똑같이 올릴 수 있다
     const up = this.upgradeCost(player);
     const upHeld = this.lootHeld(player, up.loot);
-    const upMax = player.weaponGrowing || player.weaponLevel >= CONFIG.forge.upgrade.maxLevel;
+    const upMax = player.weaponLevel >= CONFIG.forge.upgrade.maxLevel;
     list.push({
       upgrade: true, name: 'UPGRADE ' + player.weaponLabel(), color: '#ffe066',
       loot: CONFIG.loot.items[up.loot].name, need: up.need, held: upHeld,
@@ -242,7 +242,6 @@ const Forge = {
       return;
     }
     if (item.upgrade) {
-      if (player.weaponGrowing) { this.say('GROWING NEEDS NO UPGRADE'); Sound.play('error'); return; }
       if (player.weaponLevel >= CONFIG.forge.upgrade.maxLevel) { this.say('MAX LEVEL'); Sound.play('error'); return; }
       if (item.held < item.need) { this.say('NEED MORE ' + item.loot); Sound.play('error'); return; }
       if (player.gold < item.gold) { this.say('NOT ENOUGH GOLD'); Sound.play('error'); return; }

@@ -313,7 +313,7 @@ const UI = {
       const set = typeof SPRITES !== 'undefined' && SPRITES.weapons && SPRITES.weapons[player.weapon];
       const icon = set && set[levelTier(player.weaponLevel)];
       if (icon) ctx.drawImage(icon, 8, 58);
-      if (player.weaponGrowing) this.drawRainbowText(ctx, player.weaponLabel(), 23, 62);
+      if (player.weaponLegend) this.drawRainbowText(ctx, player.weaponLabel(), 23, 62);
       else this.drawText(ctx, player.weaponLabel(), 23, 62, player.weaponColor());
       // 박아 넣은 속성은 이름 뒤에 색 점 하나로 (자리가 좁다)
       const el = player.weaponElement && CONFIG.forge.elements[player.weaponElement];

@@ -603,8 +603,7 @@ const Village = {
     if (!s) return '?';
     if (s.kind === 'gear') return Gear.name(s);
     if (s.kind === 'weapon') {
-      if (s.growing) return CONFIG.weapons.growNames[s.weapon] || s.weapon;
-      return CONFIG.weapons[s.weapon].name + ' L' + s.level;
+      return (s.legend ? CONFIG.weapons.legends[s.legend].name : CONFIG.weapons[s.weapon].name) + ' L' + s.level;
     }
     if (s.kind === 'loot') return (CONFIG.loot.items[s.id] || {}).name + ' X' + s.amount;
     return '?';
@@ -613,7 +612,7 @@ const Village = {
   stashColor(s) {
     if (s.kind === 'gear') return Gear.color(s);
     if (s.kind === 'weapon') {
-      if (s.growing) return CONFIG.weapons.growColor;
+      if (s.legend) return CONFIG.weapons.legendColor;
       return CONFIG.weapons.levelColor[levelTier(s.level)] || '#ffffff';
     }
     if (s.kind === 'loot') return (CONFIG.loot.items[s.id] || {}).color || '#ffffff';
@@ -626,8 +625,8 @@ const Village = {
     if (s.kind === 'weapon' && CONFIG.weapons[s.weapon]) {
       return {
         kind: 'weapon', weapon: s.weapon,
-        level: Util.clamp(Math.round(s.level) || 1, 1, CONFIG.weapons.levelMult.length),
-        growing: !!s.growing,
+        level: Util.clamp(legendKeyOf(s) ? legendLevelOf(s, legendKeyOf(s)) : (Math.round(s.level) || 1), 1, CONFIG.weapons.levelMult.length),
+        legend: legendKeyOf(s),
         element: CONFIG.forge.elements[s.element] ? s.element : null,
       };
     }

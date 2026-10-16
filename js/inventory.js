@@ -46,10 +46,10 @@ const Inventory = {
   },
 
   // 무기 한 자루 — 빈 칸이 있어야 들어간다
-  addWeapon(player, weapon, level, growing, element) {
+  addWeapon(player, weapon, level, legend, element) {
     const i = this.firstEmpty(player);
     if (i < 0) return false;
-    player.bag[i] = { kind: 'weapon', weapon: weapon, level: level, growing: !!growing, element: element || null };
+    player.bag[i] = { kind: 'weapon', weapon: weapon, level: level, legend: legend || null, element: element || null };
     return true;
   },
 
@@ -144,8 +144,9 @@ const Inventory = {
       const s = list[i];
       if (!s) continue;
       if (s.kind === 'weapon' && CONFIG.weapons[s.weapon]) {
-        player.bag[i + 1] = { kind: 'weapon', weapon: s.weapon, level: Math.max(1, s.level | 0), growing: !!s.growing,
-          element: CONFIG.forge.elements[s.element] ? s.element : null };
+        const legend = legendKeyOf(s);
+        player.bag[i + 1] = { kind: 'weapon', weapon: s.weapon, level: legend ? legendLevelOf(s, legend) : Math.max(1, s.level | 0),
+          legend, element: CONFIG.forge.elements[s.element] ? s.element : null };
       } else if (s.kind === 'gear') {
         const g = Gear.sanitize(s);
         if (g) player.bag[i + 1] = g;
@@ -160,16 +161,15 @@ const Inventory = {
   itemName(player, s) {
     if (s.kind === 'potion') return 'POTION';
     if (s.kind === 'weapon') {
-      if (s.growing) return CONFIG.weapons.growNames[s.weapon] || CONFIG.weapons[s.weapon].name;
-      return CONFIG.weapons[s.weapon].name + ' L' + s.level;
+      return (s.legend ? CONFIG.weapons.legends[s.legend].name : CONFIG.weapons[s.weapon].name) + ' L' + s.level;
     }
     if (s.kind === 'gear') return Gear.name(s);
     return this.spec(s.id).name;
   },
 
-  // 가방 속 무기의 실제 레벨 — 성장 무기는 가방에 있어도 내 레벨을 따라간다
+  // 가방 속 무기의 레벨 (전설 무기도 이제 고정 레벨이다)
   weaponLevel(player, s) {
-    return s.growing ? Util.clamp(player.level, 1, CONFIG.weapons.levelMult.length) : s.level;
+    return s.level;
   },
 
   use(player, index) {
@@ -209,8 +209,8 @@ const Inventory = {
     }
     if (s.kind === 'weapon') {
       // 들고 있던 무기가 이 칸으로 들어가고, 이 칸의 무기를 낀다
-      const old = { kind: 'weapon', weapon: player.weapon, level: player.weaponLevel, growing: player.weaponGrowing, element: player.weaponElement };
-      const r = player.equipWeapon(s.weapon, this.weaponLevel(player, s), s.growing, s.element);
+      const old = { kind: 'weapon', weapon: player.weapon, level: player.weaponLevel, legend: player.weaponLegend, element: player.weaponElement };
+      const r = player.equipWeapon(s.weapon, this.weaponLevel(player, s), s.legend, s.element);
       if (!r) return;
       player.bag[index] = old;
       this.say('EQUIPPED ' + this.itemName(player, s));
@@ -225,7 +225,7 @@ const Inventory = {
     if (!s) return;
     if (s.kind === 'potion') { this.say('DRINK IT WITH E'); return; }
     if (s.kind === 'weapon') {
-      Items.spawnWeapon(player.x, player.y, s.weapon, this.weaponLevel(player, s), { growing: s.growing, element: s.element, pickupDelay: 0.6 });
+      Items.spawnWeapon(player.x, player.y, s.weapon, this.weaponLevel(player, s), { legend: s.legend, element: s.element, pickupDelay: 0.6 });
     } else if (s.kind === 'gear') {
       Items.spawnGear(player.x, player.y, s.id, s.level, { dropped: true });
     } else {
@@ -324,7 +324,7 @@ const Inventory = {
       if (i === this.cursor) {
         ctx.strokeStyle = '#ffe066';
         ctx.strokeRect(sx + 0.5, sy + 0.5, L.slot - 1, L.slot - 1);
-      } else if (s && s.kind === 'weapon' && s.growing) {
+      } else if (s && s.kind === 'weapon' && s.legend) {
         ctx.strokeStyle = UI.rainbowNow(0);
         ctx.strokeRect(sx + 0.5, sy + 0.5, L.slot - 1, L.slot - 1);
       } else if (s && s.kind === 'gear' && s.rarity >= 2) {
@@ -396,7 +396,7 @@ const Inventory = {
 
     // 지금 든 무기 한 줄
     const spec = player.weaponSpec(), dmg = player.attackDamage();
-    if (player.weaponGrowing) UI.drawRainbowText(ctx, player.weaponLabel(), x, top + 26);
+    if (player.weaponLegend) UI.drawRainbowText(ctx, player.weaponLabel(), x, top + 26);
     else UI.drawText(ctx, player.weaponLabel(), x, top + 26, player.weaponColor());
     const eq = player.weaponElement && CONFIG.forge.elements[player.weaponElement];
     UI.drawText(ctx, 'DMG ' + dmg + '  DPS ' + Math.round(dmg / spec.cooldown), x, top + 34, '#f0d9b5');
@@ -500,10 +500,10 @@ const Inventory = {
     if (s.kind === 'weapon') {
       const lv = this.weaponLevel(player, s);
       const w = CONFIG.weapons[s.weapon];
-      if (s.growing) { UI.drawRainbowText(ctx, this.itemName(player, s), x, y); y += 8; }
+      if (s.legend) { UI.drawRainbowText(ctx, this.itemName(player, s), x, y); y += 8; }
       else line(this.itemName(player, s), CONFIG.weapons.levelColor[levelTier(lv)]);
       // 끼면 위력이 얼마나 달라지는지 — 지금 든 무기와 바로 비교
-      const wd = player.damageWith(s.weapon, lv, s.growing);
+      const wd = player.damageWith(s.weapon, lv);
       const d = wd - dmg;
       line('DMG ' + wd + ' RNG ' + w.reach, '#f0d9b5');
       if (w.blurb) line(w.blurb, '#c8d0d8');   // 평타가 어떻게 생겼는지 (찌르기·베기·휩쓸기)

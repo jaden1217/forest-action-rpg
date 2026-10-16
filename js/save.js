@@ -35,7 +35,7 @@ const Save = {
         hp: Math.round(p.hp), maxHp: p.maxHp, damage: p.damage,
         level: p.level, xp: p.xp, xpNeed: p.xpNeed,
         potions: p.potions,
-        weapon: p.weapon, weaponLevel: p.weaponLevel, weaponGrowing: p.weaponGrowing, weaponElement: p.weaponElement,
+        weapon: p.weapon, weaponLevel: p.weaponLevel, weaponLegend: p.weaponLegend, weaponElement: p.weaponElement,
         gold: p.gold, upgrades: p.upgrades,
         bag: Inventory.serialize(p),
         gear: { head: p.gear.head, body: p.gear.body, trinket: p.gear.trinket },
@@ -48,7 +48,7 @@ const Save = {
       bossSlain: game.bossSlain,
       drops: drops.map(d => ({
         kind: d.kind, weapon: d.weapon, level: d.level, amount: d.amount, id: d.id,
-        item: d.item, growing: !!d.growing, element: d.element || null,
+        item: d.item, legend: d.legend || null, element: d.element || null,
         x: Math.round(d.x), y: Math.round(d.y), life: Math.round(d.life),
       })),
     };
@@ -113,11 +113,12 @@ const Save = {
 
     if (CONFIG.weapons[s.weapon]) {
       player.weapon = s.weapon;
-      player.weaponGrowing = !!s.weaponGrowing;
-      player.weaponLevel = Util.clamp(s.weaponLevel || 1, 1, CONFIG.weapons.levelMult.length);
+      // 예전 저장의 '성장 무기'는 그 종류의 숲 보스 전설로 (레벨은 갖고 있던 것과 전설 레벨 중 높은 쪽)
+      const held = { weapon: s.weapon, legend: s.weaponLegend, growing: s.weaponGrowing, level: s.weaponLevel };
+      player.weaponLegend = legendKeyOf(held);
+      player.weaponLevel = Util.clamp(player.weaponLegend ? legendLevelOf(held, player.weaponLegend) : (s.weaponLevel || 1), 1, CONFIG.weapons.levelMult.length);
       player.weaponElement = CONFIG.forge.elements[s.weaponElement] ? s.weaponElement : null;
-      player.syncWeaponLevel();   // 성장하는 무기는 레벨을 다시 맞춰둔다
-      player.recalcStats();       // 성장 무기의 고유 효과까지 반영한다
+      player.recalcStats();       // 전설 무기의 고유 효과까지 반영한다
     }
 
     // 저장된 자리가 막혀 있으면(설정을 바꿔 지형이 달라진 경우) 시작 지점으로 되돌린다
@@ -129,7 +130,7 @@ const Save = {
 
     Items.reset();
     for (const d of (data.drops || [])) {
-      if (d.kind === 'weapon') Items.spawnWeapon(d.x, d.y, d.weapon, d.level, { growing: d.growing, element: d.element });
+      if (d.kind === 'weapon') { const lg = legendKeyOf(d); Items.spawnWeapon(d.x, d.y, d.weapon, lg ? legendLevelOf(d, lg) : d.level, { legend: lg, element: d.element }); }
       else if (d.kind === 'gear') Items.spawnGear(d.x, d.y, d.id, d.level, { item: Gear.sanitize(d.item) });
       else if (d.kind === 'loot') Items.spawnLoot(d.x, d.y, d.id, d.amount);
       else Items.spawn(d.x, d.y, d.amount);

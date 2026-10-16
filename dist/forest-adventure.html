@@ -154,7 +154,7 @@ html, body {
 }
 
 </style>
-<!-- built 2026-10-16 14:59 by tools/build.js -->
+<!-- built 2026-10-16 15:09 by tools/build.js -->
 </head>
 <body>
   <div id="stage">
@@ -189,7 +189,7 @@ html, body {
 
 // 몬스터의 최대 레벨 (바닥에 떨어지는 무기도 잡은 몬스터 레벨을 따르므로 여기까지)
 const LEVEL_MAX = 23;
-/* 무기 레벨 표의 끝. 보스가 주는 '성장하는 무기'는 플레이어 레벨을 그대로 따라가므로
+/* 무기 레벨 표의 끝. 보스의 전설 무기(보스 레벨 + 10)와 대장간 강화가
    23을 넘어 계속 세져야 한다. 사막 몬스터(24~40)가 떨구는 무기도 자기 레벨을 그대로 따른다. */
 const WEAPON_LEVEL_MAX = 60;
 
@@ -197,6 +197,39 @@ const WEAPON_LEVEL_MAX = 60;
    몬스터 색은 종류가 정하고(ENEMY_COLORS), 위험도는 이름표 색이 알려준다.
    (1~4 / 5~8 / 9~13 / 14~18 / 19~23 — 숲, 24~29 / 30~35 / 36~ — 사막) */
 const LEVEL_TIER_BREAKS = [4, 8, 13, 18, 23, 29, 35, 41, 48, 54];
+/* 보스의 전설 무기 한 자루 — { key, weapon, level, name, unique }.
+   종류는 그 맵에서 몇 번째 보스인가로 (첫째 단검, 둘째 검, 셋째 도끼), 레벨은 보스 레벨 + 10 */
+function legendSpec(bossKey) {
+  const L = CONFIG.weapons.legends[bossKey], boss = CONFIG.bosses[bossKey];
+  if (!L || !boss) return null;
+  let order = 0;
+  for (const id in CONFIG.maps) {
+    const i = CONFIG.maps[id].caves.findIndex(c => c.boss === bossKey);
+    if (i >= 0) { order = i; break; }
+  }
+  return {
+    key: bossKey, name: L.name, unique: L.unique,
+    weapon: CONFIG.weapons.legendOrder[order] || 'sword',
+    level: Math.min(WEAPON_LEVEL_MAX, boss.level + CONFIG.weapons.legendLevelBonus),
+  };
+}
+
+/* 저장된 무기 칸·바닥 무기의 전설 표식을 읽는다.
+   예전의 '성장 무기'(growing)는 그 종류의 숲 보스 전설로 바꿔 읽는다 (SLIMELORD → SLIME MONARCH 등) */
+function legendKeyOf(s) {
+  if (!s) return null;
+  if (CONFIG.weapons.legends[s.legend]) return s.legend;
+  if (s.growing) return { dagger: 'slime', sword: 'wolf', axe: 'mushroom' }[s.weapon] || null;
+  return null;
+}
+
+// 전설 무기의 레벨 — 예전 성장 무기를 읽을 때는 저장된 레벨과 전설 레벨 중 높은 쪽 (갖고 있던 힘을 잃지 않게)
+function legendLevelOf(s, key) {
+  const L = legendSpec(key);
+  const saved = Math.max(1, Math.round((s && (s.level || s.weaponLevel)) || 1));
+  return (s && s.growing && !s.legend && L) ? Math.max(saved, L.level) : saved;
+}
+
 function levelTier(level) {
   for (let i = 0; i < LEVEL_TIER_BREAKS.length; i++) {
     if (level <= LEVEL_TIER_BREAKS[i]) return i;
@@ -619,7 +652,7 @@ const CONFIG = {
     comboWindow: 0.45,   // 공격이 끝나고 이 안에 다시 휘두르면 이어 치기가 이어진다 (넘기면 첫 타부터)
 
     /* 무기 레벨 — 레벨당 +2.5% 로 아주 완만하다 (L1 x1.00 -> L23 x1.55 -> L36 x1.875 -> L60 x2.475).
-       바닥 드랍은 몬스터 레벨(최대 23)을 따르고, 성장하는 무기만 그 위로 올라간다.
+       바닥 드랍은 몬스터 레벨을 따르고, 보스의 전설 무기는 보스 레벨 + 10 이다.
        이 게임은 무기가 아니라 플레이어 레벨이 중심이므로, 무기는 거들 뿐이다.
        좋은 무기를 주우면 조금 수월해지지만, 진짜로 강해지는 건 레벨업이다. */
     levelMult: (function () {
@@ -628,15 +661,26 @@ const CONFIG = {
       return a;
     })(),
     // 칼날 색 — 레벨이 아니라 색 등급(levelTier)으로 고른다
-    levelColor: ['#c8d0d8', '#8fe0a8', '#7ec8ff', '#c79ce8', '#ffb35c', '#ffb08a', '#f0f4f8', '#b48fd8'],
-    // 성장하는 무기(보스 보상)는 등급색 대신 이 금색으로 표시해 한눈에 구별한다
-    growColor: '#ffd93d',
-    /* 성장하는 무기의 이름 — 어느 보스가 떨구느냐에 따라 다르다.
-       (픽셀 폰트가 대문자뿐이라 게임 안에서는 전부 대문자로 보인다) */
-    growNames: { dagger: 'SLIMELORD', sword: 'WOLFLORD', axe: 'SPORELORD' },
-    // 성장 무기의 고유 효과 (CONFIG.uniques 에서 하나씩) — 전설 장비와 같은 규칙으로 켜진다
-    growUniques: { dagger: 'momentum', sword: 'swiftFoot', axe: 'executioner' },
-    /* 성장하는 무기의 이름표와 바닥 오라에 쓰는 무지개.
+    levelColor: ['#c8d0d8', '#8fe0a8', '#7ec8ff', '#c79ce8', '#ffb35c', '#ffb08a', '#f0f4f8', '#b48fd8', '#9fe8ff', '#7dffe0', '#fff2a0'],
+    /* 보스의 전설 무기 — 보스가 확률로 떨구는 이름 있는 무기.
+       **종류는 그 맵에서 몇 번째 보스인가**가 정한다 (legendOrder: 첫째 단검, 둘째 검, 셋째 도끼),
+       **레벨은 보스 레벨 + legendLevelBonus** 로 고정이다 (예전 '성장 무기'는 내 레벨을 따라 올랐다).
+       이름표가 무지개로 흐르고, 바닥에선 오라가 돌고, 휘두르면 무지개 잔상이 남는 것은 그대로다.
+       이름은 떨군 보스에게서 따 왔고, 고유 효과(CONFIG.uniques)를 하나씩 들고 온다 — 전설 장비와 같은 규칙.
+         GIANT SLIME  → SLIME MONARCH  왕관 쓴 젤리 군주의 독침
+         ALPHA WOLF   → ALPHA HOWL     우두머리의 울음이 깃든 검
+         ELDER SHROOM → ELDER BLIGHT   늙은 버섯의 마름병을 두른 도끼
+         SAND LORD    → SANDLORD FANG  모래의 군주의 이빨 하나 */
+    legendColor: '#ffd93d',          // 이름표를 무지개로 못 쓰는 곳(창고 목록 등)에 쓰는 금색
+    legendOrder: ['dagger', 'sword', 'axe'],
+    legendLevelBonus: 10,
+    legends: {
+      slime:    { name: 'SLIME MONARCH', unique: 'momentum' },
+      wolf:     { name: 'ALPHA HOWL',    unique: 'swiftFoot' },
+      mushroom: { name: 'ELDER BLIGHT',  unique: 'executioner' },
+      sandlord: { name: 'SANDLORD FANG', unique: 'phantom' },
+    },
+    /* 전설 무기의 이름표와 바닥 오라에 쓰는 무지개.
        hsl 로 매끈하게 돌리지 않고 일곱 색을 딱딱 끊어 쓴다 — 도트 그림에는 이쪽이 어울린다 */
     rainbow: ['#ff5c5c', '#ffb35c', '#ffe066', '#7dff8a', '#5cd8ff', '#8f8fff', '#e08fff'],
   },
@@ -1201,7 +1245,7 @@ const CONFIG = {
      체력이 절반 아래로 내려가면 2페이즈 — 빨라지고 패턴이 독해진다.
 
      레벨은 그 동굴 주변 몬스터보다 위로 잡았다 (가까운 동굴 12, 중간 20, 가장자리 30).
-     처치 보상은 포션 6개 확정 + 전리품(trophy) 하나 + 10% 확률로 '성장하는 무기' (weapons.growNames 참고). */
+     처치 보상은 포션 6개 확정 + 전리품(trophy) 하나 + 10% 확률로 그 보스의 전설 무기 (weapons.legends 참고). */
   bosses: {
     // 가까운 동굴 — 거대 슬라임: 느리지만 덩치와 분열로 밀어붙인다
     slime: {
@@ -1214,7 +1258,7 @@ const CONFIG = {
       speed: 26,              // 평소엔 느릿느릿 다가온다
       detect: 260,
       contactCooldown: 1.0,
-      reward: { weapon: 'dagger', chance: 0.10, potions: 6, trophy: 'slimeCore' },
+      reward: { chance: 0.10, potions: 6, trophy: 'slimeCore' },   // 전설 무기 — 숲 첫째: 단검 SLIME MONARCH L22
 
       phase2At: 0.5,
       phase2Speed: 1.35,
@@ -1254,7 +1298,7 @@ const CONFIG = {
       speed: 58,              // 평소에도 플레이어만큼 빠르다
       detect: 300,
       contactCooldown: 0.8,
-      reward: { weapon: 'sword', chance: 0.10, potions: 6, trophy: 'alphaFang' },
+      reward: { chance: 0.10, potions: 6, trophy: 'alphaFang' },   // 숲 둘째: 검 ALPHA HOWL L30
 
       phase2At: 0.5,
       phase2Speed: 1.3,
@@ -1296,7 +1340,7 @@ const CONFIG = {
       speed: 12,              // 뿌리를 끌며 아주 천천히 다가온다 (2페이즈에서 빨라진다)
       detect: 300,
       contactCooldown: 1.0,
-      reward: { weapon: 'axe', chance: 0.10, potions: 6, trophy: 'elderSpore' },
+      reward: { chance: 0.10, potions: 6, trophy: 'elderSpore' },  // 숲 셋째: 도끼 ELDER BLIGHT L40
 
       phase2At: 0.5,
       phase2Speed: 1.3,
@@ -1344,7 +1388,7 @@ const CONFIG = {
       speed: 96,              // 땅속에서는 빠르다 (밖에 나오면 거의 안 움직인다)
       detect: 400,
       contactCooldown: 1.0,
-      reward: { weapon: 'axe', chance: 0.12, potions: 8, trophy: 'lordScale' },
+      reward: { chance: 0.12, potions: 8, trophy: 'lordScale' },   // 사막 첫째: 단검 SANDLORD FANG L56
 
       phase2At: 0.5,
       phase2Speed: 1.3,
@@ -1519,7 +1563,7 @@ const CONFIG = {
 
      수치가 아니라 **규칙을 바꾸는 한 줄**이어야 한다 — +10% 는 옵션이 할 일이고,
      여기서는 '포션을 마시면 무적', '치명타가 쿨다운을 깎는다' 같은 것만 둔다.
-     성장 무기(SLIMELORD 등)도 같은 목록에서 하나씩 가져간다 (weapons.growUniques). */
+     보스의 전설 무기(SLIME MONARCH 등)도 같은 목록에서 하나씩 가져간다 (weapons.legends). */
   uniques: {
     executioner: { name: 'EXECUTIONER', text: 'LOW HP FOES TAKE +50%',      ratio: 0.25, mult: 1.5 },
     thorns:      { name: 'THORNS',      text: 'STRIKE BACK WHEN HURT',      ratio: 0.6, radius: 34 },
@@ -4691,7 +4735,12 @@ function buildSprites() {
     { w: '#b8763a', W: '#ffd9a0' },   // Lv5 황금
     { w: '#c25a2a', W: '#ffb08a' },   // 사막 24~29 구리
     { w: '#8fa0b0', W: '#ffffff' },   // 사막 30~35 은
-    { w: '#3d2e4a', W: '#b48fd8' },   // 사막 36~   흑요석
+    { w: '#3d2e4a', W: '#b48fd8' },   // 사막 36~41 흑요석
+    /* 설원 세 등급 — 예전엔 칼날이 여기까지(8개)만 있어서 42레벨 이상 무기(설원 드랍·강화·전설 무기)는
+       칼날 그림과 이름 색이 비어 아이콘이 사라졌다 (LEVEL_TIER_BREAKS 는 11등급) */
+    { w: '#5a8fb0', W: '#d8f4ff' },   // 설원 42~48 서리
+    { w: '#2f8f8a', W: '#c8fff4' },   // 설원 49~54 미스릴
+    { w: '#b0922e', W: '#fff8d0' },   // 설원 55~60 별철
   ];
   SPRITES.weapons = {};
   for (const id in WEAPON_SHAPES) {
@@ -6788,7 +6837,7 @@ const Save = {
         hp: Math.round(p.hp), maxHp: p.maxHp, damage: p.damage,
         level: p.level, xp: p.xp, xpNeed: p.xpNeed,
         potions: p.potions,
-        weapon: p.weapon, weaponLevel: p.weaponLevel, weaponGrowing: p.weaponGrowing, weaponElement: p.weaponElement,
+        weapon: p.weapon, weaponLevel: p.weaponLevel, weaponLegend: p.weaponLegend, weaponElement: p.weaponElement,
         gold: p.gold, upgrades: p.upgrades,
         bag: Inventory.serialize(p),
         gear: { head: p.gear.head, body: p.gear.body, trinket: p.gear.trinket },
@@ -6801,7 +6850,7 @@ const Save = {
       bossSlain: game.bossSlain,
       drops: drops.map(d => ({
         kind: d.kind, weapon: d.weapon, level: d.level, amount: d.amount, id: d.id,
-        item: d.item, growing: !!d.growing, element: d.element || null,
+        item: d.item, legend: d.legend || null, element: d.element || null,
         x: Math.round(d.x), y: Math.round(d.y), life: Math.round(d.life),
       })),
     };
@@ -6866,11 +6915,12 @@ const Save = {
 
     if (CONFIG.weapons[s.weapon]) {
       player.weapon = s.weapon;
-      player.weaponGrowing = !!s.weaponGrowing;
-      player.weaponLevel = Util.clamp(s.weaponLevel || 1, 1, CONFIG.weapons.levelMult.length);
+      // 예전 저장의 '성장 무기'는 그 종류의 숲 보스 전설로 (레벨은 갖고 있던 것과 전설 레벨 중 높은 쪽)
+      const held = { weapon: s.weapon, legend: s.weaponLegend, growing: s.weaponGrowing, level: s.weaponLevel };
+      player.weaponLegend = legendKeyOf(held);
+      player.weaponLevel = Util.clamp(player.weaponLegend ? legendLevelOf(held, player.weaponLegend) : (s.weaponLevel || 1), 1, CONFIG.weapons.levelMult.length);
       player.weaponElement = CONFIG.forge.elements[s.weaponElement] ? s.weaponElement : null;
-      player.syncWeaponLevel();   // 성장하는 무기는 레벨을 다시 맞춰둔다
-      player.recalcStats();       // 성장 무기의 고유 효과까지 반영한다
+      player.recalcStats();       // 전설 무기의 고유 효과까지 반영한다
     }
 
     // 저장된 자리가 막혀 있으면(설정을 바꿔 지형이 달라진 경우) 시작 지점으로 되돌린다
@@ -6882,7 +6932,7 @@ const Save = {
 
     Items.reset();
     for (const d of (data.drops || [])) {
-      if (d.kind === 'weapon') Items.spawnWeapon(d.x, d.y, d.weapon, d.level, { growing: d.growing, element: d.element });
+      if (d.kind === 'weapon') { const lg = legendKeyOf(d); Items.spawnWeapon(d.x, d.y, d.weapon, lg ? legendLevelOf(d, lg) : d.level, { legend: lg, element: d.element }); }
       else if (d.kind === 'gear') Items.spawnGear(d.x, d.y, d.id, d.level, { item: Gear.sanitize(d.item) });
       else if (d.kind === 'loot') Items.spawnLoot(d.x, d.y, d.id, d.amount);
       else Items.spawn(d.x, d.y, d.amount);
@@ -6937,8 +6987,8 @@ class Player {
     // 장비 — 한 번에 하나의 무기만 든다. 종류는 성능이 같고, 위력은 무기 레벨이 정한다
     this.weapon = CONFIG.equipment.startWeapon;
     this.weaponLevel = CONFIG.equipment.startWeaponLevel;
-    // 보스가 떨구는 '성장하는 무기' — 레벨이 내 레벨을 따라 같이 오른다
-    this.weaponGrowing = false;
+    // 보스의 전설 무기라면 그 보스 키 (CONFIG.weapons.legends) — 이름·고유 효과·무지개 연출이 여기서 나온다
+    this.weaponLegend = null;
     // 대장간에서 박은 속성 (flame / frost / shock / venom) — 무기 한 자루에 하나
     this.weaponElement = null;
 
@@ -7072,16 +7122,16 @@ class Player {
     }
     this.gearStats = g;
 
-    /* 전설 고유 효과 — 입은 전설 장비와 성장 무기에서 모은다.
+    /* 전설 고유 효과 — 입은 전설 장비와 보스의 전설 무기에서 모은다.
        수치가 아니라 규칙이라 합산하지 않고 "켜져 있는가"만 본다 */
     const uniq = {};
     for (const slot of CONFIG.gear.slots) {
       const id = Gear.uniqueIdOf(this.gear && this.gear[slot]);
       if (id) uniq[id] = true;
     }
-    if (this.weaponGrowing) {
-      const id = CONFIG.weapons.growUniques[this.weapon];
-      if (id) uniq[id] = true;
+    if (this.weaponLegend) {
+      const L = CONFIG.weapons.legends[this.weaponLegend];
+      if (L && L.unique) uniq[L.unique] = true;
     }
     this.uniques = uniq;
 
@@ -7165,7 +7215,7 @@ class Player {
       const kit = SkillKit[spec.id];
       if (kit && kit.tick) {
         kit.tick(this, spec, elapsed, dt, enemies);
-        if (this.weaponGrowing && this.activeSkill) {
+        if (this.weaponLegend && this.activeSkill) {
           const t = this.skillTipAngle(spec, elapsed);
           FX.burst(this.x + Math.cos(t) * 22, this.y - 1 + Math.sin(t) * 22, 2, CONFIG.weapons.rainbow, { speed: 22, life: 0.35, gravity: -10, size: 1 });
         }
@@ -7179,8 +7229,8 @@ class Player {
       }
 
       if (spec.id === 'spin') this.spinAngle += dt * 20;
-      if (this.weaponGrowing) {
-        // 성장 무기는 칼끝에서 무지개 알갱이가 흩날린다
+      if (this.weaponLegend) {
+        // 전설 무기는 칼끝에서 무지개 알갱이가 흩날린다
         const t = this.skillTipAngle(spec, elapsed), r = spec.id === 'spin' ? 23 : 22;
         FX.burst(this.x + Math.cos(t) * r, this.y - 1 + Math.sin(t) * r, 2, CONFIG.weapons.rainbow,
           { speed: 22, life: 0.35, gravity: -10, size: 1 });
@@ -7422,30 +7472,22 @@ class Player {
   }
 
   // 다른 무기를 들었다면 평타가 얼마일지 — 인벤토리에서 끼기 전에 비교하는 용도
-  damageWith(weapon, level, growing) {
-    const lv = growing ? Util.clamp(this.level, 1, CONFIG.weapons.levelMult.length) : level;
-    const mult = CONFIG.weapons.levelMult[lv - 1] || 1;
+  damageWith(weapon, level) {
+    const mult = CONFIG.weapons.levelMult[level - 1] || 1;
     const buff = this.buff ? this.buff.damageMult : 1;
     return Math.max(1, Math.round(this.damage * CONFIG.weapons[weapon].damageMult * mult * buff));
   }
 
   // 무기 레벨 색 — HUD·바닥 이름표에 함께 쓴다
   weaponColor() {
-    if (this.weaponGrowing) return CONFIG.weapons.growColor;
+    if (this.weaponLegend) return CONFIG.weapons.legendColor;
     return CONFIG.weapons.levelColor[levelTier(this.weaponLevel)] || '#ffffff';
   }
 
   weaponLabel() {
-    // 성장하는 무기는 고유한 이름만 보여준다 — 레벨은 늘 내 레벨과 같으니 적을 필요가 없다
-    if (this.weaponGrowing) return CONFIG.weapons.growNames[this.weapon] || this.weaponSpec().name;
-    return this.weaponSpec().name + ' L' + this.weaponLevel;
-  }
-
-  /* 성장하는 무기는 내 레벨이 곧 무기 레벨이다.
-     레벨업 때마다 맞춰주므로 다시 주울 필요가 없다. */
-  syncWeaponLevel() {
-    if (!this.weaponGrowing) return;
-    this.weaponLevel = Util.clamp(this.level, 1, CONFIG.weapons.levelMult.length);
+    // 전설 무기는 보스에게서 따 온 이름으로
+    const L = this.weaponLegend && CONFIG.weapons.legends[this.weaponLegend];
+    return (L ? L.name : this.weaponSpec().name) + ' L' + this.weaponLevel;
   }
 
   update(dt, enemies) {
@@ -7576,8 +7618,8 @@ class Player {
         const tip = this.weaponTip();
         FX.burst(tip.x, tip.y, 6, ['#ffe066', '#ffffff', '#ffb35c'], { speed: 40, life: 0.26, gravity: 0, size: 1 });
       }
-      // 성장 무기는 칼끝에서 무지개 알갱이가 흩날린다
-      if (this.weaponGrowing) {
+      // 전설 무기는 칼끝에서 무지개 알갱이가 흩날린다
+      if (this.weaponLegend) {
         const tip = this.weaponTip();
         FX.burst(tip.x, tip.y, 2, CONFIG.weapons.rainbow, { speed: 18, life: 0.32, gravity: -10, size: 1 });
       }
@@ -7792,7 +7834,6 @@ class Player {
       this.recalcStats();
       this.hp = this.maxHp;
       this.xpNeed = CONFIG.levelUp.xpNeed(this.level);
-      this.syncWeaponLevel();
       FX.number(this.x, this.y - 22, 'LEVEL UP', '#ffe066', true);
       const opened = this.currentSkills().find(s => s.unlockLevel === this.level);
       if (opened) FX.number(this.x, this.y - 34, 'NEW SKILL ' + opened.key + ' ' + opened.name, opened.color, true);
@@ -7892,24 +7933,22 @@ class Player {
   }
 
   // 무기 교체. 종류와 레벨이 모두 같으면 'same', 죽어있으면 false, 교체되면 true
-  equipWeapon(id, level, growing, element) {
+  equipWeapon(id, level, legend, element) {
     if (this.dead) return false;
     if (!CONFIG.weapons[id]) return false;
-    growing = !!growing;
-    // 성장하는 무기는 주운 순간부터 내 레벨을 그대로 따라간다
-    level = growing ? this.level : level;
+    legend = CONFIG.weapons.legends[legend] ? legend : null;
     level = Util.clamp(Math.round(level || 1), 1, CONFIG.weapons.levelMult.length);   // 사막 무기는 23을 넘는다
     element = CONFIG.forge.elements[element] ? element : null;
-    if (this.weapon === id && this.weaponLevel === level && this.weaponGrowing === growing && this.weaponElement === element) return 'same';
+    if (this.weapon === id && this.weaponLevel === level && this.weaponLegend === legend && this.weaponElement === element) return 'same';
     this.weapon = id;
     this.weaponLevel = level;
-    this.weaponGrowing = growing;
+    this.weaponLegend = legend;
     this.weaponElement = element;
-    this.recalcStats();   // 성장 무기는 고유 효과를 들고 온다
+    this.recalcStats();   // 전설 무기는 고유 효과를 들고 온다
     const color = this.weaponColor();
     FX.number(this.x, this.y - 22, this.weaponLabel() + '!', color);
-    // 성장하는 무기는 조용히 손에 들어온다 (바닥 오라가 이미 충분히 화려하다)
-    if (!growing) FX.burst(this.x, this.y, 12, [color, '#ffffff'], { speed: 50, life: 0.45, gravity: 60 });
+    // 전설 무기는 조용히 손에 들어온다 (바닥 오라가 이미 충분히 화려하다)
+    if (!legend) FX.burst(this.x, this.y, 12, [color, '#ffffff'], { speed: 50, life: 0.45, gravity: 60 });
     Sound.play('pickup');
     // 휘두르는 도중에 바뀌면 판정이 꼬이므로 자세를 리셋한다
     this.attackTimer = 0;
@@ -7975,7 +8014,7 @@ class Player {
     if (elapsed < spec.windup) return;
     const t = Util.clamp((elapsed - spec.windup) / 0.32, 0, 0.999);
     const ring = quakeRing(this.weaponSpec().reach + spec.reachBonus, Math.floor(t * 4));
-    if (this.weaponGrowing) { ctx.globalAlpha = 0.7; ctx.drawImage(tinted(ring, this.rainbowNow(0)), sx - (ring.width >> 1), sy + 3 - (ring.height >> 1)); ctx.globalAlpha = 1; }
+    if (this.weaponLegend) { ctx.globalAlpha = 0.7; ctx.drawImage(tinted(ring, this.rainbowNow(0)), sx - (ring.width >> 1), sy + 3 - (ring.height >> 1)); ctx.globalAlpha = 1; }
     ctx.drawImage(ring, sx - (ring.width >> 1), sy + 4 - (ring.height >> 1));
   }
 
@@ -7987,7 +8026,7 @@ class Player {
     const fi = Util.clamp(Math.floor(p * 3), 0, 2);
     const sw = this.weaponSprite();
 
-    const grow = this.weaponGrowing;
+    const grow = this.weaponLegend;
     const elapsedAll = spec.duration - this.skillTimer;
 
     // ── 연속 찌르기: 평타 찌르기와 같은 곧은 궤적. 찌를 때마다 손을 바꾸고, 마지막 찌르기(급소)는 금빛
@@ -8079,7 +8118,7 @@ class Player {
     ctx.restore();
   }
 
-  /* ── 성장 무기 전용 연출 ──
+  /* ── 전설 무기 전용 연출 ──
      궤적 도트를 무지개색 실루엣으로 조금 크게 한 번 더 깔아 빛나는 테두리를 만들고,
      무기가 지나온 각도에 반투명 잔상을 두 장 남긴다. 색은 이름표처럼 시간 따라 흐른다. */
   rainbowNow(offset) {
@@ -8186,14 +8225,14 @@ class Player {
 
   // 검 — 번갈아 베기. 세 번째(마무리)는 더 넓은 푸른 호가 칼날을 따라 자란다
   drawSlash(ctx, sx, sy, w, p) {
-    const s = this.swing || { dir: 1 }, base = this.swingAngle, grow = this.weaponGrowing;
+    const s = this.swing || { dir: 1 }, base = this.swingAngle, grow = this.weaponLegend;
     const a = this.swingWeaponAngle();
     let arc = SPRITES.slash[slashIndex(base)][Util.clamp(Math.floor(p * 3), 0, 2)];
     if (s.finisher) {
       const k = this.sweepFrame(s.dir * Util.angleDiff(a, base), 1.5, p > 0.85);
       arc = k >= 0 ? SPRITES.finisher[s.dir > 0 ? 0 : 1][slashIndex(base)][k] : null;
     }
-    // 성장 무기는 궤적 둘레가 무지개로 빛나고 잔상이 따라온다
+    // 전설 무기는 궤적 둘레가 무지개로 빛나고 잔상이 따라온다
     if (arc && grow) this.drawRainbowGlow(ctx, arc, sx, sy, 1.25);
     if (arc) ctx.drawImage(arc, sx - arc.width / 2, sy - arc.height / 2);
     if (grow) this.drawAfterimages(ctx, sx, sy, this.weaponSprite(), a, -20, 0.42 * s.dir);
@@ -8206,7 +8245,7 @@ class Player {
     const px = Math.round(-Math.sin(base) * 2 * s.dir), py = Math.round(Math.cos(base) * 2 * s.dir);
     let tr = SPRITES.thrust[slashIndex(base)][p < 0.25 ? 0 : (p < 0.6 ? 1 : 2)];
     if (s.crit) tr = tinted(tr, '#ffe066');
-    if (this.weaponGrowing) this.drawRainbowGlow(ctx, tr, sx + px, sy + py, 1.2);
+    if (this.weaponLegend) this.drawRainbowGlow(ctx, tr, sx + px, sy + py, 1.2);
     ctx.drawImage(tr, sx + px - tr.width / 2, sy + py - tr.height / 2);
     const out = this.thrustOut();
     this.drawHeldWeapon(ctx, Math.round(sx + px + Math.cos(base) * out), Math.round(sy - 1 + py + Math.sin(base) * out), base, 14);
@@ -8222,9 +8261,9 @@ class Player {
     if (k >= 0) {
       const set = (this.buff && this.buff.id === 'rage') ? SPRITES.cleaveRage : SPRITES.cleave;   // 광폭화 중엔 붉게
       const arc = set[s.dir > 0 ? 0 : 1][slashIndex(base)][k];
-      if (this.weaponGrowing) this.drawRainbowGlow(ctx, arc, sx, sy, 1.2);
+      if (this.weaponLegend) this.drawRainbowGlow(ctx, arc, sx, sy, 1.2);
       ctx.drawImage(arc, sx - arc.width / 2, sy - arc.height / 2);
-      if (this.weaponGrowing) this.drawAfterimages(ctx, sx, sy, this.weaponSprite(), a, -21, 0.5 * s.dir);
+      if (this.weaponLegend) this.drawAfterimages(ctx, sx, sy, this.weaponSprite(), a, -21, 0.5 * s.dir);
     }
     this.drawHeldWeapon(ctx, sx, sy - 1, a, 21);
   }
@@ -8295,11 +8334,11 @@ SkillKit.cross = {
     const i = this.phase(spec, elapsed), q = this.progress(spec, elapsed, i), dir = spec.phases[i].dir;
     if (elapsed < spec.phases[i].at[1] + 0.06) {
       const arc = SPRITES.heavySlash[slashIndex(p.swingAngle)][Math.min(2, Math.floor(q * 3))];
-      if (p.weaponGrowing) p.drawRainbowGlow(ctx, arc, sx, sy, 1.22);
+      if (p.weaponLegend) p.drawRainbowGlow(ctx, arc, sx, sy, 1.22);
       ctx.drawImage(arc, sx - (arc.width >> 1), sy - (arc.height >> 1));
     }
     const a = swingAt(p, dir, q, 1.6);
-    if (p.weaponGrowing) p.drawAfterimages(ctx, sx, sy, p.weaponSprite(), a, -25, 0.5 * dir);
+    if (p.weaponLegend) p.drawAfterimages(ctx, sx, sy, p.weaponSprite(), a, -25, 0.5 * dir);
     p.drawHeldWeapon(ctx, sx, sy - 1, a, 25);
   },
 };
@@ -8319,7 +8358,7 @@ SkillKit.wave = {
     const k = p.sweepFrame(Util.angleDiff(a, p.swingAngle), 1.5, elapsed > spec.launchAt + 0.14);
     if (k >= 0) {
       const arc = SPRITES.finisher[0][slashIndex(p.swingAngle)][k];
-      if (p.weaponGrowing) p.drawRainbowGlow(ctx, arc, sx, sy, 1.2);
+      if (p.weaponLegend) p.drawRainbowGlow(ctx, arc, sx, sy, 1.2);
       ctx.drawImage(arc, sx - (arc.width >> 1), sy - (arc.height >> 1));
     }
     p.drawHeldWeapon(ctx, sx, sy - 1, a, 22);
@@ -8374,10 +8413,10 @@ SkillKit.storm = {
       arc = SPRITES.slash[slashIndex(p.swingAngle)][Math.floor(q * 3)];
     }
     if (arc) {
-      if (p.weaponGrowing) p.drawRainbowGlow(ctx, arc, sx, sy, 1.2);
+      if (p.weaponLegend) p.drawRainbowGlow(ctx, arc, sx, sy, 1.2);
       ctx.drawImage(arc, sx - (arc.width >> 1), sy - (arc.height >> 1));
     }
-    if (p.weaponGrowing) p.drawAfterimages(ctx, sx, sy, p.weaponSprite(), a, -21, 0.45 * d.dir);
+    if (p.weaponLegend) p.drawAfterimages(ctx, sx, sy, p.weaponSprite(), a, -21, 0.45 * d.dir);
     p.drawHeldWeapon(ctx, sx, sy - 1, a, 21);
   },
 };
@@ -11406,10 +11445,10 @@ const Inventory = {
   },
 
   // 무기 한 자루 — 빈 칸이 있어야 들어간다
-  addWeapon(player, weapon, level, growing, element) {
+  addWeapon(player, weapon, level, legend, element) {
     const i = this.firstEmpty(player);
     if (i < 0) return false;
-    player.bag[i] = { kind: 'weapon', weapon: weapon, level: level, growing: !!growing, element: element || null };
+    player.bag[i] = { kind: 'weapon', weapon: weapon, level: level, legend: legend || null, element: element || null };
     return true;
   },
 
@@ -11504,8 +11543,9 @@ const Inventory = {
       const s = list[i];
       if (!s) continue;
       if (s.kind === 'weapon' && CONFIG.weapons[s.weapon]) {
-        player.bag[i + 1] = { kind: 'weapon', weapon: s.weapon, level: Math.max(1, s.level | 0), growing: !!s.growing,
-          element: CONFIG.forge.elements[s.element] ? s.element : null };
+        const legend = legendKeyOf(s);
+        player.bag[i + 1] = { kind: 'weapon', weapon: s.weapon, level: legend ? legendLevelOf(s, legend) : Math.max(1, s.level | 0),
+          legend, element: CONFIG.forge.elements[s.element] ? s.element : null };
       } else if (s.kind === 'gear') {
         const g = Gear.sanitize(s);
         if (g) player.bag[i + 1] = g;
@@ -11520,16 +11560,15 @@ const Inventory = {
   itemName(player, s) {
     if (s.kind === 'potion') return 'POTION';
     if (s.kind === 'weapon') {
-      if (s.growing) return CONFIG.weapons.growNames[s.weapon] || CONFIG.weapons[s.weapon].name;
-      return CONFIG.weapons[s.weapon].name + ' L' + s.level;
+      return (s.legend ? CONFIG.weapons.legends[s.legend].name : CONFIG.weapons[s.weapon].name) + ' L' + s.level;
     }
     if (s.kind === 'gear') return Gear.name(s);
     return this.spec(s.id).name;
   },
 
-  // 가방 속 무기의 실제 레벨 — 성장 무기는 가방에 있어도 내 레벨을 따라간다
+  // 가방 속 무기의 레벨 (전설 무기도 이제 고정 레벨이다)
   weaponLevel(player, s) {
-    return s.growing ? Util.clamp(player.level, 1, CONFIG.weapons.levelMult.length) : s.level;
+    return s.level;
   },
 
   use(player, index) {
@@ -11569,8 +11608,8 @@ const Inventory = {
     }
     if (s.kind === 'weapon') {
       // 들고 있던 무기가 이 칸으로 들어가고, 이 칸의 무기를 낀다
-      const old = { kind: 'weapon', weapon: player.weapon, level: player.weaponLevel, growing: player.weaponGrowing, element: player.weaponElement };
-      const r = player.equipWeapon(s.weapon, this.weaponLevel(player, s), s.growing, s.element);
+      const old = { kind: 'weapon', weapon: player.weapon, level: player.weaponLevel, legend: player.weaponLegend, element: player.weaponElement };
+      const r = player.equipWeapon(s.weapon, this.weaponLevel(player, s), s.legend, s.element);
       if (!r) return;
       player.bag[index] = old;
       this.say('EQUIPPED ' + this.itemName(player, s));
@@ -11585,7 +11624,7 @@ const Inventory = {
     if (!s) return;
     if (s.kind === 'potion') { this.say('DRINK IT WITH E'); return; }
     if (s.kind === 'weapon') {
-      Items.spawnWeapon(player.x, player.y, s.weapon, this.weaponLevel(player, s), { growing: s.growing, element: s.element, pickupDelay: 0.6 });
+      Items.spawnWeapon(player.x, player.y, s.weapon, this.weaponLevel(player, s), { legend: s.legend, element: s.element, pickupDelay: 0.6 });
     } else if (s.kind === 'gear') {
       Items.spawnGear(player.x, player.y, s.id, s.level, { dropped: true });
     } else {
@@ -11684,7 +11723,7 @@ const Inventory = {
       if (i === this.cursor) {
         ctx.strokeStyle = '#ffe066';
         ctx.strokeRect(sx + 0.5, sy + 0.5, L.slot - 1, L.slot - 1);
-      } else if (s && s.kind === 'weapon' && s.growing) {
+      } else if (s && s.kind === 'weapon' && s.legend) {
         ctx.strokeStyle = UI.rainbowNow(0);
         ctx.strokeRect(sx + 0.5, sy + 0.5, L.slot - 1, L.slot - 1);
       } else if (s && s.kind === 'gear' && s.rarity >= 2) {
@@ -11756,7 +11795,7 @@ const Inventory = {
 
     // 지금 든 무기 한 줄
     const spec = player.weaponSpec(), dmg = player.attackDamage();
-    if (player.weaponGrowing) UI.drawRainbowText(ctx, player.weaponLabel(), x, top + 26);
+    if (player.weaponLegend) UI.drawRainbowText(ctx, player.weaponLabel(), x, top + 26);
     else UI.drawText(ctx, player.weaponLabel(), x, top + 26, player.weaponColor());
     const eq = player.weaponElement && CONFIG.forge.elements[player.weaponElement];
     UI.drawText(ctx, 'DMG ' + dmg + '  DPS ' + Math.round(dmg / spec.cooldown), x, top + 34, '#f0d9b5');
@@ -11860,10 +11899,10 @@ const Inventory = {
     if (s.kind === 'weapon') {
       const lv = this.weaponLevel(player, s);
       const w = CONFIG.weapons[s.weapon];
-      if (s.growing) { UI.drawRainbowText(ctx, this.itemName(player, s), x, y); y += 8; }
+      if (s.legend) { UI.drawRainbowText(ctx, this.itemName(player, s), x, y); y += 8; }
       else line(this.itemName(player, s), CONFIG.weapons.levelColor[levelTier(lv)]);
       // 끼면 위력이 얼마나 달라지는지 — 지금 든 무기와 바로 비교
-      const wd = player.damageWith(s.weapon, lv, s.growing);
+      const wd = player.damageWith(s.weapon, lv);
       const d = wd - dmg;
       line('DMG ' + wd + ' RNG ' + w.reach, '#f0d9b5');
       if (w.blurb) line(w.blurb, '#c8d0d8');   // 평타가 어떻게 생겼는지 (찌르기·베기·휩쓸기)
@@ -11917,16 +11956,17 @@ const Items = {
     const tier = levelTier(enemy.level);
 
     /* 보스 보상
-       포션은 확정으로 여섯 개, 그리고 10% 확률로 '성장하는 단검'.
-       이 단검은 주운 순간부터 플레이어와 레벨이 같아지고, 레벨업할 때마다 함께 오른다.
-       확률이 낮은 대신 한 번 얻으면 다시는 무기를 갈아끼울 필요가 없는 물건이다. */
+       포션은 확정으로 여섯 개, 전리품 하나, 그리고 10% 확률로 그 보스의 **전설 무기**.
+       종류는 그 맵에서 몇 번째 보스인가(첫째 단검·둘째 검·셋째 도끼), 레벨은 보스 레벨 + 10 (legendSpec) */
     if (enemy.isBoss) {
       const r = enemy.reward;   // 보스마다 다르다 (CONFIG.bosses[*].reward)
       this.giveGold(enemy, CONFIG.gold.amountByTier[tier] * CONFIG.gold.bossMult);
       for (let i = 0; i < r.potions; i++) this.spawn(enemy.x, enemy.y, 1);
       if (r.trophy) this.spawnLoot(enemy.x, enemy.y, r.trophy, 1);   // 보스 전리품은 확정
       if (Math.random() < r.chance) {
-        this.spawnWeapon(enemy.x, enemy.y, r.weapon, Game.player.level, { growing: true });
+        const key = Object.keys(CONFIG.bosses).find(k => CONFIG.bosses[k] === enemy.spec) || Game.bossKey(Game.arenaCave);
+        const L = legendSpec(key);
+        if (L) this.spawnWeapon(enemy.x, enemy.y, L.weapon, L.level, { legend: L.key });
       }
       return;
     }
@@ -12054,15 +12094,15 @@ const Items = {
     d.kind = 'weapon';
     d.weapon = weaponId;
     d.element = (opts && opts.element) || null;   // 박아 넣은 속성은 바닥에 둬도 남는다
-    d.growing = !!(opts && opts.growing);
-    if (d.growing) d.life = 1e9;   // 성장 무기는 사라지지 않는다 (보스 보상이 증발하면 안 된다)
+    d.legend = (opts && CONFIG.weapons.legends[opts.legend]) ? opts.legend : null;
+    if (d.legend) d.life = 1e9;   // 전설 무기는 사라지지 않는다 (보스 보상이 증발하면 안 된다)
     // 떨군 몬스터의 레벨을 그대로 따른다 (사막 몬스터는 23을 넘는다). 표 끝(60)이 상한
     d.level = Util.clamp(Math.round(level || 1), 1, CONFIG.weapons.levelMult.length);
     d.amount = 1;
     d.auraTimer = 0;
     this.drops.push(d);
-    // 성장하는 무기는 떨어지는 순간 무지개가 크게 터져 멀리서도 눈에 띈다
-    if (d.growing) {
+    // 전설 무기는 떨어지는 순간 무지개가 크게 터져 멀리서도 눈에 띈다
+    if (d.legend) {
       FX.burst(d.x, d.y - 4, 36, CONFIG.weapons.rainbow, { speed: 85, life: 0.9, gravity: 40 });
     }
   },
@@ -12099,10 +12139,8 @@ const Items = {
         d.vy *= Math.pow(0.005, dt);
       }
 
-      // 성장하는 무기는 바닥에 있는 동안에도 플레이어 레벨을 따라간다
-      if (d.growing) {
-        d.level = Util.clamp(player.level, 1, CONFIG.weapons.levelMult.length);
-        // 무지개 알갱이가 계속 피어오른다 — 바닥에 놓여 있어도 오라가 살아 있다
+      // 전설 무기 — 무지개 알갱이가 계속 피어오른다. 바닥에 놓여 있어도 오라가 살아 있다
+      if (d.legend) {
         d.auraTimer -= dt;
         if (d.auraTimer <= 0) {
           d.auraTimer = 0.22;
@@ -12210,28 +12248,28 @@ const Items = {
      가방이 꽉 찼으면 예전처럼 손에 든 무기와 맞바꾼다 — 든 무기는 그 자리에 남는다 */
   pickupWeapon(index, d, player) {
     if (player.dead) return;
-    if (Inventory.addWeapon(player, d.weapon, d.level, d.growing, d.element)) {
-      const color = d.growing ? CONFIG.weapons.growColor : (CONFIG.weapons.levelColor[levelTier(d.level)] || '#ffffff');
-      const name = d.growing ? CONFIG.weapons.growNames[d.weapon] : CONFIG.weapons[d.weapon].name + ' L' + d.level;
+    if (Inventory.addWeapon(player, d.weapon, d.level, d.legend, d.element)) {
+      const color = d.legend ? CONFIG.weapons.legendColor : (CONFIG.weapons.levelColor[levelTier(d.level)] || '#ffffff');
+      const name = (d.legend ? CONFIG.weapons.legends[d.legend].name : CONFIG.weapons[d.weapon].name) + ' L' + d.level;
       FX.burst(d.x, d.y - 4, 8, [color, '#ffffff'], { speed: 40, life: 0.35, gravity: 60 });
       FX.number(d.x, d.y - 14, '+' + name, color);
       Sound.play('pickup');
       this.drops.splice(index, 1);
       return;
     }
-    const oldId = player.weapon, oldLevel = player.weaponLevel, oldGrow = player.weaponGrowing;
-    if (oldId === d.weapon && oldLevel === d.level && oldGrow === !!d.growing) {
+    const oldId = player.weapon, oldLevel = player.weaponLevel, oldLegend = player.weaponLegend;
+    if (oldId === d.weapon && oldLevel === d.level && oldLegend === d.legend) {
       FX.number(player.x, player.y - 20, 'BAG FULL', '#8f9aa8');
       return;
     }
     const oldEl = player.weaponElement;
-    if (!player.equipWeapon(d.weapon, d.level, d.growing, d.element)) return;
+    if (!player.equipWeapon(d.weapon, d.level, d.legend, d.element)) return;
     this.drops.splice(index, 1);
     // 바꾸기 전 무기는 버려두고 간다 — 마음이 바뀌면 다시 F로 집을 수 있다
-    this.spawnWeapon(d.x, d.y, oldId, oldLevel, { pickupDelay: 0.35, growing: oldGrow, element: oldEl });
+    this.spawnWeapon(d.x, d.y, oldId, oldLevel, { pickupDelay: 0.35, legend: oldLegend, element: oldEl });
   },
 
-  /* 성장하는 무기의 무지개 오라 — 바닥에 옅은 색 원판이 숨쉬듯 커졌다 작아지고,
+  /* 전설 무기의 무지개 오라 — 바닥에 옅은 색 원판이 숨쉬듯 커졌다 작아지고,
      그 둘레를 일곱 색 알갱이가 천천히 돈다. */
   drawAura(ctx, sx, sy, age) {
     const pal = CONFIG.weapons.rainbow;
@@ -12262,10 +12300,10 @@ const Items = {
       const set = SPRITES.weapons && SPRITES.weapons[d.weapon];
       const sp = set && set[levelTier(d.level)];
       fillEllipse(ctx, sx + 1, sy + 5, 5, 2.1, 'rgba(10,12,20,0.3)');
-      if (d.growing) this.drawAura(ctx, sx, sy, d.age);
+      if (d.legend) this.drawAura(ctx, sx, sy, d.age);
       if (sp) ctx.drawImage(sp, sx - Math.floor(sp.width / 2), sy - 8 + bob);
       // 어떤 무기가 몇 레벨인지 바닥에서도 바로 보인다
-      if (d.growing) UI.drawRainbowText(ctx, CONFIG.weapons.growNames[d.weapon] || spec.name, sx, sy + 8, true);
+      if (d.legend) UI.drawRainbowText(ctx, CONFIG.weapons.legends[d.legend].name + ' L' + d.level, sx, sy + 8, true);
       else UI.drawText(ctx, spec.name + ' L' + d.level, sx, sy + 8, color, true);
       // 발밑에 서 있으면 집는 방법을 알려준다 (가방이 차 있으면 맞바꾸기)
       if (d.playerNear) UI.drawText(ctx, Inventory.firstEmpty(Game.player) >= 0 ? 'F TAKE' : 'F SWAP', sx, sy - 19, '#ffffff', true);
@@ -13497,10 +13535,10 @@ const Forge = {
       });
     }
     list.push({ id: null, name: 'REMOVE', color: '#8f9aa8', remove: true, ok: !!player.weaponElement });
-    // 강화 — 성장 무기는 레벨을 알아서 따라가므로 필요 없다
+    // 강화 — 전설 무기도 레벨이 고정이라 똑같이 올릴 수 있다
     const up = this.upgradeCost(player);
     const upHeld = this.lootHeld(player, up.loot);
-    const upMax = player.weaponGrowing || player.weaponLevel >= CONFIG.forge.upgrade.maxLevel;
+    const upMax = player.weaponLevel >= CONFIG.forge.upgrade.maxLevel;
     list.push({
       upgrade: true, name: 'UPGRADE ' + player.weaponLabel(), color: '#ffe066',
       loot: CONFIG.loot.items[up.loot].name, need: up.need, held: upHeld,
@@ -13576,7 +13614,6 @@ const Forge = {
       return;
     }
     if (item.upgrade) {
-      if (player.weaponGrowing) { this.say('GROWING NEEDS NO UPGRADE'); Sound.play('error'); return; }
       if (player.weaponLevel >= CONFIG.forge.upgrade.maxLevel) { this.say('MAX LEVEL'); Sound.play('error'); return; }
       if (item.held < item.need) { this.say('NEED MORE ' + item.loot); Sound.play('error'); return; }
       if (player.gold < item.gold) { this.say('NOT ENOUGH GOLD'); Sound.play('error'); return; }
@@ -14524,8 +14561,7 @@ const Village = {
     if (!s) return '?';
     if (s.kind === 'gear') return Gear.name(s);
     if (s.kind === 'weapon') {
-      if (s.growing) return CONFIG.weapons.growNames[s.weapon] || s.weapon;
-      return CONFIG.weapons[s.weapon].name + ' L' + s.level;
+      return (s.legend ? CONFIG.weapons.legends[s.legend].name : CONFIG.weapons[s.weapon].name) + ' L' + s.level;
     }
     if (s.kind === 'loot') return (CONFIG.loot.items[s.id] || {}).name + ' X' + s.amount;
     return '?';
@@ -14534,7 +14570,7 @@ const Village = {
   stashColor(s) {
     if (s.kind === 'gear') return Gear.color(s);
     if (s.kind === 'weapon') {
-      if (s.growing) return CONFIG.weapons.growColor;
+      if (s.legend) return CONFIG.weapons.legendColor;
       return CONFIG.weapons.levelColor[levelTier(s.level)] || '#ffffff';
     }
     if (s.kind === 'loot') return (CONFIG.loot.items[s.id] || {}).color || '#ffffff';
@@ -14547,8 +14583,8 @@ const Village = {
     if (s.kind === 'weapon' && CONFIG.weapons[s.weapon]) {
       return {
         kind: 'weapon', weapon: s.weapon,
-        level: Util.clamp(Math.round(s.level) || 1, 1, CONFIG.weapons.levelMult.length),
-        growing: !!s.growing,
+        level: Util.clamp(legendKeyOf(s) ? legendLevelOf(s, legendKeyOf(s)) : (Math.round(s.level) || 1), 1, CONFIG.weapons.levelMult.length),
+        legend: legendKeyOf(s),
         element: CONFIG.forge.elements[s.element] ? s.element : null,
       };
     }
@@ -15533,7 +15569,7 @@ const UI = {
       const set = typeof SPRITES !== 'undefined' && SPRITES.weapons && SPRITES.weapons[player.weapon];
       const icon = set && set[levelTier(player.weaponLevel)];
       if (icon) ctx.drawImage(icon, 8, 58);
-      if (player.weaponGrowing) this.drawRainbowText(ctx, player.weaponLabel(), 23, 62);
+      if (player.weaponLegend) this.drawRainbowText(ctx, player.weaponLabel(), 23, 62);
       else this.drawText(ctx, player.weaponLabel(), 23, 62, player.weaponColor());
       // 박아 넣은 속성은 이름 뒤에 색 점 하나로 (자리가 좁다)
       const el = player.weaponElement && CONFIG.forge.elements[player.weaponElement];
@@ -15857,6 +15893,18 @@ const UI = {
    새 작업을 올릴 때 PATCH_NOTES 맨 앞에 한 항목을 추가하면 된다. */
 
 const PATCH_NOTES = [
+  {
+    date: '2026-10-26',
+    notes: [
+      '보스가 떨구는 무기가 성장 무기에서 이름 있는 전설 무기로 — 무지개 이름표·오라·잔상은 그대로',
+      '레벨은 떨군 보스 레벨 + 10 으로 고정. 맵의 첫째 보스는 단검, 둘째는 검, 셋째는 도끼',
+      'SLIME MONARCH (거대 슬라임, L22) · ALPHA HOWL (우두머리 늑대, L30)',
+      'ELDER BLIGHT (늙은 버섯, L40) · SANDLORD FANG (모래의 군주, L56 — 새 고유 효과 PHANTOM)',
+      '전설 무기도 대장간에서 강화할 수 있다',
+      '갖고 있던 성장 무기는 같은 종류의 전설 무기로 바뀐다 (레벨은 높은 쪽)',
+      '42레벨 이상 무기의 아이콘과 이름 색이 비어 있던 것 — 설원 칼날 셋(서리·미스릴·별철)을 더했다',
+    ],
+  },
   {
     date: '2026-10-25',
     notes: [
@@ -16780,7 +16828,7 @@ const Game = {
     else { p.x = px; p.y = py; p.kx = p.ky = 0; p.invuln = 0.9; }
 
     for (const d of carried) {
-      Items.spawnWeapon(px, py, d.weapon, d.level, { growing: d.growing, pickupDelay: 0.4 });
+      Items.spawnWeapon(px, py, d.weapon, d.level, { legend: d.legend, element: d.element, pickupDelay: 0.4 });
     }
 
     this.boss = null;
