@@ -189,7 +189,7 @@ const CONFIG = {
   },
 
   /* 스킬 — 평타 말고 따로 쓰는 공격 수단. 쿨다운이 있고 플레이어 레벨로 열린다.
-       Q 10레벨 · R 20레벨 · X 30레벨 · C 40레벨
+       Q 10레벨 · R 20레벨 · Z 30레벨 · X 40레벨
 
      무기마다 자기한테 어울리는 스킬 넷을 따로 가진다. 스킬도 그 무기 평타의 성격을 잇는다.
        검   CROSS 십자베기 / SPIN 회전베기 / WAVE 검기 / STORM 검무        — 좌우로 베고, 마무리가 크다
@@ -209,7 +209,7 @@ const CONFIG = {
      움직임이 특별한 스킬(phases·launchAt·strikes·leap 등)은 js/skills.js 의 SkillKit 이 굴린다. */
   skills: {
     buffer: 0.18,          // 스킬 입력도 잠깐 기억해둔다
-    keys: ['Q', 'R', 'X', 'C'],
+    keys: ['Q', 'R', 'Z', 'X'],
     byWeapon: {
       sword: [
         {
@@ -245,7 +245,7 @@ const CONFIG = {
         },
         {
           // 검기 — 크게 한 번 휘둘러 초승달 검기를 날린다. 멀리(180px) 날아가며 닿는 적을 전부 벤다 (x11)
-          id: 'wave', name: 'WAVE', key: 'X', unlockLevel: 30,
+          id: 'wave', name: 'WAVE', key: 'Z', unlockLevel: 30,
           cooldown: 13,
           damageMult: 11,
           duration: 0.38,
@@ -257,7 +257,7 @@ const CONFIG = {
         {
           /* 검무 — 1초 동안 좌우로 몰아 베고(열 번, 마우스를 따라간다) 마지막에 크게 마무리 (0.9 x 10 + 7 = 16).
              베는 동안 천천히 걸을 수 있다 */
-          id: 'storm', name: 'STORM', key: 'C', unlockLevel: 40,
+          id: 'storm', name: 'STORM', key: 'X', unlockLevel: 40,
           cooldown: 18,
           damageMult: 0.9,
           arc: 1.2,
@@ -313,7 +313,7 @@ const CONFIG = {
         {
           /* 비수 — 부채꼴로 다섯 자루를 던진다. 비수는 급소만 노린다 (전부 치명타 2.2 x 1.8 = 4).
              처음 닿은 적에서 멈추고, 한 적은 한 번에 세 자루까지만 맞는다 (최대 12) */
-          id: 'knives', name: 'KNIVES', key: 'X', unlockLevel: 30,
+          id: 'knives', name: 'KNIVES', key: 'Z', unlockLevel: 30,
           cooldown: 12,
           damageMult: 2.2,
           forceCrit: true,
@@ -327,7 +327,7 @@ const CONFIG = {
         {
           /* 사신 — 둘레 120 안의 적에게 차례로 순간 이동하며 일곱 번 벤다. 전부 급소, 그동안 무적.
              한 적은 세 번까지 (보스 하나면 2.8 x 1.8 x 3 + 마지막 일격 x1.4 = 약 17), 끝나면 매복 */
-          id: 'reaper', name: 'REAPER', key: 'C', unlockLevel: 40,
+          id: 'reaper', name: 'REAPER', key: 'X', unlockLevel: 40,
           cooldown: 18,
           damageMult: 2.8,
           forceCrit: true,
@@ -374,7 +374,7 @@ const CONFIG = {
         {
           /* 대지 가르기 — 들어올렸다 내리찍으면 겨눈 쪽으로 땅이 150px 갈라지며 솟는다.
              찍은 자리 둘레(반경 30)는 x5, 갈라진 금 위의 적은 x10 을 맞고 1.6초 기절 (찍은 자리 앞이면 둘 다 — 15) */
-          id: 'rift', name: 'RIFT', key: 'X', unlockLevel: 30,
+          id: 'rift', name: 'RIFT', key: 'Z', unlockLevel: 30,
           cooldown: 14,
           damageMult: 10,
           windup: 0.3,
@@ -391,7 +391,7 @@ const CONFIG = {
         {
           /* 거인의 일격 — 마우스 쪽(최대 120px)으로 뛰어올라 내리찍는다. 공중에선 무적,
              착지하면 반경 64 안 전부 x20, 2초 기절, 크게 날린다 */
-          id: 'titan', name: 'TITAN', key: 'C', unlockLevel: 40,
+          id: 'titan', name: 'TITAN', key: 'X', unlockLevel: 40,
           cooldown: 22,
           damageMult: 20,
           leap: 120,
