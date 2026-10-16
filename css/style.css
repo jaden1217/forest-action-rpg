@@ -23,9 +23,9 @@ html, body {
   box-shadow: 0 12px 40px rgba(0, 0, 0, .6);
 }
 
-/* 크기는 Game.fitScreen 이 정한다 — 창에 들어가는 **가장 큰 정수 배율**을 기기 픽셀 기준으로 고른다.
-   예전처럼 max-width 로 줄이면 2.6배 같은 비정수 배율이 되어 도트가 들쭉날쭉해지고,
-   가로·세로가 따로 줄면 도트가 직사각형이 된다 (pixel-art 지침의 CRITICAL 항목) */
+/* 크기는 Game.fitScreen 이 정한다 — 한 도트 3px(1152x648)을 채우고 창이 작으면 비율을 지켜 줄인다.
+   비정수 배율은 한 단계 큰 정수배로 그린 것을 부드럽게 줄여서(sharp bilinear) 도트 크기를 고르게 한다.
+   예전처럼 max-width·max-height 로 따로 줄이면 가로·세로 비율이 어긋나 도트가 직사각형이 된다 */
 #game, #ui {
   display: block;
   width: 1152px;   /* 384 * 3 — 스크립트가 덮어쓰기 전 기본값 */

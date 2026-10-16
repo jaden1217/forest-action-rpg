@@ -86,15 +86,19 @@ const UI = {
     this.fx.setTransform(this.FINE, 0, 0, this.FINE, 0, 0);
   },
 
-  /* 화면 배율이 정해지면 고운 레이어의 해상도를 **기기 픽셀과 1:1** 로 맞춘다.
-     그래야 글자도 늘어나지 않고 원본 픽셀로 찍힌다. 글자 배율은 한 칸이 게임 4단위를
-     넘지 않는 정수로 고른다 (넘으면 창 안의 글자가 밖으로 삐져나온다). 3배면 예전과 똑같다. */
-  resizeLayer(scale) {
-    const s = Math.max(2, scale);
+  /* 화면 배율(한 도트 = 기기 픽셀 k 개)이 정해지면 고운 레이어의 해상도를 고른다.
+     글자는 **늘 같은 크기**(한 칸 = 게임 4단위, 글자 배율 = FINE x 2/3)여야 창 안에 꼭 맞으므로
+     FINE 은 3의 배수로 — k 보다 작지 않은 가장 작은 것. 3배·6배 화면이면 기기 픽셀과 1:1 로 딱 맞고,
+     그 사이(125% 화면의 3.75배 등)는 한 단계 크게 그린 것을 브라우저가 부드럽게 줄인다
+     (세상 그림과 같은 방법 — Game.fitScreen 참고). 잠깐 글자 배율을 줄여 맞춘 적이 있는데,
+     그러면 작은 창에서 글자가 4분의 3 크기로 작아졌다. */
+  resizeLayer(k) {
+    const s = 3 * Math.max(1, Math.ceil(k / 3 - 1e-6));
     this.FINE = s;
-    this.TEXT_SCALE = Math.max(1, Math.floor(s * 4 / 6));
+    this.TEXT_SCALE = s * 2 / 3;
     this.layer.width = CONFIG.VIEW_W * s;
     this.layer.height = CONFIG.VIEW_H * s;
+    this.layer.style.imageRendering = s === k ? '' : 'auto';
     this.fx = this.layer.getContext('2d');
     this.fx.imageSmoothingEnabled = false;
     this.fx.setTransform(s, 0, 0, s, 0, 0);
@@ -411,8 +415,8 @@ const UI = {
     this.drawText(ctx, label, CONFIG.VIEW_W / 2, y - 9, boss.phase2 ? '#ff6b6b' : '#f0d9b5', true);
   },
 
-  /* 동굴 입구(또는 보스 방에서 나가는 굴) 앞에 섰을 때 뜨는 안내.
-     아직 다시 도전할 수 없으면 남은 시간을 분·초로 보여준다. */
+  /* 보스 방에서 나가는 굴 앞에 섰을 때 뜨는 안내 (들어가는 쪽은 drawCaveSign 이 이름판과 함께 그린다).
+     readyIn 이 있으면 남은 시간을 분·초로 보여준다. */
   drawCavePrompt(ctx, cave, cam, readyIn, verb) {
     if (!cave) return;
     const sx = Math.round(cave.x - cam.x), sy = Math.round(cave.y - cam.y);
@@ -425,6 +429,70 @@ const UI = {
     // 깜빡여서 눈에 띄게
     if (Math.floor(World.time * 3) % 2 === 0) return;
     this.drawText(ctx, 'F  ' + verb, sx, sy - 40, '#ff6b6b', true);
+  },
+
+  /* 보스 동굴 입구의 이름판 — 안에 누가 사는지, 몇 레벨인지, 이미 잡았는지.
+     입구에 다가가면(peekRange) 뜨고, 문 앞까지 오면(enterRange) 그 아래에 F 안내가 깜빡인다.
+     얼굴은 보스 그림 생성기(Creatures)로 작게 새로 그린 것이다 — 늘려 그리지 않는다.
+
+        ┌─────────────────────────┐
+        │ ┌──────┐ GIANT SLIME     │
+        │ │ 얼굴 │ LV 12  CLEARED  │
+        │ └──────┘                 │
+        └─────────────────────────┘
+                 F  ENTER                          */
+  drawCaveSign(ctx, cave, cam, spec, info) {
+    if (!cave || !spec) return;
+    const sx = Math.round(cave.x - cam.x), sy = Math.round(cave.y - cam.y);
+    const face = this.bossFace(spec);
+    const lv = 'LV ' + spec.level, tag = info.slain ? 'CLEARED' : '';
+    const textW = Math.max(this.textWidth(spec.name), this.textWidth(lv) + (tag ? 5 + this.textWidth(tag) : 0));
+    const BOX_W = 26, BOX_H = 20;
+    const w = Math.ceil(4 + BOX_W + 5 + textW + 5), h = BOX_H + 6;
+    // 입구 바로 위 — 화면 위쪽에 바짝 붙으면 날짜 시계 아래로 내려 붙인다 (마을 간판과 같은 규칙)
+    const x = Util.clamp(sx - Math.round(w / 2), 2, CONFIG.VIEW_W - w - 2);
+    const y = Math.max(CONFIG.village.signMinY, sy - 44 - h);
+
+    this.panel(ctx, x, y, w, h, '#ff6b6b');
+    // 얼굴 칸 — 굴 안처럼 어둡게, 보스는 바닥에 발을 딛고 선다
+    const bx = x + 3, by = y + 3;
+    ctx.fillStyle = '#070605';
+    ctx.fillRect(bx, by, BOX_W, BOX_H);
+    ctx.fillStyle = '#241c17';
+    ctx.fillRect(bx, by + BOX_H - 3, BOX_W, 3);   // 바닥
+    if (face) {
+      // 다시 도전할 수 없는 동안(굴이 비어 있는 동안)은 얼굴을 흐리게
+      if (info.readyIn > 0) ctx.globalAlpha = 0.35;
+      ctx.drawImage(face, bx + Math.round((BOX_W - face.width) / 2), by + BOX_H - 1 - face.height);
+      ctx.globalAlpha = 1;
+    }
+    const tx = bx + BOX_W + 5;
+    this.drawText(ctx, spec.name, tx, y + 6, '#f0d9b5');
+    this.drawText(ctx, lv, tx, y + 15, difficultyColor(spec.level, info.playerLevel || 1));
+    if (tag) this.drawText(ctx, tag, tx + this.textWidth(lv) + 5, y + 15, '#8fe0a8');
+
+    // 아래 안내 — 문 앞일 때만. 잡은 지 얼마 안 됐으면 돌아오기까지 남은 시간
+    if (!info.atDoor) return;
+    const ly = Math.max(y + h + 3, sy - 40);
+    if (info.readyIn > 0) {
+      const m = Math.floor(info.readyIn / 60), s = Math.ceil(info.readyIn % 60);
+      this.drawText(ctx, 'BACK IN ' + (m > 0 ? (m + 'M' + (s < 10 ? '0' : '') + s) : (s + 'S')), sx, ly, '#c8d0d8', true);
+      return;
+    }
+    if (Math.floor(World.time * 3) % 2 === 0) return;   // 깜빡여서 눈에 띄게
+    this.drawText(ctx, 'F  ENTER', sx, ly, '#ff6b6b', true);
+  },
+
+  /* 이름판에 넣을 보스 얼굴 — 실제 보스와 같은 생성기로 칸(26x20)에 맞는 크기로 그린다.
+     생성기가 크기별로 기억해 두므로 매 프레임 불러도 새로 그리지 않는다. */
+  bossFace(spec) {
+    switch (spec.type) {
+      case 'slime':    return Creatures.slime(15, 12, false, true);              // 왕관 쓴 거대 슬라임
+      case 'wolf':     return Creatures.wolf(22, 16, 0, 'walk', false, true);    // 우두머리 늑대
+      case 'mushroom': return Creatures.mushroom(15, 1, false, true);            // 늙은 버섯
+      case 'sandworm': return Creatures.worm(10, 16, false, true);               // 모래의 군주
+      default: return null;
+    }
   },
 
   /* 텔레포트 비석 안내 — 어디로 가는지와 그곳 몬스터 레벨대.

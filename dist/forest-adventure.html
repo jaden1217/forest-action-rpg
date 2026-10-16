@@ -30,9 +30,9 @@ html, body {
   box-shadow: 0 12px 40px rgba(0, 0, 0, .6);
 }
 
-/* 크기는 Game.fitScreen 이 정한다 — 창에 들어가는 **가장 큰 정수 배율**을 기기 픽셀 기준으로 고른다.
-   예전처럼 max-width 로 줄이면 2.6배 같은 비정수 배율이 되어 도트가 들쭉날쭉해지고,
-   가로·세로가 따로 줄면 도트가 직사각형이 된다 (pixel-art 지침의 CRITICAL 항목) */
+/* 크기는 Game.fitScreen 이 정한다 — 한 도트 3px(1152x648)을 채우고 창이 작으면 비율을 지켜 줄인다.
+   비정수 배율은 한 단계 큰 정수배로 그린 것을 부드럽게 줄여서(sharp bilinear) 도트 크기를 고르게 한다.
+   예전처럼 max-width·max-height 로 따로 줄이면 가로·세로 비율이 어긋나 도트가 직사각형이 된다 */
 #game, #ui {
   display: block;
   width: 1152px;   /* 384 * 3 — 스크립트가 덮어쓰기 전 기본값 */
@@ -154,7 +154,7 @@ html, body {
 }
 
 </style>
-<!-- built 2026-10-13 15:04 by tools/build.js -->
+<!-- built 2026-10-16 13:24 by tools/build.js -->
 </head>
 <body>
   <div id="stage">
@@ -1058,6 +1058,7 @@ const CONFIG = {
   arena: {
     w: 40, h: 17,
     enterRange: 26,         // 동굴 입구에서 이 거리 안이면 들어갈 수 있다
+    peekRange: 64,          // 이 거리 안이면 입구 위에 안에 사는 보스의 이름판이 뜬다 (들어가기 전에 보고 고르도록)
     respawnDelay: 300,      // 잡은 뒤 다시 도전할 수 있게 되기까지 (초) — 5분
   },
 
@@ -4627,16 +4628,17 @@ function buildSprites() {
 const Input = {
   down: {},
   pressed: {},
-  // 마우스 위치는 캔버스 내부 좌표(384x216) 기준으로 들고 있는다.
-  // 화면에서는 3배로 확대돼 있으므로 실제 픽셀 크기로 환산해서 넣는다.
+  // 마우스 위치는 게임 좌표(384x216) 기준으로 들고 있는다.
+  // 화면에서는 몇 배로 확대돼 있으므로 화면에서 차지하는 크기로 나눠 환산한다
+  // (화면 캔버스의 해상도는 배율에 따라 바뀌므로 canvas.width 가 아니라 VIEW_W 로 잰다).
   mouse: { x: CONFIG.VIEW_W / 2, y: CONFIG.VIEW_H / 2, used: false },
 
   init(canvas) {
     canvas.addEventListener('mousemove', (e) => {
       const r = canvas.getBoundingClientRect();
       if (r.width === 0 || r.height === 0) return;
-      Input.mouse.x = (e.clientX - r.left) / r.width * canvas.width;
-      Input.mouse.y = (e.clientY - r.top) / r.height * canvas.height;
+      Input.mouse.x = (e.clientX - r.left) / r.width * CONFIG.VIEW_W;
+      Input.mouse.y = (e.clientY - r.top) / r.height * CONFIG.VIEW_H;
       Input.mouse.used = true;   // 마우스를 한 번이라도 쓰면 그때부터 마우스로 겨눈다
     });
     window.addEventListener('keydown', (e) => {
@@ -5923,21 +5925,65 @@ const World = {
     const base = rng() * Math.PI * 2;
     this.spec.caves.forEach((spec, index) => {
       const want = base + index * (Math.PI * 2 / 3);
+      let best = null, bestErr = Infinity;
+      // 한 자리를 재 본다 — 빈자리면 바로 연다. 나무에 막혔어도 땅(물·맵 끝)이 괜찮으면 후보로 기억해 둔다
+      const tryAt = (x, y, apart) => {
+        const err = Math.abs(this.dangerAt(x, y) - spec.t);
+        if (err > 0.06) return false;
+        if (apart && this.caves.some(c => c && Util.dist(c.x, c.y, x, y) < 320)) return false;
+        if (this.isFreeSpot(x, y, 22)) { this.addCave(x, y, index); return true; }
+        if (err < bestErr && this.groundFree(x, y, 22)) { best = { x, y }; bestErr = err; }
+        return false;
+      };
+      // 1. 원하는 방향 ±30도, 원하는 고리 ±0.05 안에서
       for (let i = 0; i < 3000; i++) {
-        // 원하는 방향 ±30도, 원하는 고리 ±0.05 안에서 빈자리를 찾는다
         const a = want + (rng() - 0.5) * (Math.PI / 3);
         const tt = spec.t + (rng() - 0.5) * 0.1;
         const x = Util.clamp(this.startX + Math.cos(a) * tt * this.w / 2, 40, this.w - 40);
         const y = Util.clamp(this.startY + Math.sin(a) * tt * this.h / 2, 50, this.h - 40);
-        if (Math.abs(this.dangerAt(x, y) - spec.t) > 0.06) continue;
-        if (!this.isFreeSpot(x, y, 22)) continue;
-        const p = this.addProp(Util.choice(SPRITES.caveEntrance), x, y, { solid: [12, 6, 9], footHeight: 3 });
-        p.landmark = true;
-        p.caveIndex = index;
-        this.caves[index] = p;   // 이 보스 방의 입구
-        break;
+        if (tryAt(x, y, false)) return;
+      }
+      /* 여기까지 왔으면 그 방향 고리에 빈자리가 하나도 없다 — 예전엔 동굴이 그냥 안 생겨서 그 보스를
+         영영 만날 수 없었다 (시드 11762: 늙은 버섯 쪽 고리가 통째로 호수였다).
+         2. 방향을 가리지 않고 같은 고리에서 찾는다 (다른 동굴과는 떨어뜨려)
+         3. 그래도 없으면 가장 잘 맞는 자리의 나무·소품을 걷어내고 연다
+         1에서 찾은 맵은 예전과 똑같다 — 2·3은 난수를 그 뒤에 쓴다 */
+      for (let i = 0; i < 4000; i++) {
+        if (tryAt(40 + rng() * (this.w - 80), 50 + rng() * (this.h - 90), true)) return;
+      }
+      if (best) {
+        this.clearAround(best.x, best.y, 30);
+        this.addCave(best.x, best.y, index);
       }
     });
+  },
+
+  addCave(x, y, index) {
+    const p = this.addProp(Util.choice(SPRITES.caveEntrance), x, y, { solid: [12, 6, 9], footHeight: 3 });
+    p.landmark = true;
+    p.caveIndex = index;
+    this.caves[index] = p;   // 이 보스 방의 입구
+    return p;
+  },
+
+  // 땅만 본다 — 물·맵 끝만 아니면 된다 (나무·바위는 걷어낼 수 있다)
+  groundFree(x, y, r) {
+    const grid = this.grid;
+    this.grid = null;               // 격자가 없으면 blocked 는 지형만 본다
+    const ok = this.isFreeSpot(x, y, r);
+    this.grid = grid;
+    return ok;
+  },
+
+  /* 둘레 r 안의 나무·소품을 걷어낸다 — 부딪히는 상자도 함께 (발 자리를 품은 상자가 그것의 몸이다).
+     동굴 자리를 억지로 낼 때만 쓴다 */
+  clearAround(x, y, r) {
+    const gone = this.props.filter(p => !p.landmark && Util.dist(p.x, p.y, x, y) <= r);
+    if (!gone.length) return;
+    const set = new Set(gone);
+    this.props = this.props.filter(p => !set.has(p));
+    this.solids = this.solids.filter(s => !gone.some(p => p.x >= s.x && p.x <= s.x + s.w && p.y >= s.y && p.y <= s.y + s.h));
+    this.buildGrid();
   },
 
   /* 설원 소품 — 서리 덤불, 눈 덮인 바위, 얼음 조각.
@@ -14247,15 +14293,19 @@ const UI = {
     this.fx.setTransform(this.FINE, 0, 0, this.FINE, 0, 0);
   },
 
-  /* 화면 배율이 정해지면 고운 레이어의 해상도를 **기기 픽셀과 1:1** 로 맞춘다.
-     그래야 글자도 늘어나지 않고 원본 픽셀로 찍힌다. 글자 배율은 한 칸이 게임 4단위를
-     넘지 않는 정수로 고른다 (넘으면 창 안의 글자가 밖으로 삐져나온다). 3배면 예전과 똑같다. */
-  resizeLayer(scale) {
-    const s = Math.max(2, scale);
+  /* 화면 배율(한 도트 = 기기 픽셀 k 개)이 정해지면 고운 레이어의 해상도를 고른다.
+     글자는 **늘 같은 크기**(한 칸 = 게임 4단위, 글자 배율 = FINE x 2/3)여야 창 안에 꼭 맞으므로
+     FINE 은 3의 배수로 — k 보다 작지 않은 가장 작은 것. 3배·6배 화면이면 기기 픽셀과 1:1 로 딱 맞고,
+     그 사이(125% 화면의 3.75배 등)는 한 단계 크게 그린 것을 브라우저가 부드럽게 줄인다
+     (세상 그림과 같은 방법 — Game.fitScreen 참고). 잠깐 글자 배율을 줄여 맞춘 적이 있는데,
+     그러면 작은 창에서 글자가 4분의 3 크기로 작아졌다. */
+  resizeLayer(k) {
+    const s = 3 * Math.max(1, Math.ceil(k / 3 - 1e-6));
     this.FINE = s;
-    this.TEXT_SCALE = Math.max(1, Math.floor(s * 4 / 6));
+    this.TEXT_SCALE = s * 2 / 3;
     this.layer.width = CONFIG.VIEW_W * s;
     this.layer.height = CONFIG.VIEW_H * s;
+    this.layer.style.imageRendering = s === k ? '' : 'auto';
     this.fx = this.layer.getContext('2d');
     this.fx.imageSmoothingEnabled = false;
     this.fx.setTransform(s, 0, 0, s, 0, 0);
@@ -14572,8 +14622,8 @@ const UI = {
     this.drawText(ctx, label, CONFIG.VIEW_W / 2, y - 9, boss.phase2 ? '#ff6b6b' : '#f0d9b5', true);
   },
 
-  /* 동굴 입구(또는 보스 방에서 나가는 굴) 앞에 섰을 때 뜨는 안내.
-     아직 다시 도전할 수 없으면 남은 시간을 분·초로 보여준다. */
+  /* 보스 방에서 나가는 굴 앞에 섰을 때 뜨는 안내 (들어가는 쪽은 drawCaveSign 이 이름판과 함께 그린다).
+     readyIn 이 있으면 남은 시간을 분·초로 보여준다. */
   drawCavePrompt(ctx, cave, cam, readyIn, verb) {
     if (!cave) return;
     const sx = Math.round(cave.x - cam.x), sy = Math.round(cave.y - cam.y);
@@ -14586,6 +14636,70 @@ const UI = {
     // 깜빡여서 눈에 띄게
     if (Math.floor(World.time * 3) % 2 === 0) return;
     this.drawText(ctx, 'F  ' + verb, sx, sy - 40, '#ff6b6b', true);
+  },
+
+  /* 보스 동굴 입구의 이름판 — 안에 누가 사는지, 몇 레벨인지, 이미 잡았는지.
+     입구에 다가가면(peekRange) 뜨고, 문 앞까지 오면(enterRange) 그 아래에 F 안내가 깜빡인다.
+     얼굴은 보스 그림 생성기(Creatures)로 작게 새로 그린 것이다 — 늘려 그리지 않는다.
+
+        ┌─────────────────────────┐
+        │ ┌──────┐ GIANT SLIME     │
+        │ │ 얼굴 │ LV 12  CLEARED  │
+        │ └──────┘                 │
+        └─────────────────────────┘
+                 F  ENTER                          */
+  drawCaveSign(ctx, cave, cam, spec, info) {
+    if (!cave || !spec) return;
+    const sx = Math.round(cave.x - cam.x), sy = Math.round(cave.y - cam.y);
+    const face = this.bossFace(spec);
+    const lv = 'LV ' + spec.level, tag = info.slain ? 'CLEARED' : '';
+    const textW = Math.max(this.textWidth(spec.name), this.textWidth(lv) + (tag ? 5 + this.textWidth(tag) : 0));
+    const BOX_W = 26, BOX_H = 20;
+    const w = Math.ceil(4 + BOX_W + 5 + textW + 5), h = BOX_H + 6;
+    // 입구 바로 위 — 화면 위쪽에 바짝 붙으면 날짜 시계 아래로 내려 붙인다 (마을 간판과 같은 규칙)
+    const x = Util.clamp(sx - Math.round(w / 2), 2, CONFIG.VIEW_W - w - 2);
+    const y = Math.max(CONFIG.village.signMinY, sy - 44 - h);
+
+    this.panel(ctx, x, y, w, h, '#ff6b6b');
+    // 얼굴 칸 — 굴 안처럼 어둡게, 보스는 바닥에 발을 딛고 선다
+    const bx = x + 3, by = y + 3;
+    ctx.fillStyle = '#070605';
+    ctx.fillRect(bx, by, BOX_W, BOX_H);
+    ctx.fillStyle = '#241c17';
+    ctx.fillRect(bx, by + BOX_H - 3, BOX_W, 3);   // 바닥
+    if (face) {
+      // 다시 도전할 수 없는 동안(굴이 비어 있는 동안)은 얼굴을 흐리게
+      if (info.readyIn > 0) ctx.globalAlpha = 0.35;
+      ctx.drawImage(face, bx + Math.round((BOX_W - face.width) / 2), by + BOX_H - 1 - face.height);
+      ctx.globalAlpha = 1;
+    }
+    const tx = bx + BOX_W + 5;
+    this.drawText(ctx, spec.name, tx, y + 6, '#f0d9b5');
+    this.drawText(ctx, lv, tx, y + 15, difficultyColor(spec.level, info.playerLevel || 1));
+    if (tag) this.drawText(ctx, tag, tx + this.textWidth(lv) + 5, y + 15, '#8fe0a8');
+
+    // 아래 안내 — 문 앞일 때만. 잡은 지 얼마 안 됐으면 돌아오기까지 남은 시간
+    if (!info.atDoor) return;
+    const ly = Math.max(y + h + 3, sy - 40);
+    if (info.readyIn > 0) {
+      const m = Math.floor(info.readyIn / 60), s = Math.ceil(info.readyIn % 60);
+      this.drawText(ctx, 'BACK IN ' + (m > 0 ? (m + 'M' + (s < 10 ? '0' : '') + s) : (s + 'S')), sx, ly, '#c8d0d8', true);
+      return;
+    }
+    if (Math.floor(World.time * 3) % 2 === 0) return;   // 깜빡여서 눈에 띄게
+    this.drawText(ctx, 'F  ENTER', sx, ly, '#ff6b6b', true);
+  },
+
+  /* 이름판에 넣을 보스 얼굴 — 실제 보스와 같은 생성기로 칸(26x20)에 맞는 크기로 그린다.
+     생성기가 크기별로 기억해 두므로 매 프레임 불러도 새로 그리지 않는다. */
+  bossFace(spec) {
+    switch (spec.type) {
+      case 'slime':    return Creatures.slime(15, 12, false, true);              // 왕관 쓴 거대 슬라임
+      case 'wolf':     return Creatures.wolf(22, 16, 0, 'walk', false, true);    // 우두머리 늑대
+      case 'mushroom': return Creatures.mushroom(15, 1, false, true);            // 늙은 버섯
+      case 'sandworm': return Creatures.worm(10, 16, false, true);               // 모래의 군주
+      default: return null;
+    }
   },
 
   /* 텔레포트 비석 안내 — 어디로 가는지와 그곳 몬스터 레벨대.
@@ -14728,6 +14842,17 @@ const UI = {
    새 작업을 올릴 때 PATCH_NOTES 맨 앞에 한 항목을 추가하면 된다. */
 
 const PATCH_NOTES = [
+  {
+    date: '2026-10-20',
+    notes: [
+      '보스 동굴에 다가가면 입구 위에 이름판이 뜬다 — 보스 얼굴·이름·레벨, 이미 잡았으면 CLEARED',
+      '레벨 색은 몬스터 이름표와 같다. 내 레벨보다 높을수록 붉다',
+      '잡은 지 얼마 안 된 굴은 얼굴이 흐려지고 돌아오기까지 남은 시간이 뜬다',
+      '화면이 예전보다 작게 보이던 문제를 고쳤다 — 윈도 125%·150% 화면에서도 예전 크기 그대로',
+      '배율이 정수가 아닐 때도 도트 크기가 고르게 (한 단계 크게 그린 뒤 부드럽게 줄인다)',
+      '맵에 따라 가장자리 동굴(늙은 버섯)이 아예 안 생기던 문제를 고쳤다',
+    ],
+  },
   {
     date: '2026-10-19',
     notes: [
@@ -15051,6 +15176,7 @@ const Game = {
   boss: null,        // 살아있는 보스
   bossReadyIn: {},   // 맵마다 동굴마다 다시 도전할 수 있게 되기까지 남은 시간 { forest:[...], desert:[...] }
   cavePrompt: null,  // 앞에 서 있는 동굴 입구 (입장 안내가 뜬다) — 없으면 null
+  cavePeek: null,    // 가까이 다가간 동굴 입구 — 입구 위에 안에 사는 보스의 이름판이 뜬다
   arenaCave: 0,      // 지금 들어가 있는 보스 방이 몇 번째 동굴 것인가 (CONFIG.maps.forest.caves 순서)
   exitPrompt: false, // 보스 방에서 나가는 굴 앞에 서 있는가
   inArena: false,    // 지금 보스 방 안인가
@@ -15064,7 +15190,10 @@ const Game = {
   heartbeat: 0,      // 체력이 낮을 때 심장 소리 간격
 
   init() {
-    this.canvas = document.getElementById('game');
+    // 세상은 보이지 않는 384x216 캔버스에 원본 해상도로 그리고, 매 프레임 화면 캔버스로 옮겨 찍는다 (present)
+    this.screen = document.getElementById('game');
+    this.screenCtx = this.screen.getContext('2d');
+    this.canvas = makeCanvas(CONFIG.VIEW_W, CONFIG.VIEW_H);
     this.ctx = this.canvas.getContext('2d');
     this.ctx.imageSmoothingEnabled = false;
     UI.initLayer(document.getElementById('ui'));   // 글자·창을 그릴 고운 레이어
@@ -15072,7 +15201,7 @@ const Game = {
     window.addEventListener('resize', () => this.fitScreen());
 
     buildSprites();
-    Input.init(this.canvas);
+    Input.init(this.screen);
     Sound.init();
     PatchNotes.init();
 
@@ -15088,25 +15217,43 @@ const Game = {
     requestAnimationFrame(this.frame.bind(this));
   },
 
-  /* 화면 크기 — **정수 배율만** 쓴다 (pixel-art 지침: 비정수 배율은 도트를 망가뜨린다).
-     기기 픽셀(devicePixelRatio)로 계산해야 윈도 125% 배율에서도 한 도트가 정확히 N 픽셀이 된다.
-     예전엔 CSS 로 1152px 을 두고 창이 작으면 줄였는데, 125% 화면에서는 한 도트가 3.75픽셀이 되어
-     줄마다 굵기가 달랐다. */
+  /* 화면 크기 — 예전과 같은 크기(한 도트 = 3 CSS px, 1152x648)를 채우고, 창이 작으면 줄인다.
+
+     잠깐 '기기 픽셀 기준 정수 배율만' 썼더니, 윈도 125%·150% 화면에서는 3.75배 대신 3배로 떨어져
+     화면이 20% 작아졌다. 그래서 크기는 예전대로 두고 **그리는 방법**을 바꾼다 (sharp bilinear):
+       1. 원본(384x216)을 그 크기보다 큰 가장 작은 정수배로 먼저 키운다 — 도트가 정확한 정사각형 (present)
+       2. 남은 비정수 몫(예: 4배 → 3.75배)만 브라우저가 부드럽게 줄인다
+     그대로 비정수로 늘리면 줄마다 3칸·4칸이 섞여 들쭉날쭉하지만, 이렇게 하면 도트 크기는 고르고
+     도트 경계에만 한 픽셀 정도가 섞인다. 배율이 정수에 가까우면(5% 이내) 정수로 맞춰 완전히 또렷하게 그린다. */
   fitScreen() {
     const dpr = window.devicePixelRatio || 1;
-    // 아래 조작 안내·저장 문구가 실제로 차지하는 높이만큼만 비운다 (어림값으로 비우면 한 배율을 손해 본다)
+    // 아래 조작 안내·저장 문구가 실제로 차지하는 높이만큼 비운다
     const below = ['controls', 'savenote'].reduce((s, id) => { const e = document.getElementById(id); return s + (e ? e.offsetHeight + 14 : 0); }, 0);
-    const availW = Math.max(1, (window.innerWidth - 24) * dpr), availH = Math.max(1, (window.innerHeight - below - 16) * dpr);
-    const s = Math.max(1, Math.floor(Math.min(availW / CONFIG.VIEW_W, availH / CONFIG.VIEW_H)));
-    if (s === this.screenScale) return;
-    this.screenScale = s;
-    const cssW = CONFIG.VIEW_W * s / dpr, cssH = CONFIG.VIEW_H * s / dpr;
-    for (const id of ['game', 'ui']) {
-      const c = document.getElementById(id);
-      c.style.width = cssW + 'px';
-      c.style.height = cssH + 'px';
-    }
-    UI.resizeLayer(s);
+    const css = Math.min(3, (window.innerWidth - 24) / CONFIG.VIEW_W, (window.innerHeight - below - 16) / CONFIG.VIEW_H);
+    let k = Math.max(1, css * dpr);                    // 한 도트가 기기 픽셀 몇 개인가
+    if (Math.floor(k) / k >= 0.95) k = Math.floor(k);
+    // 384x216 = 24 x (16x9) — 24분의 1 단위로 끊으면 가로·세로가 둘 다 정수 픽셀이 된다
+    const n = Math.max(24, Math.floor(k * 24 + 1e-6));
+    const key = n + '@' + dpr;
+    if (key === this.screenKey) return;
+    this.screenKey = key;
+    k = n / 24;
+    this.screenPre = Math.ceil(k - 1e-6);              // 1단계 — 정수배
+    this.screen.width = CONFIG.VIEW_W * this.screenPre;
+    this.screen.height = CONFIG.VIEW_H * this.screenPre;
+    // 2단계 — 남은 몫은 CSS 가 줄인다. 정수배면 줄일 것이 없으니 도트 그대로(pixelated)
+    this.screen.style.imageRendering = this.screenPre === k ? '' : 'auto';
+    const cssW = (CONFIG.VIEW_W * k / dpr) + 'px', cssH = (CONFIG.VIEW_H * k / dpr) + 'px';
+    for (const c of [this.screen, UI.layer]) { c.style.width = cssW; c.style.height = cssH; }
+    UI.resizeLayer(k);
+  },
+
+  // 원본 그림을 화면 캔버스에 정수배로 옮겨 찍는다 (fitScreen 의 1단계)
+  present() {
+    const c = this.screenCtx, p = this.screenPre || 1;
+    c.imageSmoothingEnabled = false;
+    c.clearRect(0, 0, this.screen.width, this.screen.height);
+    c.drawImage(this.canvas, 0, 0, CONFIG.VIEW_W * p, CONFIG.VIEW_H * p);
   },
 
   // saved 가 있으면 그 시드로 같은 맵을 되살리고 진행 상황을 얹는다
@@ -15149,6 +15296,7 @@ const Game = {
     this.bossReadyIn = {};
     for (const id in CONFIG.maps) this.bossReadyIn[id] = CONFIG.maps[id].caves.map(() => 0);
     this.cavePrompt = null;
+    this.cavePeek = null;
     this.exitPrompt = false;
     this.inArena = false;
     this.overworld = null;
@@ -15256,6 +15404,7 @@ const Game = {
       for (let i = 0; i < list.length; i++) list[i] = Math.max(0, list[i] - dt);
     }
     this.cavePrompt = null;
+    this.cavePeek = null;
     this.exitPrompt = false;
     this.shopPrompt = false;
     this.portalPrompt = false;
@@ -15423,11 +15572,14 @@ const Game = {
   },
 
   updateCaveGate() {
-    if (this.player.dead || Items.nearWeapon) return;   // 무기 교체가 먼저다
+    if (this.player.dead) return;
     for (let index = 0; index < World.caves.length; index++) {
       const cave = World.caves[index];
       if (!cave) continue;
-      if (Util.dist(this.player.x, this.player.y, cave.x, cave.y) > CONFIG.arena.enterRange) continue;
+      const d = Util.dist(this.player.x, this.player.y, cave.x, cave.y);
+      if (d > CONFIG.arena.peekRange) continue;
+      this.cavePeek = cave;   // 이름판은 입구에 닿기 전부터 보인다 — 누가 사는지 보고 들어갈지 정한다
+      if (d > CONFIG.arena.enterRange || Items.nearWeapon) return;   // 무기 교체가 먼저다
 
       this.cavePrompt = cave;
       if (this.readyIn(index) > 0) return;   // 잡은 지 얼마 안 됐으면 아직 비어 있다
@@ -15857,7 +16009,15 @@ const Game = {
     UI.draw(ui, this.player, this.showInventory);
     if (this.showMap) Minimap.drawFull(ui, this.player, this.enemies);
     if (this.boss && !this.boss.dead && !this.showMap) UI.drawBossBar(ui, this.boss);
-    if (this.cavePrompt) UI.drawCavePrompt(ui, this.cavePrompt, cam, this.readyIn(this.cavePrompt.caveIndex), 'ENTER');
+    if (this.cavePeek && !this.showMap) {
+      const i = this.cavePeek.caveIndex, key = this.bossKey(i);
+      UI.drawCaveSign(ui, this.cavePeek, cam, this.bossSpec(i), {
+        slain: !!(key && this.bossSlain[key]),
+        readyIn: this.readyIn(i),
+        atDoor: this.cavePrompt === this.cavePeek,
+        playerLevel: this.player.level,
+      });
+    }
     if (this.exitPrompt) UI.drawCavePrompt(ui, World.arenaExit, cam, 0, 'LEAVE');
     if (this.shopPrompt && !this.showMap) Shop.drawPrompt(ui, cam);
     if (this.boardPrompt && !this.showMap) Quests.drawPrompt(ui, cam);
@@ -15895,6 +16055,7 @@ const Game = {
     if (this.title) UI.drawTitle(ui, this.hasSave);
     // 조준점은 무엇보다 위에 — 창이 열려 있어도 마우스 자리는 보여야 한다
     else UI.drawCrosshair(ui, this.player, cam, this.enemies);
+    this.present();
   },
 };
 

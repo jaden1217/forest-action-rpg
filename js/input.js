@@ -6,16 +6,17 @@
 const Input = {
   down: {},
   pressed: {},
-  // 마우스 위치는 캔버스 내부 좌표(384x216) 기준으로 들고 있는다.
-  // 화면에서는 3배로 확대돼 있으므로 실제 픽셀 크기로 환산해서 넣는다.
+  // 마우스 위치는 게임 좌표(384x216) 기준으로 들고 있는다.
+  // 화면에서는 몇 배로 확대돼 있으므로 화면에서 차지하는 크기로 나눠 환산한다
+  // (화면 캔버스의 해상도는 배율에 따라 바뀌므로 canvas.width 가 아니라 VIEW_W 로 잰다).
   mouse: { x: CONFIG.VIEW_W / 2, y: CONFIG.VIEW_H / 2, used: false },
 
   init(canvas) {
     canvas.addEventListener('mousemove', (e) => {
       const r = canvas.getBoundingClientRect();
       if (r.width === 0 || r.height === 0) return;
-      Input.mouse.x = (e.clientX - r.left) / r.width * canvas.width;
-      Input.mouse.y = (e.clientY - r.top) / r.height * canvas.height;
+      Input.mouse.x = (e.clientX - r.left) / r.width * CONFIG.VIEW_W;
+      Input.mouse.y = (e.clientY - r.top) / r.height * CONFIG.VIEW_H;
       Input.mouse.used = true;   // 마우스를 한 번이라도 쓰면 그때부터 마우스로 겨눈다
     });
     window.addEventListener('keydown', (e) => {

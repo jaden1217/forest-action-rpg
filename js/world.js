@@ -640,21 +640,65 @@ const World = {
     const base = rng() * Math.PI * 2;
     this.spec.caves.forEach((spec, index) => {
       const want = base + index * (Math.PI * 2 / 3);
+      let best = null, bestErr = Infinity;
+      // 한 자리를 재 본다 — 빈자리면 바로 연다. 나무에 막혔어도 땅(물·맵 끝)이 괜찮으면 후보로 기억해 둔다
+      const tryAt = (x, y, apart) => {
+        const err = Math.abs(this.dangerAt(x, y) - spec.t);
+        if (err > 0.06) return false;
+        if (apart && this.caves.some(c => c && Util.dist(c.x, c.y, x, y) < 320)) return false;
+        if (this.isFreeSpot(x, y, 22)) { this.addCave(x, y, index); return true; }
+        if (err < bestErr && this.groundFree(x, y, 22)) { best = { x, y }; bestErr = err; }
+        return false;
+      };
+      // 1. 원하는 방향 ±30도, 원하는 고리 ±0.05 안에서
       for (let i = 0; i < 3000; i++) {
-        // 원하는 방향 ±30도, 원하는 고리 ±0.05 안에서 빈자리를 찾는다
         const a = want + (rng() - 0.5) * (Math.PI / 3);
         const tt = spec.t + (rng() - 0.5) * 0.1;
         const x = Util.clamp(this.startX + Math.cos(a) * tt * this.w / 2, 40, this.w - 40);
         const y = Util.clamp(this.startY + Math.sin(a) * tt * this.h / 2, 50, this.h - 40);
-        if (Math.abs(this.dangerAt(x, y) - spec.t) > 0.06) continue;
-        if (!this.isFreeSpot(x, y, 22)) continue;
-        const p = this.addProp(Util.choice(SPRITES.caveEntrance), x, y, { solid: [12, 6, 9], footHeight: 3 });
-        p.landmark = true;
-        p.caveIndex = index;
-        this.caves[index] = p;   // 이 보스 방의 입구
-        break;
+        if (tryAt(x, y, false)) return;
+      }
+      /* 여기까지 왔으면 그 방향 고리에 빈자리가 하나도 없다 — 예전엔 동굴이 그냥 안 생겨서 그 보스를
+         영영 만날 수 없었다 (시드 11762: 늙은 버섯 쪽 고리가 통째로 호수였다).
+         2. 방향을 가리지 않고 같은 고리에서 찾는다 (다른 동굴과는 떨어뜨려)
+         3. 그래도 없으면 가장 잘 맞는 자리의 나무·소품을 걷어내고 연다
+         1에서 찾은 맵은 예전과 똑같다 — 2·3은 난수를 그 뒤에 쓴다 */
+      for (let i = 0; i < 4000; i++) {
+        if (tryAt(40 + rng() * (this.w - 80), 50 + rng() * (this.h - 90), true)) return;
+      }
+      if (best) {
+        this.clearAround(best.x, best.y, 30);
+        this.addCave(best.x, best.y, index);
       }
     });
+  },
+
+  addCave(x, y, index) {
+    const p = this.addProp(Util.choice(SPRITES.caveEntrance), x, y, { solid: [12, 6, 9], footHeight: 3 });
+    p.landmark = true;
+    p.caveIndex = index;
+    this.caves[index] = p;   // 이 보스 방의 입구
+    return p;
+  },
+
+  // 땅만 본다 — 물·맵 끝만 아니면 된다 (나무·바위는 걷어낼 수 있다)
+  groundFree(x, y, r) {
+    const grid = this.grid;
+    this.grid = null;               // 격자가 없으면 blocked 는 지형만 본다
+    const ok = this.isFreeSpot(x, y, r);
+    this.grid = grid;
+    return ok;
+  },
+
+  /* 둘레 r 안의 나무·소품을 걷어낸다 — 부딪히는 상자도 함께 (발 자리를 품은 상자가 그것의 몸이다).
+     동굴 자리를 억지로 낼 때만 쓴다 */
+  clearAround(x, y, r) {
+    const gone = this.props.filter(p => !p.landmark && Util.dist(p.x, p.y, x, y) <= r);
+    if (!gone.length) return;
+    const set = new Set(gone);
+    this.props = this.props.filter(p => !set.has(p));
+    this.solids = this.solids.filter(s => !gone.some(p => p.x >= s.x && p.x <= s.x + s.w && p.y >= s.y && p.y <= s.y + s.h));
+    this.buildGrid();
   },
 
   /* 설원 소품 — 서리 덤불, 눈 덮인 바위, 얼음 조각.
