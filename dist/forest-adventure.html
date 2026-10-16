@@ -154,7 +154,7 @@ html, body {
 }
 
 </style>
-<!-- built 2026-10-16 13:24 by tools/build.js -->
+<!-- built 2026-10-16 13:37 by tools/build.js -->
 </head>
 <body>
   <div id="stage">
@@ -14656,9 +14656,11 @@ const UI = {
     const textW = Math.max(this.textWidth(spec.name), this.textWidth(lv) + (tag ? 5 + this.textWidth(tag) : 0));
     const BOX_W = 26, BOX_H = 20;
     const w = Math.ceil(4 + BOX_W + 5 + textW + 5), h = BOX_H + 6;
-    // 입구 바로 위 — 화면 위쪽에 바짝 붙으면 날짜 시계 아래로 내려 붙인다 (마을 간판과 같은 규칙)
+    /* 입구 바로 위 — 화면 위쪽에 바짝 붙으면 날짜 시계 아래로 내려 붙인다 (마을 간판과 같은 규칙).
+       위쪽 가운데에 이름표(맵 이름·밤이 온다 등)가 떠 있으면 그 아래로 — 보스 방에서 나오면
+       늘 동굴 앞에 서서 맵 이름표를 보게 되는데, 둘이 겹쳐 둘 다 못 읽었다 */
     const x = Util.clamp(sx - Math.round(w / 2), 2, CONFIG.VIEW_W - w - 2);
-    const y = Math.max(CONFIG.village.signMinY, sy - 44 - h);
+    const y = Math.max(info.bannerUp ? 42 : CONFIG.village.signMinY, sy - 44 - h);
 
     this.panel(ctx, x, y, w, h, '#ff6b6b');
     // 얼굴 칸 — 굴 안처럼 어둡게, 보스는 바닥에 발을 딛고 선다
@@ -14848,6 +14850,7 @@ const PATCH_NOTES = [
       '보스 동굴에 다가가면 입구 위에 이름판이 뜬다 — 보스 얼굴·이름·레벨, 이미 잡았으면 CLEARED',
       '레벨 색은 몬스터 이름표와 같다. 내 레벨보다 높을수록 붉다',
       '잡은 지 얼마 안 된 굴은 얼굴이 흐려지고 돌아오기까지 남은 시간이 뜬다',
+      '보스 방에서 나오면 맵 이름표와 동굴 이름판이 겹치던 것 — 이름판이 이름표 아래로 비켜선다',
       '화면이 예전보다 작게 보이던 문제를 고쳤다 — 윈도 125%·150% 화면에서도 예전 크기 그대로',
       '배율이 정수가 아닐 때도 도트 크기가 고르게 (한 단계 크게 그린 뒤 부드럽게 줄인다)',
       '맵에 따라 가장자리 동굴(늙은 버섯)이 아예 안 생기던 문제를 고쳤다',
@@ -16016,6 +16019,7 @@ const Game = {
         readyIn: this.readyIn(i),
         atDoor: this.cavePrompt === this.cavePeek,
         playerLevel: this.player.level,
+        bannerUp: this.lairBanner > 0 || this.forestBanner > 0 || this.gateBanner > 0 || (typeof Events !== 'undefined' && Events.notice > 0),
       });
     }
     if (this.exitPrompt) UI.drawCavePrompt(ui, World.arenaExit, cam, 0, 'LEAVE');

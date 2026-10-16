@@ -449,9 +449,11 @@ const UI = {
     const textW = Math.max(this.textWidth(spec.name), this.textWidth(lv) + (tag ? 5 + this.textWidth(tag) : 0));
     const BOX_W = 26, BOX_H = 20;
     const w = Math.ceil(4 + BOX_W + 5 + textW + 5), h = BOX_H + 6;
-    // 입구 바로 위 — 화면 위쪽에 바짝 붙으면 날짜 시계 아래로 내려 붙인다 (마을 간판과 같은 규칙)
+    /* 입구 바로 위 — 화면 위쪽에 바짝 붙으면 날짜 시계 아래로 내려 붙인다 (마을 간판과 같은 규칙).
+       위쪽 가운데에 이름표(맵 이름·밤이 온다 등)가 떠 있으면 그 아래로 — 보스 방에서 나오면
+       늘 동굴 앞에 서서 맵 이름표를 보게 되는데, 둘이 겹쳐 둘 다 못 읽었다 */
     const x = Util.clamp(sx - Math.round(w / 2), 2, CONFIG.VIEW_W - w - 2);
-    const y = Math.max(CONFIG.village.signMinY, sy - 44 - h);
+    const y = Math.max(info.bannerUp ? 42 : CONFIG.village.signMinY, sy - 44 - h);
 
     this.panel(ctx, x, y, w, h, '#ff6b6b');
     // 얼굴 칸 — 굴 안처럼 어둡게, 보스는 바닥에 발을 딛고 선다

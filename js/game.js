@@ -862,6 +862,7 @@ const Game = {
         readyIn: this.readyIn(i),
         atDoor: this.cavePrompt === this.cavePeek,
         playerLevel: this.player.level,
+        bannerUp: this.lairBanner > 0 || this.forestBanner > 0 || this.gateBanner > 0 || (typeof Events !== 'undefined' && Events.notice > 0),
       });
     }
     if (this.exitPrompt) UI.drawCavePrompt(ui, World.arenaExit, cam, 0, 'LEAVE');
