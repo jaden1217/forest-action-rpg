@@ -54,9 +54,20 @@ const Save = {
     };
   },
 
+  /* 멀티플레이 — 로그인한 번호마다 저장 칸이 따로 있고, 서버에도 같은 것을 올려둔다.
+     서버에 저장이 있으면 그걸 믿는다 (다른 브라우저에서 이어서 해도 진행이 같다). */
+  useUser(user, serverSave) {
+    this.KEY = 'forest-rpg-save-u' + user;
+    if (serverSave && serverSave.version === this.VERSION) {
+      try { localStorage.setItem(this.KEY, JSON.stringify(serverSave)); } catch (err) { /* 무시 */ }
+    }
+  },
+
   write(game) {
     try {
-      localStorage.setItem(this.KEY, JSON.stringify(this.collect(game)));
+      const data = this.collect(game);
+      localStorage.setItem(this.KEY, JSON.stringify(data));
+      if (typeof Net !== 'undefined' && Net.active) Net.sendSave(data);
       return true;
     } catch (err) {
       // 시크릿 모드나 저장 공간 부족 — 게임 진행 자체는 막지 않는다
@@ -67,6 +78,7 @@ const Save = {
 
   clear() {
     try { localStorage.removeItem(this.KEY); } catch (err) { /* 무시 */ }
+    if (typeof Net !== 'undefined' && Net.active) Net.sendSave(null);
   },
 
   /* ── 읽기 ──────────────────────────────────────────────── */
@@ -78,6 +90,8 @@ const Save = {
       const data = JSON.parse(raw);
       if (!data || data.version !== this.VERSION) return null;
       if (typeof data.seed !== 'number' || !data.player) return null;
+      // 멀티플레이는 모두가 같은 세계를 쓴다 — 다른 세계(시드)에서 만든 저장은 이어갈 수 없다
+      if (typeof Net !== 'undefined' && Net.active && data.seed !== Net.seed) return null;
       return data;
     } catch (err) {
       console.warn('[save] 저장 파일을 읽지 못했습니다', err);

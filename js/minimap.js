@@ -161,6 +161,9 @@ const Minimap = {
       put(s.x, s.y, difficultyColor(s.level, player.level), 1);
     }
 
+    // 같이 하는 사람들은 하늘색 점
+    if (typeof MP !== 'undefined') MP.drawMinimapDots(put);
+
     // 플레이어는 흰 십자로 늘 그려서 점들 사이에서도 바로 찾을 수 있다 (깜빡이지 않는다)
     {
       const mx = Math.floor(player.x / T) - sx, my = Math.floor(player.y / T) - sy;

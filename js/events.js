@@ -130,6 +130,7 @@ const Events = {
   turnover(dt) {
     const cfg = CONFIG.events.night;
     if (World.isArena || this.nightFactor() < 0.35 || !Game.enemies) return;
+    if (typeof MP !== 'undefined' && MP.guest) return;   // 멀티플레이 손님은 몬스터를 건드리지 않는다
     this.turnTimer = (this.turnTimer || 0) - dt;
     if (this.turnTimer > 0) return;
     this.turnTimer = cfg.turnover;

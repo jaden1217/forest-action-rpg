@@ -104,7 +104,8 @@ const Game = {
 
   // saved 가 있으면 그 시드로 같은 맵을 되살리고 진행 상황을 얹는다
   startGame(saved) {
-    this.seed = (saved && saved.seed) || Math.floor(Math.random() * 100000);
+    // 멀티플레이는 모두가 같은 세계(서버가 정한 시드)에서 논다
+    this.seed = Net.active ? Net.seed : ((saved && saved.seed) || Math.floor(Math.random() * 100000));
     this.mapStates = {};
     Landmarks.deserialize(saved && saved.landmarks);   // 이미 연 상자는 열린 채로 다시 선다
     Fog.deserialize(saved && saved.fog);                // 밝혀둔 지도도 그대로
@@ -153,7 +154,9 @@ const Game = {
 
     this.enemies = [];
     this.respawnQueue = [];
-    for (let i = 0; i < CONFIG.spawn.maxAlive; i++) this.spawnEnemy();
+    if (!Net.active) for (let i = 0; i < CONFIG.spawn.maxAlive; i++) this.spawnEnemy();
+    // 시작 화면을 넘긴 뒤(새 게임 포함)에는 방에 들어간다. 처음 켤 때는 첫 키를 누르는 순간에 들어간다
+    if (Net.active && !this.title) MP.enterZone();
 
     this.updateCamera(true);
   },
@@ -211,7 +214,8 @@ const Game = {
       const x = Util.rand(30, World.w - 30);
       const y = Util.rand(60, World.h - 30);
       if (!World.isFreeSpot(x, y, 9)) continue;
-      if (Util.dist(x, y, this.player.x, this.player.y) < cs.minDistFromPlayer) continue;
+      if (Net.active ? MP.targets().some(t => Util.dist(x, y, t.x, t.y) < cs.minDistFromPlayer)
+        : Util.dist(x, y, this.player.x, this.player.y) < cs.minDistFromPlayer) continue;
       // 거점 안전구역 안에는 스폰하지 않는다 — 마을은 쉬는 곳이다
       if (typeof Village !== 'undefined' && Village.isSafe && Village.isSafe(x, y)) continue;
 
@@ -380,8 +384,8 @@ const Game = {
     const saved = this.mapStates[mapId];
     if (saved) {
       World.restore(saved.world);
-      this.enemies = saved.enemies;
-      this.respawnQueue = saved.respawnQueue;
+      this.enemies = Net.active ? [] : saved.enemies;
+      this.respawnQueue = Net.active ? [] : saved.respawnQueue;
       for (const d of saved.drops) Items.drops.push(d);
       delete this.mapStates[mapId];
     } else {
@@ -398,7 +402,8 @@ const Game = {
     p.x = portal.x; p.y = portal.y + 22;
     p.spawnX = p.x; p.spawnY = p.y;
     p.kx = p.ky = 0; p.invuln = 0.9; p.attackTimer = 0; p.activeSkill = null;
-    if (!saved) for (let i = 0; i < CONFIG.spawn.maxAlive; i++) this.spawnEnemy();
+    if (!saved && !Net.active) for (let i = 0; i < CONFIG.spawn.maxAlive; i++) this.spawnEnemy();
+    if (Net.active) MP.enterZone();
 
     this.forestBanner = 2.8;
     this.updateCamera(true);
@@ -515,9 +520,12 @@ const Game = {
     p.activeSkill = null;
 
     const spec = this.bossSpec(caveIndex);
-    const b = this.BOSS_TYPES[spec.type](World.bossX, World.bossY);
-    this.enemies.push(b);
-    this.boss = b;
+    // 멀티플레이는 같은 동굴에 들어온 사람끼리 한 방이다 — 보스는 먼저 들어온 방장이 만들고 나머지는 그걸 본다
+    if (!Net.active) {
+      const b = this.BOSS_TYPES[spec.type](World.bossX, World.bossY);
+      this.enemies.push(b);
+      this.boss = b;
+    }
     this.inArena = true;
     this.failTimer = 1.2;
     this.forestBanner = 0;
@@ -525,8 +533,9 @@ const Game = {
     this.updateCamera(true);
     FX.addShake(6);
     Sound.play('caveIn');
-    const pal = b.palette;
-    FX.burst(b.x, b.y + 8, 40, [pal.M, pal.n, '#12100e'], { speed: 110, life: 0.8 });
+    const pal = ENEMY_COLORS[spec.type] || ENEMY_COLORS.slime;
+    FX.burst(World.bossX, World.bossY + 8, 40, [pal.M, pal.n, '#12100e'], { speed: 110, life: 0.8 });
+    if (Net.active) MP.enterZone();
   },
 
   // 동굴 밖으로 — 접어뒀던 겉맵을 그대로 펼치고 동굴 입구 앞에 세운다
@@ -538,8 +547,8 @@ const Game = {
 
     World.restore(o.world);
     if (typeof Village !== 'undefined' && Village.syncZone) Village.syncZone();
-    this.enemies = o.enemies;
-    this.respawnQueue = o.respawnQueue;
+    this.enemies = Net.active ? [] : o.enemies;
+    this.respawnQueue = Net.active ? [] : o.respawnQueue;
     Projectiles.reset();
     PlayerShots.reset();
     FX.reset();
@@ -567,37 +576,59 @@ const Game = {
     this.overworld = null;
     this.lairBanner = 0;
     this.forestBanner = 2.4;   // 숲으로 돌아왔다
+    if (Net.active) MP.enterZone();
     this.updateCamera(true);
     Sound.play('caveOut');
   },
 
+  /* 보스를 잡았을 때 내 쪽에서 할 일 — 다시 도전할 수 있을 때까지의 시간, 그리고 처음 잡은 보스라면 다음 무대의 열쇠.
+     멀티플레이에서는 방 안의 모두가 각자 이걸 받는다 (MP.applyKill). */
+  onBossSlain() {
+    // 보스는 일반 몬스터 정원과 무관하다. 한참 뒤에 다시 도전할 수 있다
+    const list = this.bossReadyIn[World.mapId];
+    if (list) list[this.arenaCave] = CONFIG.arena.respawnDelay;
+    /* 처음 잡은 보스라면 — 이게 다음 무대를 여는 열쇠다.
+       **보스 설정의 id** 로 적는다 (종류 이름이 아니라) — 모래의 군주는 종류가 'sandworm' 이라
+       종류로 적으면 평범한 모래벌레와 구별되지 않고 관문 열쇠가 안 맞는다.
+       앞선 보스 셋은 id 와 종류가 같아서 옛 저장도 그대로 열린다. */
+    const type = this.bossKey(this.arenaCave);
+    if (type && !this.bossSlain[type]) {
+      this.bossSlain[type] = true;
+      if (this.portalUnlocked()) this.gateBanner = 3.2;
+      // 대장장이 이사 조건 — 보스 하나면 마을로 온다
+      if (typeof Village !== 'undefined') Village.checkMoveIns(false);
+    }
+  },
+
   updateEnemies(dt) {
-    for (const e of this.enemies) e.update(dt, this.player);
+    // 멀티플레이 손님은 몬스터를 계산하지 않는다 — 방장이 보낸 모습을 따라갈 뿐이다 (MP.ghostStep)
+    if (MP.guest) return;
+    const multi = Net.active && MP.remotes.size > 0;
+    for (const e of this.enemies) {
+      if (!multi) { e.update(dt, this.player); continue; }
+      // 여럿이 있으면 몬스터마다 가장 가까운 사람을 쫓는다. 몬스터 코드는 Game.player 를 직접 읽기도 하므로 그동안만 바꿔 끼운다
+      const t = MP.targetFor(e);
+      if (t === this.player) { e.update(dt, t); continue; }
+      const keep = this.player;
+      this.player = t;
+      try { e.update(dt, t); } finally { this.player = keep; }
+    }
 
     // 죽은 몬스터는 목록에서 빼고 재등장 타이머에 넣는다
     for (let i = this.enemies.length - 1; i >= 0; i--) {
       if (!this.enemies[i].dead) continue;
       const e = this.enemies[i];
-      Items.dropFor(e);
-      // 조용히 물러난 것(습격 종료·밤의 교대)은 잡은 게 아니므로 의뢰에도 안 센다
-      if (!e.noDrop) Quests.onKill(e);
+      if (Net.active) {
+        MP.onEnemyDeath(e);   // 경험치·드랍·의뢰는 때린 사람마다 각자 받는다
+      } else {
+        Items.dropFor(e);
+        // 조용히 물러난 것(습격 종료·밤의 교대)은 잡은 게 아니므로 의뢰에도 안 센다
+        if (!e.noDrop) Quests.onKill(e);
+      }
       this.enemies.splice(i, 1);
       if (e.isBoss) {
-        // 보스는 일반 몬스터 정원과 무관하다. 한참 뒤에 다시 도전할 수 있다
         this.boss = null;
-        const list = this.bossReadyIn[World.mapId];
-        if (list) list[this.arenaCave] = CONFIG.arena.respawnDelay;
-        /* 처음 잡은 보스라면 — 이게 다음 무대를 여는 열쇠다.
-           **보스 설정의 id** 로 적는다 (종류 이름이 아니라) — 모래의 군주는 종류가 'sandworm' 이라
-           종류로 적으면 평범한 모래벌레와 구별되지 않고 관문 열쇠가 안 맞는다.
-           앞선 보스 셋은 id 와 종류가 같아서 옛 저장도 그대로 열린다. */
-        const type = this.bossKey(this.arenaCave);
-        if (type && !this.bossSlain[type]) {
-          this.bossSlain[type] = true;
-          if (this.portalUnlocked()) this.gateBanner = 3.2;
-          // 대장장이 이사 조건 — 보스 하나면 마을로 온다
-          if (typeof Village !== 'undefined') Village.checkMoveIns(false);
-        }
+        if (!Net.active) this.onBossSlain();
       } else if (!this.inArena) {
         this.respawnQueue.push(Util.rand(CONFIG.spawn.respawnMin, CONFIG.spawn.respawnMax));
       }
@@ -689,8 +720,13 @@ const Game = {
     // 개발 중 에러 하나로 게임이 통째로 멈추지 않도록 감싼다 (에러는 콘솔에 남는다)
     try {
       // 시작 화면 — 아무 키나 누르면 시작한다. 그 전까지는 세상이 멈춰 있다
+      // 서버와 끊겼다 — 안내가 덮여 있으니 세상은 멈춘다
+      if (this.netLost) { Input.endFrame(); this.render(); requestAnimationFrame(this.frame.bind(this)); return; }
       if (this.title) {
-        if (Object.keys(Input.pressed).length) { this.title = false; }
+        if (Object.keys(Input.pressed).length) {
+          this.title = false;
+          if (Net.active) MP.enterZone();   // 이제 사람들 사이로 들어간다
+        }
         Input.endFrame();
         this.render();
         requestAnimationFrame(this.frame.bind(this));
@@ -704,6 +740,7 @@ const Game = {
       if (Input.pressed.KeyT && typeof Village !== 'undefined') Village.tryReturn(this.player);
 
       Save.tick(dt, this);
+      if (Net.active) MP.update(dt);   // 내 모습을 보내고, 방장은 몬스터를 보낸다
       this.soundFlash = Math.max(0, this.soundFlash - dt);
 
       // 동굴을 드나드는 장면 전환 중에도 시간이 멈춘다 (전환 도중에 맞으면 억울하다)
@@ -718,7 +755,7 @@ const Game = {
           this.player.update(dt, this.enemies);
           this.updateEnemies(dt);
           if (typeof Village !== 'undefined' && Village.update) Village.update(dt);
-          Projectiles.update(dt, this.player);
+          Projectiles.update(dt, Net.active ? MP.targets() : this.player);
           // F 입력을 먼저 가져갈 수 있도록 아이템 처리보다 앞에 둔다
           this.updateGates(dt);
           Items.update(dt, this.player);
@@ -732,6 +769,10 @@ const Game = {
           Landmarks.update(dt, this.player);
           Fog.update(dt, this.player);
         }
+        FX.update(dt);
+      } else if (Net.active) {
+        // 메뉴를 열어 내 시간은 멈췄어도, 같이 있는 사람들의 몬스터는 방장인 내가 계속 돌려야 한다
+        MP.pausedSim(dt);
         FX.update(dt);
       }
       Input.endFrame();
@@ -813,6 +854,13 @@ const Game = {
       drawables.push(it);
     }
     if (!this.player.dead) drawables.push(this.player);
+    if (Net.active) {
+      for (const r of MP.remotes.values()) {
+        if (!r.seen || r.dead) continue;
+        if (r.x < cam.x - pad || r.x > cam.x + CONFIG.VIEW_W + pad || r.y < cam.y - pad || r.y > cam.y + CONFIG.VIEW_H + pad) continue;
+        drawables.push(r);
+      }
+    }
 
     drawables.sort((a, b) => (a.depth !== undefined ? a.depth : a.y) - (b.depth !== undefined ? b.depth : b.y));
     this.fadeTrees(drawables, this.frameDt || 0);
@@ -858,6 +906,7 @@ const Game = {
     // 마을 간판 — 안에 들어와 있을 때만 시설 이름이 뜬다
     if (!this.showMap && !this.title && typeof Village !== 'undefined') Village.drawSigns(ui, cam, this.player);
     UI.draw(ui, this.player, this.showInventory);
+    if (Net.active && !this.showMap && !this.title) MP.drawHud(ui);
     if (this.showMap) Minimap.drawFull(ui, this.player, this.enemies);
     if (this.boss && !this.boss.dead && !this.showMap) UI.drawBossBar(ui, this.boss);
     if (this.cavePeek && !this.showMap) {
@@ -911,4 +960,5 @@ const Game = {
   },
 };
 
-window.addEventListener('load', () => Game.init());
+// 회원가입·로그인(Auth)을 마치면 그때 게임을 켠다
+window.addEventListener('load', () => Auth.boot(() => Game.init()));

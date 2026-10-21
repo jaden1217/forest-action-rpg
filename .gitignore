@@ -6,3 +6,7 @@ desktop.ini
 # 에디터
 .vscode/
 *.swp
+.vercel
+node_modules
+server/data
+.vercel

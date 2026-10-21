@@ -32,7 +32,11 @@ const Projectiles = {
     });
   },
 
-  update(dt, player) {
+  /* targets — 맞을 수 있는 사람들 (멀티플레이는 여럿, 혼자면 한 명).
+     멀티플레이 손님은 탄을 움직이지도 맞히지도 않는다 — 방장이 계산해서 보내준 것을 MP.ghostStep 이 그저 따라 그린다. */
+  update(dt, targets) {
+    if (typeof Net !== 'undefined' && Net.active && !MP.isHost) return;
+    const list = Array.isArray(targets) ? targets : [targets];
     for (let i = this.list.length - 1; i >= 0; i--) {
       const p = this.list[i];
       p.life -= dt;
@@ -59,7 +63,8 @@ const Projectiles = {
       }
 
       // 플레이어에게 명중
-      if (!player.dead && Util.aabb(box, player.hurtBox)) {
+      for (const player of list) {
+        if (player.dead || !Util.aabb(box, player.hurtBox)) continue;
         // 무적 시간 중이면 피해가 들어가지 않으므로 탄도 그대로 지나가게 둔다
         if (player.invuln <= 0) {
           player.takeDamage(p.damage, p.x, p.y);
@@ -67,6 +72,7 @@ const Projectiles = {
           if (p.type === 'mushroom') Status.apply(player, 'poison', p.damage * CONFIG.status.monsterPoison, null);
           this.burst(p);
           this.list.splice(i, 1);
+          break;
         }
       }
     }

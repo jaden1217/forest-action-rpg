@@ -1,0 +1,9 @@
+{
+  "name": "forest-action-rpg-server",
+  "version": "1.0.0",
+  "private": true,
+  "description": "숲의 모험 멀티플레이 서버 — 로그인·방 관리·메시지 중계",
+  "main": "server.js",
+  "scripts": { "start": "node server.js" },
+  "dependencies": { "ws": "^8.18.0" }
+}

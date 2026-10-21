@@ -145,3 +145,84 @@ html, body {
   padding: 1px 6px;
   font-weight: 600;
 }
+
+/* ── 회원가입 / 로그인 (js/auth.js) ───────────────────────── */
+#auth {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: radial-gradient(ellipse at 50% 40%, #1d2b1b 0%, #0c110b 70%);
+  transition: opacity .35s;
+}
+#auth.gone { opacity: 0; pointer-events: none; }
+.au-card {
+  width: min(400px, 100%);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 26px 24px 22px;
+  background: rgba(16, 22, 14, .92);
+  border: 1px solid #3a442f;
+  border-radius: 6px;
+  box-shadow: 0 16px 50px rgba(0, 0, 0, .6);
+  text-align: center;
+}
+.au-card h1 { margin: 0; font-size: 28px; color: #9be564; letter-spacing: 1px; }
+.au-sub-title { font-size: 11px; color: #6f8566; letter-spacing: 1.5px; margin-bottom: 8px; }
+.au-lead { margin: 4px 0 0; font-size: 17px; color: #d8e6cf; font-weight: 600; }
+.au-small { margin: 0; font-size: 12px; line-height: 1.5; color: #8fa383; word-break: break-all; }
+.au-small code { color: #c9d8bd; }
+.au-count { font-size: 12px; color: #8fa383; }
+.au-count b { color: #ffe066; }
+.au-tag { font-size: 10px; color: #10140f; background: #ffe066; border-radius: 3px; padding: 1px 5px; vertical-align: 2px; letter-spacing: .5px; }
+.au-btn {
+  font: 600 14px/1 "Malgun Gothic", "맑은 고딕", system-ui, sans-serif;
+  padding: 12px 14px;
+  color: #d8e6cf;
+  background: #232a1f;
+  border: 1px solid #3a442f;
+  border-radius: 4px;
+  cursor: pointer;
+}
+.au-btn:hover { border-color: #9be564; }
+.au-btn.primary { background: #3d6b2e; border-color: #5f9a45; color: #fff; }
+.au-btn.primary:hover { background: #48803a; }
+.au-btn.ghost { background: none; color: #8fa383; }
+.au-users { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.au-user {
+  display: grid;
+  grid-template-columns: 34px 1fr;
+  grid-template-rows: auto auto;
+  column-gap: 8px;
+  align-items: center;
+  text-align: left;
+  padding: 9px 10px;
+  color: #d8e6cf;
+  background: #232a1f;
+  border: 1px solid #3a442f;
+  border-radius: 4px;
+  cursor: pointer;
+  font-family: inherit;
+}
+.au-user:hover:not(:disabled) { border-color: #9be564; background: #2a3425; }
+.au-user:disabled { cursor: not-allowed; opacity: .45; }
+.au-num { grid-row: 1 / 3; font-size: 24px; font-weight: 700; color: #9be564; text-align: center; }
+.au-name { font-size: 13px; font-weight: 600; }
+.au-sub { font-size: 10.5px; color: #7f9375; line-height: 1.3; }
+.au-sub.on { color: #ff9a6b; }
+.au-form { display: flex; flex-direction: column; gap: 8px; }
+.au-form input {
+  font: 13px system-ui, sans-serif;
+  padding: 10px;
+  color: #d8e6cf;
+  background: #0c110b;
+  border: 1px solid #3a442f;
+  border-radius: 4px;
+}
+.au-msg { font-size: 12.5px; color: #ff8a8a; background: rgba(229, 72, 77, .12); border: 1px solid rgba(229, 72, 77, .35); border-radius: 4px; padding: 7px 9px; }
+
+/* 연결이 끊겼을 때 게임 위에 덮는 안내도 같은 카드를 쓴다 */

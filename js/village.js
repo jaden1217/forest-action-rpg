@@ -291,6 +291,7 @@ const Village = {
      스폰 제외·이동 차단이 본방이고, 이건 넉백·분열처럼 뚫고 들어온 경우의 뒷정리다. */
   update(dt) {
     if (World.isArena || !this.zoneFor() || !Game.enemies) return;
+    if (typeof MP !== 'undefined' && MP.guest) return;   // 멀티플레이 손님은 몬스터를 건드리지 않는다
     const z = this.zoneFor();
     const speed = CONFIG.village.pushSpeed;
     for (const e of Game.enemies) {
