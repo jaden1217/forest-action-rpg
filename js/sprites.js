@@ -116,14 +116,17 @@ function fillEllipse(ctx, cx, cy, rx, ry, color) {
 }
 
 // 픽셀 단위 원 채우기 (안티앨리어싱 없음 = 도트 느낌 유지)
+/* 픽셀 원 채우기 — 칸 가운데가 원 안인 칸을 칠한다. 줄마다 한 번에 칠한다
+   (예전엔 칸마다 fillRect 를 불러, 반지름 14짜리 원 하나가 600번이었다 — 설인 빙판 16개가 한 프레임 22ms) */
 function fillCircle(ctx, cx, cy, r, color) {
   ctx.fillStyle = color;
   const r2 = r * r;
   for (let y = Math.floor(cy - r); y <= Math.ceil(cy + r); y++) {
-    for (let x = Math.floor(cx - r); x <= Math.ceil(cx + r); x++) {
-      const dx = x + 0.5 - cx, dy = y + 0.5 - cy;
-      if (dx * dx + dy * dy <= r2) ctx.fillRect(x, y, 1, 1);
-    }
+    const dy = y + 0.5 - cy;
+    if (dy * dy > r2) continue;
+    const half = Math.sqrt(r2 - dy * dy);
+    const x0 = Math.ceil(cx - half - 0.5), x1 = Math.floor(cx + half - 0.5);
+    if (x1 >= x0) ctx.fillRect(x0, y, x1 - x0 + 1, 1);
   }
 }
 
