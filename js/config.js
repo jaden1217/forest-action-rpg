@@ -881,6 +881,7 @@ const CONFIG = {
     monsterNames: {
       slime: 'SLIMES', wolf: 'WOLVES', mushroom: 'MUSHROOMS',
       scorpion: 'SCORPIONS', cactus: 'CACTI', sandworm: 'SANDWORMS',
+      wisp: 'WISPS', yeti: 'YETIS', golem: 'GOLEMS',   // 여기 없으면 불러올 때 그 의뢰가 버려진다
     },
   },
 

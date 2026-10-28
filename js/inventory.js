@@ -227,7 +227,8 @@ const Inventory = {
     if (s.kind === 'weapon') {
       Items.spawnWeapon(player.x, player.y, s.weapon, this.weaponLevel(player, s), { legend: s.legend, element: s.element, pickupDelay: 0.6 });
     } else if (s.kind === 'gear') {
-      Items.spawnGear(player.x, player.y, s.id, s.level, { dropped: true });
+      // 굴려 둔 등급·옵션을 그대로 들고 내려간다 (item 을 안 넘기면 바닥에서 새로 굴린다)
+      Items.spawnGear(player.x, player.y, s.id, s.level, { item: s, dropped: true });
     } else {
       Items.spawnLoot(player.x, player.y, s.id, s.amount, { dropped: true });
     }

@@ -85,7 +85,8 @@ const Quests = {
       } else {
         // 아직 안 가본 곳 — 이 맵의 동굴들과, 비석 건너편 맵
         const spots = [];
-        World.caves.forEach((c, i) => { if (c) spots.push({ kind: 'cave', index: i }); });
+        // 동굴은 번호만으로는 어느 맵 것인지 모른다 (숲 0번과 사막 0번이 다르다) — 맵도 같이 적는다
+        World.caves.forEach((c, i) => { if (c) spots.push({ kind: 'cave', map: World.mapId, index: i }); });
         if (spec.portalTo) spots.push({ kind: 'map', id: spec.portalTo });
         if (!spots.length) continue;
         q = { type: 'explore', target: Util.choice(spots), need: 1, progress: 0 };
@@ -149,7 +150,7 @@ const Quests = {
       const t = q.target;
       if (t.kind === 'map') {
         if (World.mapId === t.id) this.finishExplore(q);
-      } else if (!World.isArena) {
+      } else if (!World.isArena && World.mapId === this.caveMap(t)) {
         const cave = World.caves[t.index];
         if (cave && Util.dist(player.x, player.y, cave.x, cave.y) < CONFIG.quests.reachRange) this.finishExplore(q);
       }
@@ -236,9 +237,13 @@ const Quests = {
 
   placeName(t) {
     if (t.kind === 'map') return (CONFIG.maps[t.id] || {}).name || '?';
-    const cave = CONFIG.maps.forest.caves[t.index];
+    const spec = CONFIG.maps[this.caveMap(t)];
+    const cave = spec && spec.caves[t.index];
     return cave ? CONFIG.bosses[cave.boss].lairName : '?';
   },
+
+  // 동굴 의뢰가 어느 맵 것인가 — 맵을 적기 전의 옛 의뢰는 숲 것이었다 (그때는 이름도 숲 기준으로 떴다)
+  caveMap(t) { return t.map || 'forest'; },
 
   /* 화면 오른쪽에 늘 떠 있는 할 일 — 이 주차의 핵심이다.
      접속하자마자 "지금 뭘 하면 되는지"가 적혀 있어야 한다. */
