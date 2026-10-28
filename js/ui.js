@@ -548,16 +548,57 @@ const UI = {
     this.drawText(ctx, on ? 'SOUND ON' : 'SOUND OFF', CONFIG.VIEW_W / 2, CONFIG.VIEW_H - 26, on ? '#9be564' : '#8f9aa8', true);
   },
 
+  /* 창이 떠 있을 때의 포인터 — 끝(왼쪽 위 꼭짓점)이 마우스 자리다.
+     십자는 가운데를 덮어서 칸 속 아이템을 가렸다. 화살표는 아래·오른쪽으로만 뻗어 칸 가운데가 보인다.
+     고운 픽셀 단위로 찍는다 (X 테두리, o 흰 속) — 100% 화면에서 가로 4 · 세로 5 게임 단위쯤 */
+  POINTER: [
+    'X.........',
+    'XX........',
+    'XoX.......',
+    'XooX......',
+    'XoooX.....',
+    'XooooX....',
+    'XoooooX...',
+    'XooooooX..',
+    'XoooooooX.',
+    'XooooXXXXX',
+    'XooXoX....',
+    'XoX.XoX...',
+    'XX..XoX...',
+    'X....XoX..',
+    '.....XX...',
+  ],
+
   /* 조준점 — 마우스 자리에 검은 테두리를 두른 흰 십자. 적 위에 있으면 붉어진다.
-     (OS 십자 커서는 가늘고 색이 없어서 도트 배경에 묻히기 때문에 직접 그린다) */
-  drawCrosshair(ctx, player, cam, enemies) {
+     (OS 십자 커서는 가늘고 색이 없어서 도트 배경에 묻히기 때문에 직접 그린다)
+     창(인벤토리·창고·상점 …)이 떠 있으면 십자 대신 작은 화살표 — menu 가 참이면.
+     예전 십자는 반지름이 7단위(고운 픽셀 21개)라 아이템 칸(18단위)을 거의 다 덮었다.
+     이제 고운 픽셀로 직접 찍어 절반 크기로, 선도 얇게 그린다 */
+  drawCrosshair(ctx, player, cam, enemies, menu) {
     if (!Input.mouse.used) return;
-    const mx = Math.round(Input.mouse.x), my = Math.round(Input.mouse.y);
+    const g = this.fx, F = this.FINE, b = F / 3;   // b = 100% 화면에서 고운 픽셀 하나 (화면이 크면 같이 커진다)
+    const fx = Math.round(Input.mouse.x * F), fy = Math.round(Input.mouse.y * F);
+    g.save();
+    g.setTransform(1, 0, 0, 1, 0, 0);
+
+    if (menu) {
+      const P = this.POINTER;
+      for (let y = 0; y < P.length; y++) {
+        for (let x = 0; x < P[y].length; x++) {
+          const c = P[y][x];
+          if (c === '.') continue;
+          g.fillStyle = c === 'X' ? '#000000' : '#ffffff';
+          g.fillRect(fx + x * b, fy + y * b, b, b);
+        }
+      }
+      g.restore();
+      return;
+    }
 
     // 적 위에 있으면 붉게
     let hot = false;
     if (enemies) {
-      const wx = cam.x + mx, wy = cam.y + my;
+      const wx = cam.x + Input.mouse.x, wy = cam.y + Input.mouse.y;
       for (const e of enemies) {
         if (e.dead) continue;
         if (Math.abs(e.x - wx) < e.radius + 3 && Math.abs(e.y - 4 - wy) < e.radius + 5) { hot = true; break; }
@@ -566,17 +607,19 @@ const UI = {
     const color = hot ? '#ff6b6b' : '#ffffff';
 
     // 십자 — 가운데 비우고 네 방향 막대 + 중심점. 검은 테두리를 먼저 깔아 어떤 배경에서도 읽힌다
-    const gap = 3, len = 4;
-    const cross = (c, o) => {
-      ctx.fillStyle = c;
-      ctx.fillRect(mx - gap - len - o, my - o, len + 2 * o, 1 + 2 * o);
-      ctx.fillRect(mx + gap + 1 - o, my - o, len + 2 * o, 1 + 2 * o);
-      ctx.fillRect(mx - o, my - gap - len - o, 1 + 2 * o, len + 2 * o);
-      ctx.fillRect(mx - o, my + gap + 1 - o, 1 + 2 * o, len + 2 * o);
-      ctx.fillRect(mx - o, my - o, 1 + 2 * o, 1 + 2 * o);
+    const gap = 4 * b, len = 6 * b, t = 2 * b, o = b;
+    const cross = (c, k) => {
+      g.fillStyle = c;
+      const h = t / 2;
+      g.fillRect(fx - gap - len - k, fy - h - k, len + 2 * k, t + 2 * k);
+      g.fillRect(fx + gap - k, fy - h - k, len + 2 * k, t + 2 * k);
+      g.fillRect(fx - h - k, fy - gap - len - k, t + 2 * k, len + 2 * k);
+      g.fillRect(fx - h - k, fy + gap - k, t + 2 * k, len + 2 * k);
+      g.fillRect(fx - h - k, fy - h - k, t + 2 * k, t + 2 * k);
     };
-    cross('#000000', 1);
+    cross('#000000', o);
     cross(color, 0);
+    g.restore();
   },
 
   // 시작 화면 — 게임 위에 어둡게 덮고 제목과 안내만 띄운다

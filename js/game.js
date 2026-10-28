@@ -909,7 +909,7 @@ const Game = {
     if (this.transition) UI.drawFade(ui, this.fadeAlpha());
     if (this.title) UI.drawTitle(ui, this.hasSave);
     // 조준점은 무엇보다 위에 — 창이 열려 있어도 마우스 자리는 보여야 한다
-    else UI.drawCrosshair(ui, this.player, cam, this.enemies);
+    else UI.drawCrosshair(ui, this.player, cam, this.enemies, this.paused());   // 창이 떠 있으면 화살표
     this.present();
   },
 };
