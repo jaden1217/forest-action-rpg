@@ -243,6 +243,143 @@ const Inventory = {
     this.messageTimer = 1.6;
   },
 
+  /* ── 끌어 옮기기 ───────────────────────────────────────────
+     인벤토리와 창고 창이 같이 쓴다. 칸을 누른 채 3단위 넘게 움직이면 **끌기**가 되고,
+     그 전에 떼면 그냥 **클릭**이다 (예전처럼 쓰기·옮기기).
+     창마다 다른 것은 h 로 넘긴다:
+       cellAt(mx, my)   그 자리의 칸 {zone, index | slot} 또는 null
+       itemOf(cell)     끌 수 있는 물건 (없거나 끌 수 없으면 null)
+       drop(from, to, m) 놓았을 때 — to 는 칸 또는 null(칸 밖), m 은 마우스 자리
+       click(cell)      끌지 않고 뗐을 때 */
+  drag: null,
+
+  sameCell(a, b) { return !!a && !!b && a.zone === b.zone && a.index === b.index && a.slot === b.slot; },
+
+  dragTick(h) {
+    const m = Input.mouse, P = Input.pressed;
+    if (P.Mouse) {
+      const c = h.cellAt(m.x, m.y);
+      this.drag = c ? { from: c, x0: m.x, y0: m.y, active: false } : null;
+      delete P.Mouse;   // 여기서 쓴 클릭이 창을 닫은 뒤 공격으로 새어나가지 않게
+    }
+    const d = this.drag;
+    if (!d) return;
+    if (!d.active && Math.abs(m.x - d.x0) + Math.abs(m.y - d.y0) > 3 && h.itemOf(d.from)) d.active = true;
+    if (Input.down.Mouse) return;     // 아직 누르고 있다
+    this.drag = null;
+    const to = h.cellAt(m.x, m.y);
+    if (d.active) h.drop(d.from, to, m);
+    else if (this.sameCell(to, d.from)) h.click(d.from);
+  },
+
+  // 끌고 있는 물건을 마우스 자리에 반투명하게 — 창 그림 맨 위에
+  drawDrag(ctx, player, item) {
+    if (!this.drag || !this.drag.active || !item) return;
+    const m = Input.mouse, size = 18;
+    ctx.globalAlpha = 0.85;
+    this.drawItem(ctx, player, item, Math.round(m.x - size / 2), Math.round(m.y - size / 2), size);
+    ctx.globalAlpha = 1;
+  },
+
+  // 인벤토리의 칸 — 가방 칸 {bag, index}, 입은 장비 칸 {gear, slot}, 든 무기 칸 {weapon}
+  cellAt(player, mx, my) {
+    const i = this.slotAt(player, mx, my);
+    if (i >= 0) return i < player.bag.length ? { zone: 'bag', index: i } : { zone: 'gear', slot: CONFIG.gear.slots[i - player.bag.length] };
+    const L = this.layout(player);
+    if (mx >= L.boxX && mx < L.boxX + L.box && my >= L.boxY && my < L.boxY + L.box) return { zone: 'weapon' };
+    return null;
+  },
+
+  cellItem(player, c) {
+    if (!c) return null;
+    if (c.zone === 'bag') return player.bag[c.index];
+    if (c.zone === 'gear') return player.gear[c.slot];
+    return { kind: 'weapon', weapon: player.weapon, level: player.weaponLevel, legend: player.weaponLegend, element: player.weaponElement };
+  },
+
+  // 칸 → 커서 번호 (가방 칸은 그대로, 장비 칸은 가방 다음 번호 — use / drop 이 이 번호를 쓴다)
+  cellIndex(player, c) {
+    return c.zone === 'bag' ? c.index : player.bag.length + CONFIG.gear.slots.indexOf(c.slot);
+  },
+
+  /* 가방 칸끼리 — 같은 전리품이면 쌓을 수 있는 만큼 합치고, 아니면 자리를 맞바꾼다.
+     0번(포션 주머니)은 늘 그 자리다. 안 되면 까닭을 돌려준다 (창고 창도 쓴다) */
+  moveBag(player, i, j) {
+    if (i === j) return null;
+    if (i === 0 || j === 0) return 'POTIONS STAY PUT';
+    const s = player.bag[i], t = player.bag[j];
+    if (!s) return null;
+    const room = (t && s.kind === 'loot' && t.kind === 'loot' && s.id === t.id) ? this.stackMax(t.id) - t.amount : 0;
+    if (room > 0) {
+      const take = Math.min(room, s.amount);
+      t.amount += take; s.amount -= take;
+      if (s.amount <= 0) player.bag[i] = null;
+    } else {
+      player.bag[i] = t || null;
+      player.bag[j] = s;
+    }
+    Sound.play('blip');
+    return null;
+  },
+
+  /* 인벤토리에서 놓았을 때
+       가방 → 가방        옮기기 (맞바꾸기 / 같은 전리품은 합치기)
+       가방 → 장비 칸     입기 (그 칸에 맞는 장비만 — 입던 것은 끌어온 칸으로)
+       가방 → 무기 칸     들기 (들던 무기는 끌어온 칸으로)
+       장비 칸 → 가방     벗기 (빈 칸이면 그 자리에, 같은 칸 장비 위면 맞바꿔 입는다)
+       무기 칸 → 가방 무기 맞바꿔 들기 (빈손이 될 수는 없다)
+       창 밖              바닥에 버리기 (X 와 같다) */
+  dropOn(player, from, to, m) {
+    const fail = (msg) => { this.say(msg); Sound.play('error'); };
+    if (!to) {
+      const L = this.layout(player);
+      if (m.x >= L.x && m.x < L.x + L.w && m.y >= L.y && m.y < L.y + L.h) return;   // 창 안 빈 곳 — 내려놓기 취소
+      if (from.zone === 'weapon') return fail('KEEP A WEAPON IN HAND');
+      this.drop(player, this.cellIndex(player, from));
+      return;
+    }
+    if (this.sameCell(from, to)) return;
+    const s = this.cellItem(player, from), t = this.cellItem(player, to);
+    if (!s) return;
+
+    if (from.zone === 'bag') {
+      if (to.zone === 'bag') {
+        const err = this.moveBag(player, from.index, to.index);
+        if (err) return fail(err);
+        this.cursor = to.index;
+        return;
+      }
+      if (to.zone === 'gear') {
+        if (s.kind !== 'gear') return fail('NOT WEARABLE');
+        if (Gear.slotOf(s) !== to.slot) return fail('GOES ON ' + CONFIG.gear.slotNames[Gear.slotOf(s)]);
+        this.use(player, from.index);
+        this.cursor = this.cellIndex(player, to);
+        return;
+      }
+      if (s.kind !== 'weapon') return fail('NOT A WEAPON');
+      this.use(player, from.index);
+      return;
+    }
+
+    if (from.zone === 'gear') {
+      if (to.zone !== 'bag') return fail(to.zone === 'gear' ? 'GOES ON ' + CONFIG.gear.slotNames[from.slot] : 'NOT A WEAPON');
+      if (to.index === 0) return fail('POTIONS STAY PUT');
+      if (t && !(t.kind === 'gear' && Gear.slotOf(t) === from.slot)) return fail('SLOT IS TAKEN');
+      this.cursor = to.index;
+      if (t) { this.use(player, to.index); return; }   // 같은 칸 장비 위 — 맞바꿔 입는다
+      player.bag[to.index] = s;
+      player.gear[from.slot] = null;
+      player.recalcStats();
+      Sound.play('blip');
+      this.say('TOOK OFF ' + Gear.spec(s.id).name);
+      return;
+    }
+
+    // 든 무기 — 가방의 다른 무기 위에 놓으면 맞바꿔 든다
+    if (to.zone === 'bag' && t && t.kind === 'weapon') { this.cursor = to.index; this.use(player, to.index); return; }
+    fail('KEEP A WEAPON IN HAND');
+  },
+
   /* ── 입력 (시간이 멈춘 동안 Game.handleMenuInput 에서 매 프레임 호출) ── */
 
   handleInput(player) {
@@ -264,14 +401,22 @@ const Inventory = {
       if (hit >= 0) this.cursor = hit;
     }
 
-    if (P.Space || P.Enter || P.Mouse) {
-      if (!P.Mouse || this.slotAt(player, m.x, m.y) === this.cursor) this.use(player, this.cursor);
-      // 여기서 쓴 Space/클릭이 닫힌 뒤 공격으로 새어나가지 않게 지운다
-      delete P.Space; delete P.Enter; delete P.Mouse;
+    if (P.Space || P.Enter) {
+      this.use(player, this.cursor);
+      // 여기서 쓴 Space 가 닫힌 뒤 공격으로 새어나가지 않게 지운다
+      delete P.Space; delete P.Enter;
     }
+    // 마우스 — 클릭은 쓰기, 끌면 옮기기·입기·벗기·버리기
+    this.dragTick({
+      cellAt: (mx, my) => this.cellAt(player, mx, my),
+      itemOf: (c) => { const s = this.cellItem(player, c); return s && s.kind !== 'potion' ? s : null; },
+      drop: (a, b, mm) => this.dropOn(player, a, b, mm),
+      click: (c) => { if (c.zone !== 'weapon') this.use(player, this.cellIndex(player, c)); },
+    });
     if (P.KeyX) this.drop(player, this.cursor);
     if (P.KeyI || P.Tab || P.Escape) {
       Game.showInventory = false;
+      this.drag = null;
       delete P.KeyI; delete P.Tab;
     }
   },
@@ -326,8 +471,10 @@ const Inventory = {
     // ── 안내
     const footY = L.y + L.h - 17;
     if (this.message) UI.drawText(ctx, this.message, L.x + L.w / 2, footY, '#9be564', true);
-    else UI.drawText(ctx, 'WASD PICK  SPACE USE  X DROP', L.x + L.w / 2, footY, '#7fa86a', true);
+    else UI.drawText(ctx, 'WASD PICK  SPACE USE  X DROP  DRAG MOVE', L.x + L.w / 2, footY, '#7fa86a', true);
     UI.drawText(ctx, 'PAUSED - I TO CLOSE', L.x + L.w / 2, footY + 8, '#5f6b59', true);
+    // 끌고 있는 물건은 창 그림 맨 위에
+    if (this.drag && this.drag.active) this.drawDrag(ctx, player, this.cellItem(player, this.drag.from));
   },
 
   /* 칸 하나 — 바탕, 그림, 테두리. 창고 창도 같은 칸을 쓴다 (Village.drawStashWindow).

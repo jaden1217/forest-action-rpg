@@ -646,10 +646,11 @@ const Village = {
     this.stashTop = 0;
     this.stashMessage = '';
     this.stashMouse = { x: Input.mouse.x, y: Input.mouse.y };   // 열자마자 마우스 자리가 커서를 빼앗지 않게
+    Inventory.drag = null;
     Sound.play('shopOpen');
   },
 
-  closeStash() { this.stashOpen = false; Sound.play('shopClose'); },
+  closeStash() { this.stashOpen = false; Inventory.drag = null; Sound.play('shopClose'); },
 
   /* 창과 칸의 자리 — 그리기와 마우스 판정이 같은 값을 쓴다.
      가방은 인벤토리와 같은 5열(가장 커도 34칸 = 7줄), 창고는 7열 x 7줄이 보이고 커서를 따라 흐른다 */
@@ -672,8 +673,8 @@ const Village = {
     return this.stashZone === 'bag' ? player.bag[this.stashCursor + 1] : this.stash[this.stashCursor];
   },
 
-  // 화면 좌표 → { zone, index } (칸 밖이면 null)
-  stashCellAt(player, mx, my) {
+  // 화면 좌표 → { zone, index } (칸 밖이면 null). any 면 창고의 빈 칸도 친다 (끌어서 놓을 자리)
+  stashCellAt(player, mx, my, any) {
     const L = this.stashLayout();
     const hit = (gx, cols, n, top) => {
       const c = Math.floor((mx - gx) / L.step), r = Math.floor((my - L.gridY) / L.step);
@@ -684,7 +685,7 @@ const Village = {
     };
     const b = hit(L.bagX, L.bagCols, this.stashBagN(player), 0);
     if (b >= 0) return { zone: 'bag', index: b };
-    const s = hit(L.boxX, L.boxCols, this.stashBoxN(), this.stashTop);
+    const s = hit(L.boxX, L.boxCols, any ? CONFIG.stash.maxItems : this.stashBoxN(), this.stashTop);
     if (s >= 0) return { zone: 'box', index: s };
     return null;
   },
@@ -742,13 +743,108 @@ const Village = {
       if (hit) { this.stashZone = hit.zone; this.stashCursor = hit.index; }
     }
 
-    if (P.Space || P.Enter || P.Mouse) {
-      const hit = P.Mouse ? this.stashCellAt(player, m.x, m.y) : null;
-      if (!P.Mouse || (hit && hit.zone === this.stashZone && hit.index === this.stashCursor)) this.transferStash(player);
-      // 여기서 쓴 Space/클릭이 닫힌 뒤 공격으로 새어나가지 않게 지운다
-      delete P.Space; delete P.Enter; delete P.Mouse;
+    if (P.Space || P.Enter) {
+      this.transferStash(player);
+      // 여기서 쓴 Space 가 닫힌 뒤 공격으로 새어나가지 않게 지운다
+      delete P.Space; delete P.Enter;
     }
+    // 마우스 — 클릭은 옮기기(맡기기·찾기), 끌면 원하는 칸에 놓기 (인벤토리와 같은 끌기)
+    Inventory.dragTick({
+      cellAt: (mx, my) => this.stashCellAt(player, mx, my, true),
+      itemOf: (c) => this.stashCellItem(player, c),
+      drop: (a, b) => this.dropStash(player, a, b),
+      click: (c) => {
+        if (!this.stashCellItem(player, c)) return;
+        this.stashZone = c.zone; this.stashCursor = c.index;
+        this.transferStash(player);
+      },
+    });
     if (P.KeyF || P.Escape) { this.closeStash(); delete P.KeyF; }
+  },
+
+  stashCellItem(player, c) {
+    if (!c) return null;
+    return (c.zone === 'bag' ? player.bag[c.index + 1] : this.stash[c.index]) || null;
+  },
+
+  /* 창고 창에서 놓았을 때
+       가방 → 가방   자리 바꾸기 (같은 전리품은 합치기)
+       창고 → 창고   자리 바꾸기 (빈 칸에 놓으면 맨 뒤로)
+       가방 → 창고   맡기기 — 빈 칸이면 평소처럼, 물건 위면 맞바꾼다 (같은 전리품이면 합친다)
+       창고 → 가방   찾기 — 빈 칸이면 그 자리에, 물건 위면 맞바꾼다 (같은 전리품이면 쌓을 만큼)
+     칸 밖에 놓으면 아무 일도 없다 (창고에서는 바닥에 버리지 않는다) */
+  dropStash(player, from, to) {
+    const fail = (msg) => { this.sayStash(msg); Sound.play('error'); };
+    if (!to || Inventory.sameCell(from, to)) return;
+    const fits = (s) => !(s.kind === 'loot' && s.amount > Inventory.stackMax(s.id));   // 가방 한 칸에 들어가는가
+
+    if (from.zone === 'bag' && to.zone === 'bag') {
+      const err = Inventory.moveBag(player, from.index + 1, to.index + 1);
+      if (err) return fail(err);
+      this.stashZone = 'bag'; this.stashCursor = to.index;
+      return;
+    }
+
+    if (from.zone === 'box' && to.zone === 'box') {
+      const s = this.stash[from.index];
+      if (!s) return;
+      if (to.index >= this.stash.length) { this.stash.splice(from.index, 1); this.stash.push(s); this.stashCursor = this.stash.length - 1; }
+      else { this.stash[from.index] = this.stash[to.index]; this.stash[to.index] = s; this.stashCursor = to.index; }
+      this.stashZone = 'box';
+      Sound.play('blip');
+      this.stashScroll();
+      return;
+    }
+
+    if (from.zone === 'bag') {
+      const i = from.index + 1, s = player.bag[i], t = this.stash[to.index];
+      if (!s) return;
+      const clean = this.sanitizeItem(s);
+      if (!clean) return fail('CANT STORE THAT');
+      if (t && t.kind === 'loot' && clean.kind === 'loot' && t.id === clean.id) {
+        t.amount += clean.amount;
+        player.bag[i] = null;
+      } else if (t && fits(t)) {
+        this.stash[to.index] = clean;
+        player.bag[i] = this.sanitizeItem(t);
+      } else {
+        // 빈 칸이거나 맞바꿀 수 없는 것 위 — 평소처럼 맡긴다 (전리품은 같은 종류에 합친다)
+        this.stashZone = 'bag'; this.stashCursor = from.index;
+        this.transferStash(player);
+        return;
+      }
+      Sound.play('blip');
+      this.sayStash('STORED ' + this.stashName(clean));
+      this.stashZone = 'box'; this.stashCursor = to.index;
+      this.stashScroll();
+      return;
+    }
+
+    // 창고 → 가방
+    const t = this.stash[from.index], j = to.index + 1, b = player.bag[j];
+    if (!t) return;
+    let name = this.stashName(t);
+    if (t.kind === 'loot' && (!b || (b.kind === 'loot' && b.id === t.id))) {
+      const take = Math.min(Inventory.stackMax(t.id) - (b ? b.amount : 0), t.amount);
+      if (take <= 0) return fail('STACK IS FULL');
+      name = (CONFIG.loot.items[t.id] || {}).name + ' X' + take;   // 한 칸에 들어간 만큼만 가져온다
+      if (b) b.amount += take;
+      else player.bag[j] = { kind: 'loot', id: t.id, amount: take };
+      t.amount -= take;
+      if (t.amount <= 0) this.stash.splice(from.index, 1);
+    } else if (!b) {
+      player.bag[j] = this.sanitizeItem(t);
+      this.stash.splice(from.index, 1);
+    } else {
+      if (!fits(t)) return fail('TOO MANY TO SWAP');
+      const clean = this.sanitizeItem(b);
+      if (!clean) return fail('CANT STORE THAT');
+      this.stash[from.index] = clean;
+      player.bag[j] = this.sanitizeItem(t);
+    }
+    Sound.play('pickup');
+    this.sayStash('TOOK ' + name);
+    this.stashZone = 'bag'; this.stashCursor = to.index;
   },
 
   // 고른 칸의 물건을 반대편으로 — 가방 칸이면 맡기고, 창고 칸이면 찾는다
@@ -854,8 +950,11 @@ const Village = {
 
     const footY = L.y + L.h - 17;
     if (this.stashMessage) UI.drawText(ctx, this.stashMessage, L.x + L.w / 2, footY, '#9be564', true);
-    else UI.drawText(ctx, 'WASD PICK  SPACE ' + (this.stashZone === 'bag' ? 'STORE' : 'TAKE'), L.x + L.w / 2, footY, '#7fa86a', true);
+    else UI.drawText(ctx, 'WASD PICK  SPACE ' + (this.stashZone === 'bag' ? 'STORE' : 'TAKE') + '  DRAG MOVE', L.x + L.w / 2, footY, '#7fa86a', true);
     UI.drawText(ctx, 'PAUSED - F TO CLOSE', L.x + L.w / 2, footY + 8, '#5f6b59', true);
+    // 끌고 있는 물건은 창 그림 맨 위에
+    const d = Inventory.drag;
+    if (d && d.active) Inventory.drawDrag(ctx, player, this.stashCellItem(player, d.from));
   },
 
   /* ── 저장 ──────────────────────────────────────────────── */

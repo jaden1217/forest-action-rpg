@@ -6,6 +6,7 @@
 const Input = {
   down: {},
   pressed: {},
+  released: {},   // 이번 프레임에 뗀 것 — 지금은 마우스만 (끌어서 놓기)
   // 마우스 위치는 게임 좌표(384x216) 기준으로 들고 있는다.
   // 화면에서는 몇 배로 확대돼 있으므로 화면에서 차지하는 크기로 나눠 환산한다
   // (화면 캔버스의 해상도는 배율에 따라 바뀌므로 canvas.width 가 아니라 VIEW_W 로 잰다).
@@ -33,7 +34,9 @@ const Input = {
       Input.down.Mouse = true;
     });
     window.addEventListener('mouseup', (e) => {
-      if (e.button === 0) Input.down.Mouse = false;
+      if (e.button !== 0) return;
+      if (Input.down.Mouse) Input.released.Mouse = true;
+      Input.down.Mouse = false;
     });
     // 창에서 포커스가 빠지면 키가 눌린 채로 남지 않도록 정리
     window.addEventListener('blur', () => { Input.down = {}; });
@@ -106,5 +109,6 @@ const Input = {
   // 매 프레임 끝에서 호출 — pressed 는 한 프레임만 살아있다
   endFrame() {
     this.pressed = {};
+    this.released = {};
   },
 };
