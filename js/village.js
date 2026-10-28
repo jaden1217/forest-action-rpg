@@ -664,9 +664,26 @@ const Village = {
       bagX: x + 8, boxX: x + 8 + bagW + 14, gridY: y + 22 };
   },
 
-  // 가방 칸 수 (포션 주머니 빼고) / 창고 쪽 커서가 갈 수 있는 칸 수 (비어 있어도 한 칸)
+  /* 창고는 **칸 자리표**다 — this.stash[q] 가 q 번째 칸이고, 비어 있는 칸은 null.
+     예전엔 빈칸 없이 앞에서부터 채우는 목록이라, 아래쪽 빈 칸에 끌어다 놓아도 맨 앞 빈자리로 붙었다.
+     이제 놓은 칸에 그대로 들어간다. 맨 뒤의 빈칸은 잘라 둔다 (stashTrim). */
+  stashCount() { let n = 0; for (const s of this.stash) if (s) n++; return n; },
+  stashTrim() { while (this.stash.length && !this.stash[this.stash.length - 1]) this.stash.pop(); },
+  // 맡길 자리 (Space·클릭으로 맡길 때) — 가장 앞의 빈칸, 없으면 맨 뒤. 다 찼으면 -1
+  stashFree() {
+    const i = this.stash.findIndex(s => !s);
+    if (i >= 0) return i;
+    return this.stash.length < CONFIG.stash.maxItems ? this.stash.length : -1;
+  },
+  // 칸 q 를 지운다 (그 자리는 빈칸으로 남는다 — 다른 칸이 당겨지지 않게)
+  stashClear(q) { this.stash[q] = null; this.stashTrim(); },
+
+  // 가방 칸 수 (포션 주머니 빼고) / 창고 쪽 커서가 갈 수 있는 칸 수 — 마지막 물건 다음 한 줄까지
   stashBagN(player) { return player.bag.length - 1; },
-  stashBoxN() { return Math.max(1, this.stash.length); },
+  stashBoxN() {
+    const cols = this.stashLayout().boxCols;
+    return Math.min(CONFIG.stash.maxItems, (Math.floor(this.stash.length / cols) + 1) * cols);
+  },
 
   // 지금 커서가 가리키는 물건 (없으면 null)
   stashAt(player) {
@@ -788,9 +805,12 @@ const Village = {
     if (from.zone === 'box' && to.zone === 'box') {
       const s = this.stash[from.index];
       if (!s) return;
-      if (to.index >= this.stash.length) { this.stash.splice(from.index, 1); this.stash.push(s); this.stashCursor = this.stash.length - 1; }
-      else { this.stash[from.index] = this.stash[to.index]; this.stash[to.index] = s; this.stashCursor = to.index; }
-      this.stashZone = 'box';
+      // 놓은 칸과 맞바꾼다 (빈칸이면 그냥 옮겨 간다)
+      this.stash[from.index] = this.stash[to.index] || null;
+      this.stash[to.index] = s;
+      for (let k = 0; k < this.stash.length; k++) if (this.stash[k] === undefined) this.stash[k] = null;
+      this.stashTrim();
+      this.stashZone = 'box'; this.stashCursor = to.index;
       Sound.play('blip');
       this.stashScroll();
       return;
@@ -807,8 +827,13 @@ const Village = {
       } else if (t && fits(t)) {
         this.stash[to.index] = clean;
         player.bag[i] = this.sanitizeItem(t);
+      } else if (!t) {
+        // 빈 칸 — 놓은 그 칸에 들어간다 (사이의 칸은 빈칸으로)
+        for (let k = this.stash.length; k < to.index; k++) this.stash[k] = null;
+        this.stash[to.index] = clean;
+        player.bag[i] = null;
       } else {
-        // 빈 칸이거나 맞바꿀 수 없는 것 위 — 평소처럼 맡긴다 (전리품은 같은 종류에 합친다)
+        // 가방 한 칸에 다 안 들어가는 전리품 더미 위 — 맞바꿀 수 없으니 평소처럼 맡긴다
         this.stashZone = 'bag'; this.stashCursor = from.index;
         this.transferStash(player);
         return;
@@ -831,10 +856,10 @@ const Village = {
       if (b) b.amount += take;
       else player.bag[j] = { kind: 'loot', id: t.id, amount: take };
       t.amount -= take;
-      if (t.amount <= 0) this.stash.splice(from.index, 1);
+      if (t.amount <= 0) this.stashClear(from.index);
     } else if (!b) {
       player.bag[j] = this.sanitizeItem(t);
-      this.stash.splice(from.index, 1);
+      this.stashClear(from.index);
     } else {
       if (!fits(t)) return fail('TOO MANY TO SWAP');
       const clean = this.sanitizeItem(b);
@@ -852,13 +877,16 @@ const Village = {
     if (this.stashZone === 'bag') {
       const i = this.stashCursor + 1, s = player.bag[i];
       if (!s) { this.sayStash('EMPTY SLOT'); return; }
-      if (this.stash.length >= CONFIG.stash.maxItems) { this.sayStash('STASH IS FULL'); Sound.play('error'); return; }
       const clean = this.sanitizeItem(s);
       if (!clean) { this.sayStash('CANT STORE THAT'); Sound.play('error'); return; }
-      // 전리품은 창고에서 합친다
-      const same = clean.kind === 'loot' && this.stash.find(o => o.kind === 'loot' && o.id === clean.id);
+      // 전리품은 창고에서 합친다. 아니면 가장 앞의 빈칸에
+      const same = clean.kind === 'loot' && this.stash.find(o => o && o.kind === 'loot' && o.id === clean.id);
       if (same) same.amount += clean.amount;
-      else this.stash.push(clean);
+      else {
+        const q = this.stashFree();
+        if (q < 0) { this.sayStash('STASH IS FULL'); Sound.play('error'); return; }
+        this.stash[q] = clean;
+      }
       player.bag[i] = null;
       Sound.play('blip');
       this.sayStash('STORED ' + this.stashName(clean));
@@ -870,7 +898,7 @@ const Village = {
       const left = Inventory.addLoot(player, s.id, s.amount);
       if (left >= s.amount) { this.sayStash('BAG IS FULL'); Sound.play('error'); return; }
       const got = s.amount - left;
-      if (left <= 0) this.stash.splice(si, 1);
+      if (left <= 0) this.stashClear(si);
       else s.amount = left;
       Sound.play('pickup');
       this.sayStash('TOOK ' + (CONFIG.loot.items[s.id] || {}).name + ' X' + got);
@@ -878,7 +906,7 @@ const Village = {
       const free = Inventory.firstEmpty(player);
       if (free < 0) { this.sayStash('BAG IS FULL'); Sound.play('error'); return; }
       player.bag[free] = this.sanitizeItem(s);
-      this.stash.splice(si, 1);
+      this.stashClear(si);
       Sound.play('pickup');
       this.sayStash('TOOK ' + this.stashName(s));
     }
@@ -911,7 +939,7 @@ const Village = {
     UI.drawText(ctx, 'STASH', L.x + L.w / 2, L.y + 5, '#e8dcc0', true);
     const bagN = this.stashBagN(player), used = Inventory.count(player);
     UI.drawText(ctx, 'BAG ' + used + '/' + bagN, L.bagX, L.y + 5, used >= bagN ? '#ff6b6b' : '#7fa86a');
-    const boxText = 'BOX ' + this.stash.length + '/' + CONFIG.stash.maxItems;
+    const boxText = 'BOX ' + this.stashCount() + '/' + CONFIG.stash.maxItems;
     UI.drawText(ctx, boxText, L.boxX + L.boxW - UI.textWidth(boxText), L.y + 5, '#7fa86a');
 
     // 가방 — 포션 주머니(0번)를 뺀 칸 전부
@@ -960,7 +988,8 @@ const Village = {
   /* ── 저장 ──────────────────────────────────────────────── */
   serialize() {
     return {
-      stash: this.stash.map(s => Object.assign({}, s)).slice(0, CONFIG.stash.maxItems),
+      // 빈칸은 null 로 — 자리까지 그대로 남는다
+      stash: this.stash.slice(0, CONFIG.stash.maxItems).map(s => s ? Object.assign({}, s) : null),
       lootSold: this.lootSold | 0,
       announced: Object.assign({}, this.announced),
     };
@@ -980,11 +1009,9 @@ const Village = {
     this.lootSold = Math.max(0, data.lootSold | 0);
     this.announced = Object.assign({}, data.announced || {});
     if (Array.isArray(data.stash)) {
-      for (const s of data.stash) {
-        const clean = this.sanitizeItem(s);
-        if (clean) this.stash.push(clean);
-        if (this.stash.length >= CONFIG.stash.maxItems) break;
-      }
+      // 칸 자리를 지킨다 — 빈칸(null)이나 이제 없는 물건은 빈칸으로 남긴다
+      for (const s of data.stash.slice(0, CONFIG.stash.maxItems)) this.stash.push(this.sanitizeItem(s));
+      this.stashTrim();
     }
     // 불러오기 뒤에는 조건에 맞는 집이 비어 있으면 조용히 채운다
     try { this.checkMoveIns(true); } catch (err) { /* 무시 */ }
