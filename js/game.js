@@ -887,18 +887,21 @@ const Game = {
       if (Village.stashOpen) Village.drawStashWindow(ui, this.player);
       if (Village.alchemyOpen) Village.drawAlchemy(ui, this.player);
     }
+    /* 배너와 날짜 시계는 창보다 나중에 그려지므로, 창(지도·인벤토리·상점·창고 …)이 떠 있으면 비켜준다 —
+       안 그러면 창 위에 맵 이름표나 시계가 겹쳐 둘 다 못 읽는다 (paused 가 곧 '창이 떠 있다'이다) */
+    const windowUp = this.paused();
     // 방 이름표는 보스 방을 나와 다른 맵으로 가 있는 동안에도 남아 있을 수 있다 —
     // 그 맵에 그 동굴이 없으면 설정이 비어 있으므로 확인하고 그린다
-    if (this.lairBanner > 0) {
+    if (this.lairBanner > 0 && !windowUp) {
       const lair = this.bossSpec(this.arenaCave);
       if (lair) UI.drawBanner(ui, lair.lairName, '#ff6b6b', this.lairBanner);
     }
-    if (this.forestBanner > 0 && !this.showMap && !this.showInventory && !Shop.open && !this.title) UI.drawBanner(ui, World.spec.name, World.spec.color, this.forestBanner);
-    if (this.gateBanner > 0 && !this.showMap) UI.drawBanner(ui, 'THE OBELISK AWAKENS', '#5ff0ff', this.gateBanner);
+    if (this.forestBanner > 0 && !windowUp && !this.title) UI.drawBanner(ui, World.spec.name, World.spec.color, this.forestBanner);
+    if (this.gateBanner > 0 && !windowUp) UI.drawBanner(ui, 'THE OBELISK AWAKENS', '#5ff0ff', this.gateBanner);
     if (typeof Events !== 'undefined') {
       // 보스 방에서는 화면 위를 보스 체력바가 쓴다 — 날짜 시계는 비켜준다
-      if (!this.showMap && !this.showInventory && !this.title && !this.inArena && !Shop.open && !Quests.open) Events.drawHud(ui);
-      if (Events.notice > 0 && !this.showMap) UI.drawBanner(ui, Events.noticeText, Events.noticeColor, Events.notice);
+      if (!windowUp && !this.title && !this.inArena) Events.drawHud(ui);
+      if (Events.notice > 0 && !windowUp) UI.drawBanner(ui, Events.noticeText, Events.noticeColor, Events.notice);
     }
     if (this.confirmNewGame) UI.drawConfirm(ui);
     if (this.soundFlash > 0) UI.drawSoundState(ui, Sound.enabled);

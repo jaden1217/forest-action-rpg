@@ -318,21 +318,7 @@ const Inventory = {
     // ── 칸
     for (let i = 0; i < player.bag.length; i++) {
       const sx = L.gridX + (i % L.cols) * (L.slot + L.gap), sy = L.gridY + Math.floor(i / L.cols) * (L.slot + L.gap);
-      const s = player.bag[i];
-      ctx.fillStyle = s ? '#252c22' : '#1b201a';
-      ctx.fillRect(sx, sy, L.slot, L.slot);
-      if (s) this.drawItem(ctx, player, s, sx, sy, L.slot);
-      if (i === this.cursor) {
-        ctx.strokeStyle = '#ffe066';
-        ctx.strokeRect(sx + 0.5, sy + 0.5, L.slot - 1, L.slot - 1);
-      } else if (s && s.kind === 'weapon' && s.legend) {
-        ctx.strokeStyle = UI.rainbowNow(0);
-        ctx.strokeRect(sx + 0.5, sy + 0.5, L.slot - 1, L.slot - 1);
-      } else if (s && s.kind === 'gear' && s.rarity >= 2) {
-        // 희귀·전설은 칸 테두리만 봐도 가려낼 수 있다
-        ctx.strokeStyle = Gear.color(s);
-        ctx.strokeRect(sx + 0.5, sy + 0.5, L.slot - 1, L.slot - 1);
-      }
+      this.drawSlot(ctx, player, player.bag[i], sx, sy, L.slot, i === this.cursor);
     }
 
     this.drawDetails(ctx, player, L);
@@ -342,6 +328,23 @@ const Inventory = {
     if (this.message) UI.drawText(ctx, this.message, L.x + L.w / 2, footY, '#9be564', true);
     else UI.drawText(ctx, 'WASD PICK  SPACE USE  X DROP', L.x + L.w / 2, footY, '#7fa86a', true);
     UI.drawText(ctx, 'PAUSED - I TO CLOSE', L.x + L.w / 2, footY + 8, '#5f6b59', true);
+  },
+
+  /* 칸 하나 — 바탕, 그림, 테두리. 창고 창도 같은 칸을 쓴다 (Village.drawStashWindow).
+     테두리는 커서가 먼저고, 그다음 전설 무기는 무지개, 희귀·전설 장비는 등급 색 —
+     칸 테두리만 봐도 귀한 것을 가려낼 수 있다 */
+  drawSlot(ctx, player, s, sx, sy, size, selected) {
+    // 고른 칸은 바탕도 밝힌다 — 노란 커서 테두리만으로는 전설(주황) 테두리와 헷갈린다
+    ctx.fillStyle = selected ? '#4a4a2a' : (s ? '#252c22' : '#1b201a');
+    ctx.fillRect(sx, sy, size, size);
+    if (s) this.drawItem(ctx, player, s, sx, sy, size);
+    let edge = null;
+    if (selected) edge = '#ffe066';
+    else if (s && s.kind === 'weapon' && s.legend) edge = UI.rainbowNow(0);
+    else if (s && s.kind === 'gear' && s.rarity >= 2) edge = Gear.color(s);
+    if (!edge) return;
+    ctx.strokeStyle = edge;
+    ctx.strokeRect(sx + 0.5, sy + 0.5, size - 1, size - 1);
   },
 
   // 칸 안의 그림 — 가운데 맞춤. 개수는 오른쪽 아래에 작게
