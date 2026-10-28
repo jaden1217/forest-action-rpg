@@ -60,6 +60,7 @@ class Player {
     this.comboStep = 0;        // 이어 치기에서 다음이 몇 번째인가 (무기의 combo 칸만큼 돈다)
     this.comboIdle = 9;        // 마지막 평타가 끝난 뒤 흐른 시간 — comboWindow 를 넘기면 첫 타부터
     this.invuln = 0;
+    this.hurtTimer = 0;        // 맞은 직후 — 이 동안 몸이 붉게 번쩍이며 뒤로 젖힌다 (무적 시간과 따로 센다)
     this.kx = 0; this.ky = 0;  // 넉백 속도
     this.walkTime = 0;
     this.moving = false;
@@ -445,6 +446,7 @@ class Player {
     this.dashGap = d.gap;
     this.dashQueued = 0;
     this.dashIFrames = d.invuln;
+    this.hurtTimer = 0;
     // 대시하면 휘두르던 동작도 쓰던 스킬도 끊긴다 (빠져나가는 수단이므로)
     this.attackTimer = 0;
     this.activeSkill = null;
@@ -539,6 +541,7 @@ class Player {
     const c = CONFIG.player;
     this.cooldown = Math.max(0, this.cooldown - dt);
     this.invuln = Math.max(0, this.invuln - dt);
+    this.hurtTimer = Math.max(0, this.hurtTimer - dt);
     this.potionCooldown = Math.max(0, this.potionCooldown - dt);
     this.wardTimer = Math.max(0, (this.wardTimer || 0) - dt);
     this.tonicTimer = Math.max(0, (this.tonicTimer || 0) - dt);
@@ -561,7 +564,7 @@ class Player {
       // 대시 중에는 이동 입력과 넉백을 무시하고 정해진 방향으로만 미끄러진다
       const d = CONFIG.dash;
       this.moveWithCollision(Math.cos(this.dashDir) * d.speed * dt, Math.sin(this.dashDir) * d.speed * dt);
-      this.trail.push({ x: this.x, y: this.y, life: 0.2, facing: this.facing });
+      this.trail.push({ x: this.x, y: this.y, life: 0.2, facing: Player.facingFromAngle(this.dashDir) });
     } else {
       // 스킬을 쓰는 동안은 그 스킬의 moveScale 만큼만 걷는다 (강공격 0 — 스스로 앞으로 나간다,
       // 회전베기 0.45 — 돌면서 천천히 자리를 옮긴다). 평타 중에는 속도가 크게 줄어든다
@@ -807,6 +810,7 @@ class Player {
     amount = Math.max(1, Math.round(amount * (1 - this.damageReduction()) * Status.damageTaken(this)));
     this.hp -= amount;
     this.invuln = c.invulnTime;
+    this.hurtTimer = 0.25;
     this.sinceCombat = 0;      // 맞으면 자연 회복은 처음부터 다시 기다린다
     const a = Math.atan2(this.y - fromY, this.x - fromX);
     // STEADY 옵션만큼 덜 밀리고, 광폭화 중엔 아예 밀리지 않는다
@@ -845,6 +849,7 @@ class Player {
   reviveAt(x, y) {
     this.dead = false;
     this.deadTimer = 0;
+    this.hurtTimer = 0;
     Status.clear(this);
     this.hp = this.maxHp;
     this.sinceCombat = 0;
@@ -857,6 +862,7 @@ class Player {
 
   respawn() {
     this.dead = false;
+    this.hurtTimer = 0;
     this.hp = this.maxHp;
     this.sinceCombat = 0;
     this.x = this.spawnX; this.y = this.spawnY;
@@ -1003,7 +1009,7 @@ class Player {
     if (this.trail.length) {
       for (const t of this.trail) {
         ctx.globalAlpha = Util.clamp(t.life / 0.2, 0, 1) * 0.34;
-        ctx.drawImage(SPRITES.player[t.facing][1], Math.round(t.x - cam.x) - 8, Math.round(t.y - cam.y) - PLAYER_TOP);
+        ctx.drawImage(SPRITES.playerPose[t.facing].dash, Math.round(t.x - cam.x) - 8, Math.round(t.y - cam.y) - PLAYER_TOP);
       }
       ctx.globalAlpha = 1;
     }
@@ -1017,28 +1023,71 @@ class Player {
     const groundKit = this.activeSkill && SkillKit[this.activeSkill];
     if (groundKit && groundKit.ground) groundKit.ground(this, ctx, sx, sy, this.skillSpec(this.activeSkill));
 
-    /* 걸음 네 장 — 딛기(0)·지나기(1)·딛기(2)·지나기(3). 한 장에 약 0.1초.
-       서 있을 땐 다리를 모은 지나기 자세(1)로 선다 */
-    const frame = this.moving ? Math.floor(this.walkTime * 10) % 4 : 1;
+    // 몸 — 걸음 네 장이거나, 공격·대시·피격 같은 자세 한 장 (bodyPose)
+    const bp = this.bodyPose();
     // 맞은 직후 0.25초는 붉은 실루엣, 그 뒤 무적이 남은 동안엔 한 프레임 걸러 살짝 옅어질 뿐 늘 보인다
-    const set = this.invuln > CONFIG.player.invulnTime - 0.25 ? SPRITES.playerFlash : SPRITES.player;
+    const flash = this.hurtTimer > 0;
+    const body = bp.pose
+      ? (flash ? SPRITES.playerFlashPose : SPRITES.playerPose)[bp.facing][bp.pose]
+      : (flash ? SPRITES.playerFlash : SPRITES.player)[bp.facing][bp.frame];
     if (this.invuln > 0 && Math.floor(this.invuln * 20) % 2 === 0) ctx.globalAlpha = 0.75;
     // 지나기 자세에서 몸이 가장 높다 — 걸을 때만 한 칸 솟는다
-    const bob = this.moving && (frame === 1 || frame === 3) ? -1 : 0;
-    // 회전베기 중에는 바라보는 방향을 빠르게 돌려서 도는 것처럼 보이게 한다
-    const facing = this.activeSkill === 'spin' ? Player.facingFromAngle(this.spinAngle) : this.facing;
+    const bob = !bp.pose && this.moving && (bp.frame === 1 || bp.frame === 3) ? -1 : 0;
     // 광폭화 중엔 몸 뒤에 붉은 그림자가 떨린다
     if (this.buff) {
       const o = Math.floor(World.time * 12) % 2 === 0 ? 1 : -1;
       ctx.globalAlpha = 0.6;
-      ctx.drawImage(tinted(set[facing][frame], '#ff6b6b'), sx - 8 + o, sy - PLAYER_TOP + bob);
+      ctx.drawImage(tinted(body, '#ff6b6b'), sx - 8 + o, sy - PLAYER_TOP + bob);
       ctx.globalAlpha = 1;
     }
-    ctx.drawImage(set[facing][frame], sx - 8, sy - PLAYER_TOP + bob - this.lift);
+    ctx.drawImage(body, sx - 8, sy - PLAYER_TOP + bob - this.lift);
     ctx.globalAlpha = 1;
 
     if (this.activeSkill) this.drawSkill(ctx, sx, sy);
     else if (this.attackTimer > 0) this.drawSwing(ctx, sx, sy);
+  }
+
+  /* 지금 몸이 어떤 자세인가 — { facing, pose } 또는 { facing, frame }(걸음 네 장 중 하나).
+     자세는 js/art_player.js 가 만든다: wind 준비 · strike 내지르기 · dash · hurt · air · blink.
+     공격 중에는 겨눈 쪽(휘두르기 시작할 때 고정한 각도)을 본다 — 마우스를 돌려도 몸이 휙 돌지 않는다 */
+  bodyPose() {
+    const F = Player.facingFromAngle;
+    // 걸음 네 장 — 딛기(0)·지나기(1)·딛기(2)·지나기(3). 한 장에 약 0.1초. 서 있을 땐 다리를 모은 지나기(1)
+    const frame = this.moving ? Math.floor(this.walkTime * 10) % 4 : 1;
+    if (this.dashTimer > 0) return { facing: F(this.dashDir), pose: 'dash' };
+    if (this.hurtTimer > 0) return { facing: this.facing, pose: 'hurt' };
+
+    if (this.activeSkill) {
+      const spec = this.skillSpec(this.activeSkill), el = spec.duration - this.skillTimer;
+      const at = F(this.swingAngle), d = this.skillData || {};
+      switch (spec.id) {
+        case 'spin': return { facing: F(this.spinAngle), pose: 'strike' };    // 도는 방향으로 몸을 돌린다
+        case 'titan': return { facing: at, pose: el < spec.air ? 'air' : 'strike' };
+        case 'quake': case 'rift': return { facing: at, pose: el < spec.windup ? 'wind' : 'strike' };
+        case 'rage': return { facing: at, pose: 'wind' };                     // 무기를 치켜든다
+        case 'shadow': case 'reaper': return { facing: at, pose: 'dash' };
+        case 'wave': case 'knives': return { facing: at, pose: el < spec.launchAt ? 'wind' : 'strike' };
+        case 'flurry': return { facing: at, pose: this.skillHits % 2 ? 'strike' : 'wind' };   // 찌를 때마다 젖혔다 뻗는다
+        case 'storm': return { facing: at, pose: (el >= spec.finale.at - 0.05 || (d.hits || 0) % 2) ? 'strike' : 'wind' };
+        case 'cross': {
+          const ph = spec.phases[SkillKit.cross.phase(spec, el)];
+          return { facing: at, pose: el >= ph.at[0] - 0.05 && el <= ph.at[1] ? 'strike' : 'wind' };
+        }
+        default: return { facing: at, pose: 'strike' };
+      }
+    }
+
+    if (this.attackTimer > 0) {
+      // 평타 — 무기마다 준비가 길고 짧다 (도끼는 들어올리는 동안 내내 젖힌다), 다 휘두른 뒤 여운은 평소 몸으로
+      const w = this.weaponSpec(), el = w.duration - this.attackTimer, p = el / w.duration;
+      const wind = w.style === 'cleave' ? el < w.windup : p < (w.style === 'thrust' ? 0.2 : 0.15);
+      const hold = w.style === 'cleave' ? 0.85 : 0.65;
+      return { facing: F(this.swingAngle), pose: wind ? 'wind' : (p < hold ? 'strike' : null), frame };
+    }
+
+    // 가만히 서 있으면 3초에 한 번 눈빛이 꺼졌다 켜진다
+    const blink = !this.moving && (World.time % 3.2) > 3.05;
+    return { facing: this.facing, pose: blink ? 'blink' : null, frame };
   }
 
   // 지금 든 무기의 도트 (종류 + 레벨 등급)

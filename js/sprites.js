@@ -1077,6 +1077,8 @@ function buildSprites() {
   const pa = PlayerArt.build();
   SPRITES.player = pa.sets;
   SPRITES.playerFlash = pa.flash;
+  SPRITES.playerPose = pa.poses;            // 걸음 말고 자세 한 장씩 (준비·내지르기·대시·피격·공중·깜빡임)
+  SPRITES.playerFlashPose = pa.flashPoses;
 
   SPRITES.sword = makeSprite('sword', SWORD);
   // 무기 3종 x 레벨 1~5. 휘두르기 코드는 손잡이가 아래·날이 위라는 방향만 가정한다.
