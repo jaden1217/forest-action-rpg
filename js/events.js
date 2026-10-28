@@ -241,42 +241,44 @@ const Events = {
     return 'rgba(' + c[0] + ',' + c[1] + ',' + c[2] + ',' + a.toFixed(3) + ')';
   },
 
-  /* 하늘빛 — 세상 위에 한 겹 덮는다.
-     밤에는 **플레이어 둘레만 밝게** 뚫어서 등불을 든 것처럼 보이게 한다.
+  /* 지금 하늘빛 — CONFIG.events.sky 의 기준점 사이를 부드럽게 잇는다 (색은 RGB 로 섞는다).
+     기준점 사이는 smoothstep 으로 — 직선으로 이으면 기준점에서 바뀌는 속도가 툭 꺾인다 */
+  skyAt(t) {
+    const keys = CONFIG.events.sky;
+    let i = 0;
+    while (i < keys.length - 2 && t >= keys[i + 1].t) i++;
+    const a = keys[i], b = keys[i + 1];
+    let u = Util.clamp((t - a.t) / ((b.t - a.t) || 1), 0, 1);
+    u = u * u * (3 - 2 * u);
+    const ca = hexToRgb(a.tint), cb = hexToRgb(b.tint);
+    return {
+      rgb: [0, 1, 2].map(k => Math.round(Util.lerp(ca[k], cb[k], u))),
+      alpha: Util.lerp(a.alpha, b.alpha, u),
+      lamp: Util.lerp(a.lamp, b.lamp, u),
+    };
+  },
+
+  /* 하늘빛 — 세상 위에 한 겹 덮는다. 하루 내내 이어진 그라데이션이라 갑자기 어두워지는 순간이 없다.
+     밤이 깊을수록 **플레이어 둘레만 밝게** 뚫어서 등불을 든 것처럼 보이게 한다 (lamp 가 그 세기).
      마을 안에서는 모닥불 덕에 밝은 범위가 넓다. */
   drawSky(ctx, player, cam) {
     if (World.isArena) return;     // 동굴은 원래 어둡다 — 두 번 덮지 않는다
-    const e = CONFIG.events, t = this.time;
-    let color, alpha;
-    if (this.phase === 'dusk') {
-      const u = (t - e.duskStart) / (e.nightStart - e.duskStart);
-      color = e.dusk.tint;
-      alpha = Util.lerp(0, e.dusk.alpha, u);
-    } else if (this.phase === 'night') {
-      color = e.night.tint;
-      alpha = e.night.alpha;
-    } else if (this.phase === 'dawn') {
-      const u = t / e.dawnEnd;
-      color = e.dawn.tint;
-      alpha = Util.lerp(e.dawn.alpha, 0, u);
-    } else {
-      return;
-    }
-    // 황혼은 노을이 하늘 전체에 깔린 것이라 등불이 없다. 깊은 밤에만 둘레가 밝다
-    const lampF = this.nightFactor() * (this.phase === 'dusk' ? 0.35 : 1);
-    if (alpha <= 0.004) return;
+    const e = CONFIG.events, s = this.skyAt(this.time);
+    if (s.alpha <= 0.004) return;
+    const rgba = (a) => 'rgba(' + s.rgb[0] + ',' + s.rgb[1] + ',' + s.rgb[2] + ',' + a.toFixed(3) + ')';
 
-    if (lampF > 0.25) {
+    if (s.lamp > 0.02) {
       const safe = (typeof Village !== 'undefined' && Village.isSafe && Village.isSafe(player.x, player.y));
       const rad = e.night.lamp * (safe ? e.night.villageLamp : 1);
       const px = Math.round(player.x - cam.x), py = Math.round(player.y - cam.y - 4);
       const g = ctx.createRadialGradient(px, py, 6, px, py, rad);
-      g.addColorStop(0, this.rgba(color, alpha * 0.12));
-      g.addColorStop(0.55, this.rgba(color, alpha * 0.66));
-      g.addColorStop(1, this.rgba(color, alpha));
+      // 깊은 밤(lamp 1)에 가운데 12% · 중간 66% — lamp 가 작을수록 둘레가 덜 뚫린다
+      g.addColorStop(0, rgba(s.alpha * (1 - 0.88 * s.lamp)));
+      g.addColorStop(0.55, rgba(s.alpha * (1 - 0.34 * s.lamp)));
+      g.addColorStop(1, rgba(s.alpha));
       ctx.fillStyle = g;
     } else {
-      ctx.fillStyle = this.rgba(color, alpha);
+      ctx.fillStyle = rgba(s.alpha);
     }
     ctx.fillRect(0, 0, CONFIG.VIEW_W, CONFIG.VIEW_H);
   },

@@ -154,7 +154,7 @@ html, body {
 }
 
 </style>
-<!-- built 2026-10-28 08:54 by tools/build.js -->
+<!-- built 2026-10-28 08:59 by tools/build.js -->
 </head>
 <body>
   <div id="stage">
@@ -1696,8 +1696,7 @@ const CONFIG = {
     night: {
       hp: 1.5, atk: 1.35, xp: 1.5, gold: 1.5,
       eliteMult: 3,        // 엘리트가 이만큼 더 자주 나온다 (3% -> 9%)
-      tint: '#0a1430', alpha: 0.54,
-      lamp: 88,            // 플레이어 둘레 이만큼은 밝다 (px)
+      lamp: 88,            // 플레이어 둘레 이만큼은 밝다 (px) — 얼마나 밝게 뚫리는지는 sky 의 lamp 가 정한다
       /* 밤이 '도착'하게 하는 장치 — 몬스터는 죽어야 다시 나므로, 가만히 서 있으면
          해가 져도 낮에 태어난 놈들만 서성인다. 멀리 있는 낮 개체를 이 주기로 하나씩
          조용히 물려 밤 개체로 갈아 끼운다 (밤 110초면 약 90마리). */
@@ -1709,8 +1708,26 @@ const CONFIG = {
          간판과 시설은 다 읽히면서 가장자리는 어두워 밤인 줄은 안다 */
       villageLamp: 1.7,
     },
-    dusk: { tint: '#ff7a3c', alpha: 0.22 },
-    dawn: { tint: '#9fc8ff', alpha: 0.30 },
+    /* 하늘빛 — 하루(0~1) 위의 기준점들. 기준점 사이는 색·짙기·등불을 **부드럽게 이어** 칠한다.
+       예전엔 황혼·밤·새벽을 구간마다 따로 칠해서, 구간이 바뀌는 순간(노을 → 밤) 화면이 한꺼번에 어두워졌다.
+       이제 해가 기우는 0.45 부터 깊은 밤 0.68 까지 약 70초에 걸쳐
+       맑음 → 금빛 → 노을 → 보랏빛 땅거미 → 푸른 밤으로 조금씩 넘어간다. 새벽도 같은 길을 거꾸로 간다.
+         tint  덮는 색   alpha  짙기 (0 이면 안 덮는다)
+         lamp  내 둘레가 등불처럼 밝게 뚫리는 정도 (0 없음 ~ 1 깊은 밤)
+       몬스터가 세지는 '밤'의 판정(duskStart·nightStart)과는 따로다 — 이건 보이는 것만 정한다. */
+    sky: [
+      { t: 0.00, tint: '#0a1430', alpha: 0.54, lamp: 1 },     // 깊은 밤
+      { t: 0.035, tint: '#2a2050', alpha: 0.46, lamp: 0.8 },  // 동트기 전 — 보랏빛이 돈다
+      { t: 0.07, tint: '#c86a6a', alpha: 0.24, lamp: 0.25 },  // 여명 — 붉은 빛
+      { t: 0.11, tint: '#ffd09a', alpha: 0.08, lamp: 0 },     // 아침 햇살
+      { t: 0.15, tint: '#ffd09a', alpha: 0, lamp: 0 },        // 한낮 — 맑다
+      { t: 0.45, tint: '#ffc070', alpha: 0, lamp: 0 },
+      { t: 0.52, tint: '#ffb050', alpha: 0.10, lamp: 0 },     // 해가 기운다 — 금빛
+      { t: 0.57, tint: '#ff7a3c', alpha: 0.22, lamp: 0.1 },   // 노을
+      { t: 0.61, tint: '#6a3060', alpha: 0.34, lamp: 0.45 },  // 땅거미 — 보랏빛
+      { t: 0.68, tint: '#0a1430', alpha: 0.54, lamp: 1 },     // 밤
+      { t: 1.00, tint: '#0a1430', alpha: 0.54, lamp: 1 },
+    ],
 
     /* 모래폭풍 — 사막에만. 앞이 안 보이고 바람이 밀고 조금씩 깎인다.
        마을 안은 안전하므로 "폭풍이 오면 들어간다"가 생긴다. */
@@ -15850,42 +15867,44 @@ const Events = {
     return 'rgba(' + c[0] + ',' + c[1] + ',' + c[2] + ',' + a.toFixed(3) + ')';
   },
 
-  /* 하늘빛 — 세상 위에 한 겹 덮는다.
-     밤에는 **플레이어 둘레만 밝게** 뚫어서 등불을 든 것처럼 보이게 한다.
+  /* 지금 하늘빛 — CONFIG.events.sky 의 기준점 사이를 부드럽게 잇는다 (색은 RGB 로 섞는다).
+     기준점 사이는 smoothstep 으로 — 직선으로 이으면 기준점에서 바뀌는 속도가 툭 꺾인다 */
+  skyAt(t) {
+    const keys = CONFIG.events.sky;
+    let i = 0;
+    while (i < keys.length - 2 && t >= keys[i + 1].t) i++;
+    const a = keys[i], b = keys[i + 1];
+    let u = Util.clamp((t - a.t) / ((b.t - a.t) || 1), 0, 1);
+    u = u * u * (3 - 2 * u);
+    const ca = hexToRgb(a.tint), cb = hexToRgb(b.tint);
+    return {
+      rgb: [0, 1, 2].map(k => Math.round(Util.lerp(ca[k], cb[k], u))),
+      alpha: Util.lerp(a.alpha, b.alpha, u),
+      lamp: Util.lerp(a.lamp, b.lamp, u),
+    };
+  },
+
+  /* 하늘빛 — 세상 위에 한 겹 덮는다. 하루 내내 이어진 그라데이션이라 갑자기 어두워지는 순간이 없다.
+     밤이 깊을수록 **플레이어 둘레만 밝게** 뚫어서 등불을 든 것처럼 보이게 한다 (lamp 가 그 세기).
      마을 안에서는 모닥불 덕에 밝은 범위가 넓다. */
   drawSky(ctx, player, cam) {
     if (World.isArena) return;     // 동굴은 원래 어둡다 — 두 번 덮지 않는다
-    const e = CONFIG.events, t = this.time;
-    let color, alpha;
-    if (this.phase === 'dusk') {
-      const u = (t - e.duskStart) / (e.nightStart - e.duskStart);
-      color = e.dusk.tint;
-      alpha = Util.lerp(0, e.dusk.alpha, u);
-    } else if (this.phase === 'night') {
-      color = e.night.tint;
-      alpha = e.night.alpha;
-    } else if (this.phase === 'dawn') {
-      const u = t / e.dawnEnd;
-      color = e.dawn.tint;
-      alpha = Util.lerp(e.dawn.alpha, 0, u);
-    } else {
-      return;
-    }
-    // 황혼은 노을이 하늘 전체에 깔린 것이라 등불이 없다. 깊은 밤에만 둘레가 밝다
-    const lampF = this.nightFactor() * (this.phase === 'dusk' ? 0.35 : 1);
-    if (alpha <= 0.004) return;
+    const e = CONFIG.events, s = this.skyAt(this.time);
+    if (s.alpha <= 0.004) return;
+    const rgba = (a) => 'rgba(' + s.rgb[0] + ',' + s.rgb[1] + ',' + s.rgb[2] + ',' + a.toFixed(3) + ')';
 
-    if (lampF > 0.25) {
+    if (s.lamp > 0.02) {
       const safe = (typeof Village !== 'undefined' && Village.isSafe && Village.isSafe(player.x, player.y));
       const rad = e.night.lamp * (safe ? e.night.villageLamp : 1);
       const px = Math.round(player.x - cam.x), py = Math.round(player.y - cam.y - 4);
       const g = ctx.createRadialGradient(px, py, 6, px, py, rad);
-      g.addColorStop(0, this.rgba(color, alpha * 0.12));
-      g.addColorStop(0.55, this.rgba(color, alpha * 0.66));
-      g.addColorStop(1, this.rgba(color, alpha));
+      // 깊은 밤(lamp 1)에 가운데 12% · 중간 66% — lamp 가 작을수록 둘레가 덜 뚫린다
+      g.addColorStop(0, rgba(s.alpha * (1 - 0.88 * s.lamp)));
+      g.addColorStop(0.55, rgba(s.alpha * (1 - 0.34 * s.lamp)));
+      g.addColorStop(1, rgba(s.alpha));
       ctx.fillStyle = g;
     } else {
-      ctx.fillStyle = this.rgba(color, alpha);
+      ctx.fillStyle = rgba(s.alpha);
     }
     ctx.fillRect(0, 0, CONFIG.VIEW_W, CONFIG.VIEW_H);
   },
@@ -16810,6 +16829,8 @@ const PATCH_NOTES = [
       '무기를 무기 칸으로 끌면 바꿔 든다. 창 밖으로 끌어 놓으면 바닥에 버린다',
       '창고에서도 끌어서 맡기고 찾는다 — 원하는 칸에 놓고, 물건 위에 놓으면 맞바꾸고, 같은 전리품은 합친다',
       '창고 아래쪽 빈 칸에 놓아도 맨 앞으로 붙던 것 — 이제 놓은 칸에 그대로 들어가고, 꺼낸 자리는 빈칸으로 남는다 (저장해도 자리 그대로)',
+      '해 질 녘이 그라데이션으로 — 맑음 → 금빛 → 노을 → 보랏빛 땅거미 → 푸른 밤으로 1분 넘게 천천히 넘어간다 (노을에서 밤으로 한꺼번에 어두워지던 것)',
+      '새벽도 같은 길을 거꾸로 — 보랏빛 → 붉은 여명 → 아침 햇살. 등불도 밤이 깊어질수록 서서히 밝아진다',
       '조준점을 절반 크기로 줄였다. 인벤토리·창고·상점 같은 창에서는 작은 화살표가 되어 칸 속 아이템을 가리지 않는다',
       '가방에서 장비를 버렸다 주우면 등급·옵션이 새로 굴려지던 것을 고쳤다 — 이제 버린 그대로 남는다',
       '사막 동굴 탐험 의뢰가 숲 동굴 이름(SLIME LAIR)으로 뜨던 것을 고쳤다',
