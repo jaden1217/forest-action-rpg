@@ -179,7 +179,7 @@ const Forge = {
       const c = this.reforgeCost(t.item);
       const held = this.lootHeld(player, c.loot);
       list.push({
-        reforge: true, target: t, name: 'REFORGE ' + Gear.name(t.item).slice(0, 14),
+        reforge: true, target: t, name: 'REFORGE ' + Gear.name(t.item).slice(0, 24),
         fullName: Gear.name(t.item), color: Gear.color(t.item),
         loot: CONFIG.loot.items[c.loot].name, need: c.need, held: held,
         gold: c.gold, worn: false,
@@ -323,7 +323,10 @@ const Forge = {
   draw(ctx, player) {
     const list = this.entries(player);
     this.cursor = Util.clamp(this.cursor, 0, Math.max(0, list.length - 1));
-    const w = 214, h = Math.min(190, 52 + list.length * 13 + 22);
+    /* 한 줄이 [이름 … 재료 | 값] 이다. 재료를 왼쪽 고정 자리에서 시작하면 긴 이름
+       (UPGRADE SANDLORD FANG L56, REFORGE …) 위에 겹치므로, 창을 넓히고 재료를 값 앞에 오른쪽 맞춤한다.
+       가장 긴 이름(32자)과 가장 긴 재료(가방 가득 — 3자리 수)가 함께 와도 틈이 남는 너비다 */
+    const w = 250, h = Math.min(190, 52 + list.length * 13 + 22);
     const x = Math.round((CONFIG.VIEW_W - w) / 2), y = Math.round((CONFIG.VIEW_H - h) / 2);
     UI.panel(ctx, x, y, w, h, '#ff8a3c');
     UI.divider(ctx, x + 6, y + 15, w - 12);
@@ -338,6 +341,7 @@ const Forge = {
     /* 줄이 많아져서(속성 넷 + 해제 + 강화 + 재련 여섯 + 제작 셋) 창 하나에 다 안 들어간다.
        커서를 따라 목록이 흐르게 하고, 위아래에 더 있다는 표시를 둔다 */
     const rowY = y + 32, rowH = 13;
+    const matRight = x + w - 40;   // 재료 글자의 오른쪽 끝 — 값(최대 '1600 G')과 틈을 둔 자리
     const rows = Math.max(1, Math.floor((h - 56) / rowH));
     const top = Util.clamp(this.cursor - Math.floor(rows / 2), 0, Math.max(0, list.length - rows));
     if (top > 0) UI.drawText(ctx, '-', x + w / 2, rowY - 8, '#7f6a52', true);
@@ -361,14 +365,14 @@ const Forge = {
       }
       // 제작은 재료가 둘이라 한 줄로 이어 붙인다
       if (it.craft) {
-        UI.drawText(ctx, it.lootText, x + 62, ry, it.lootOk ? '#7fa86a' : '#c05a5a');
+        UI.drawText(ctx, it.lootText, matRight - UI.textWidth(it.lootText), ry, it.lootOk ? '#7fa86a' : '#c05a5a');
         const cp = it.gold + ' G';
         UI.drawText(ctx, cp, x + w - 12 - UI.textWidth(cp), ry, player.gold >= it.gold ? CONFIG.gold.color : '#c05a5a');
         continue;
       }
       // 재료와 값 — 모자라면 붉게
       const mat = it.loot + ' ' + it.held + '/' + it.need;
-      UI.drawText(ctx, mat, x + 56, ry, it.held >= it.need ? '#7fa86a' : '#c05a5a');
+      UI.drawText(ctx, mat, matRight - UI.textWidth(mat), ry, it.held >= it.need ? '#7fa86a' : '#c05a5a');
       const price = it.worn ? 'ON' : it.gold + ' G';
       UI.drawText(ctx, price, x + w - 12 - UI.textWidth(price), ry,
         it.worn ? '#9be564' : (player.gold >= it.gold ? CONFIG.gold.color : '#c05a5a'));

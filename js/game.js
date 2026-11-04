@@ -878,7 +878,7 @@ const Game = {
     if (this.stashPrompt && !this.showMap && typeof Village !== 'undefined') Village.drawStashPrompt(ui, cam);
     if (this.chestPrompt && !this.showMap) Landmarks.drawPrompt(ui, cam, this.chestPrompt);
     if (this.portalPrompt && !this.showMap) Portal.drawPrompt(ui, cam);
-    if (!this.showMap && !this.showInventory && !Shop.open && !Quests.open && !this.title) Quests.drawTracker(ui, this.player);
+    if (!this.paused() && !this.title) Quests.drawTracker(ui, this.player);   // 창이 떠 있으면 가장자리에 잘리므로 숨긴다
     if (Shop.open) Shop.draw(ui, this.player);
     if (Quests.open) Quests.draw(ui, this.player);
     if (Forge.open) Forge.draw(ui, this.player);

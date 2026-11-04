@@ -283,6 +283,8 @@ const Village = {
     for (const p of World.props) {
       if (!p.sign) continue;
       if (Util.dist(player.x, player.y, p.x, p.y) < near) continue;   // F 안내가 뜰 거리면 비켜준다
+      // 대장간 간판은 모루 위인데 안내는 옆에 선 대장장이 위라, 거리만 재면 왼쪽에서 다가갈 때 둘이 겹친다
+      if (p.anvil && Game.forgePrompt) continue;
       const sx = Math.round(p.x - cam.x), sy = Math.round(p.y - cam.y);
       if (sx < -40 || sx > CONFIG.VIEW_W + 40 || sy < -40 || sy > CONFIG.VIEW_H + 40) continue;
       /* 북쪽 시설은 화면 위에 바짝 붙을 때가 있다 — 그대로 두면 날짜·의뢰 칸과 겹쳐
