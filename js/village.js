@@ -916,18 +916,19 @@ const Village = {
     this.stashScroll();
   },
 
-  /* 고른 물건 두 줄 설명 — 이름(등급 색)과 쓸모 한 줄. 자세한 것은 인벤토리에서 본다 */
+  /* 고른 물건 두 줄 설명 — 이름(등급 색)과, 지금 입은 것과 견준 한 줄. 자세한 표는 인벤토리에서 본다 */
   stashDetail(player, s) {
     if (!s) return [[this.stashZone === 'bag' ? '빈 칸' : '맡긴 것이 없다', '#5f6b59']];
     if (s.kind === 'gear') {
-      const r = Gear.rarity(s);
-      return [[Gear.name(s) + ' ' + s.level + '레벨', r.color],
-        [r.name + '  ' + Gear.statLine(Gear.statsOf(s)).slice(0, 3).join(' '), '#c8d0d8']];
+      const r = Gear.rarity(s), cmp = Gear.compare(player, s);
+      return [[Gear.name(s) + ' ' + s.level + '레벨  ' + r.name, r.color],
+        [Inventory.verdictWord(cmp.verdict) + '  ' + Gear.diffLine(cmp, 210), Inventory.verdictColor(cmp.verdict)]];
     }
     if (s.kind === 'weapon') {
       const w = CONFIG.weapons[s.weapon], el = s.element && CONFIG.forge.elements[s.element];
+      const v = Inventory.weaponVerdict(player, s), d = player.dpsWith(s.weapon, s.level) - player.dpsWith(player.weapon, player.weaponLevel);
       return [[this.stashName(s), s.legend ? 'rainbow' : this.stashColor(s)],
-        ['공격력 ' + player.damageWith(s.weapon, s.level) + '  ' + (w.blurb || '') + (el ? '  ' + el.name : ''), el ? el.color : '#c8d0d8']];
+        [Inventory.verdictWord(v) + '  초당 피해 ' + (d > 0 ? '+' : '') + d + '  ' + (w.blurb || '') + (el ? '  ' + el.name : ''), Inventory.verdictColor(v)]];
     }
     const ls = CONFIG.loot.items[s.id] || {};
     return [[ls.name + ' ' + s.amount + '개', ls.color || '#ffffff'],

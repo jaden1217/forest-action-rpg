@@ -401,8 +401,8 @@ const UI = {
 
     if (showInventory) Inventory.draw(ctx, player);   // 여러 칸짜리 가방 창
 
-    // ── 스킬 바 (화면 아래 가운데)
-    if (player.skillCooldowns) this.drawSkillBar(ctx, player);
+    // ── 스킬 바 (화면 아래 가운데) — 가방 창이 그 자리까지 내려오므로 열려 있는 동안은 비켜준다
+    if (player.skillCooldowns && !showInventory) this.drawSkillBar(ctx, player);
 
     // ── 사망 안내
     if (player.dead) {

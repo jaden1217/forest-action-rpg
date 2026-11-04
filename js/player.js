@@ -131,49 +131,11 @@ class Player {
   recalcStats() {
     const c = CONFIG.player, lu = CONFIG.levelUp, up = this.upgrades || {};
 
-    const g = { armor: 0, maxHp: 0, power: 0, speed: 0 };
-    for (const slot of CONFIG.gear.slots) {
-      const item = this.gear && this.gear[slot];
-      if (!item) continue;
-      const stats = Gear.statsOf(item);
-      for (const k in stats) g[k] = (g[k] || 0) + stats[k];
-    }
-    /* 세트 — 같은 세트를 두 점 이상 입으면 덤이 붙는다.
-       덤도 그냥 수치라서 장비 수치와 똑같이 더하면 된다 (상한도 아래에서 함께 걸린다) */
-    const counts = {};
-    for (const slot of CONFIG.gear.slots) {
-      const item = this.gear && this.gear[slot];
-      if (!item) continue;
-      const key = Gear.setIdOf(item.id);
-      if (key) counts[key] = (counts[key] || 0) + 1;
-    }
-    this.setCounts = counts;
-    for (const key in counts) {
-      const bonus = CONFIG.sets[key].bonus;
-      for (let n = 2; n <= counts[key]; n++) {
-        if (!bonus[n]) continue;
-        for (const k in bonus[n]) g[k] = (g[k] || 0) + bonus[n][k];
-      }
-    }
-
-    // 퍼센트 옵션은 겹쳐 입으면 금세 터무니없어진다 — 총합을 묶어둔다
-    for (const k in CONFIG.affixes.caps) {
-      if (g[k]) g[k] = Math.min(g[k], CONFIG.affixes.caps[k]);
-    }
+    // 장비·세트 덤·상한을 합친 값 (입기 전 비교도 같은 셈을 쓴다)
+    const sum = Gear.totals(this.gear), g = sum.stats;
+    this.setCounts = sum.counts;
     this.gearStats = g;
-
-    /* 전설 고유 효과 — 입은 전설 장비와 보스의 전설 무기에서 모은다.
-       수치가 아니라 규칙이라 합산하지 않고 "켜져 있는가"만 본다 */
-    const uniq = {};
-    for (const slot of CONFIG.gear.slots) {
-      const id = Gear.uniqueIdOf(this.gear && this.gear[slot]);
-      if (id) uniq[id] = true;
-    }
-    if (this.weaponLegend) {
-      const L = CONFIG.weapons.legends[this.weaponLegend];
-      if (L && L.unique) uniq[L.unique] = true;
-    }
-    this.uniques = uniq;
+    this.uniques = Gear.uniquesOf(this.gear, this.weaponLegend);
 
     const gain = (id) => { const u = CONFIG.shop.upgrades.find(x => x.id === id); return u ? u.gain : 0; };
     this.maxHp = c.maxHp + (this.level - 1) * lu.hpGain + (up.hp || 0) * gain('hp') + g.maxHp;
@@ -517,6 +479,16 @@ class Player {
     const mult = CONFIG.weapons.levelMult[level - 1] || 1;
     const buff = this.buff ? this.buff.damageMult : 1;
     return Math.max(1, Math.round(this.damage * CONFIG.weapons[weapon].damageMult * mult * buff));
+  }
+
+  /* 그 무기의 초당 피해 기댓값 — 치명타와 손 빠르기까지 든 값이다. 무기를 견줄 때 쓴다.
+     단검은 이어 찌르면 셋째가 반드시 급소라, 이걸 빼고 재면 같은 레벨에서도 늘 손해로 보인다.
+     (검의 마무리는 위력과 쿨다운이 함께 1.3배라 초당으로는 변함이 없다) */
+  dpsWith(weapon, level) {
+    const w = CONFIG.weapons[weapon], m = this.critMult();
+    const hit = 1 + Math.min(1, this.critChance()) * (m - 1);
+    const perHit = w.style === 'thrust' ? ((w.combo - 1) * hit + m) / w.combo : hit;
+    return Math.round(this.damageWith(weapon, level) * perHit * this.attackSpeedMult() / w.cooldown);
   }
 
   // 무기 레벨 색 — HUD·바닥 이름표에 함께 쓴다

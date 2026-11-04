@@ -1311,6 +1311,14 @@ const CONFIG = {
     dropChance: 0.12,       // 몬스터 종류·레벨과 무관하게 모두 같은 확률
     armorSoftness: 70,      // armor 70 이면 딱 절반을 막는다
     armorCap: 0.70,         // 아무리 껴입어도 70% 까지만
+    /* 입기 전 비교의 판정 — 수치마다 무게를 달아 더한다. 합이 compareEven 안쪽이면 '비슷함'.
+       방어력은 비율로 막으니 체력보다 무겁고, 공격력은 한 점이 레벨업 하나의 절반이라 가장 무겁다.
+       골드·넉백저항·포션처럼 싸움을 바로 바꾸지 않는 것은 숫자가 커 보여도 가볍게 쳤다.
+       고유 효과는 수치가 아니라서 판정에 넣지 않고 따로 적는다 */
+    compareWeight: { armor: 1.5, maxHp: 0.3, power: 3, speed: 0.8, attackSpeed: 1.5, crit: 1.5, critMult: 0.5,
+                     lifesteal: 2, potion: 0.2, cooldown: 1, knockRes: 0.2, gold: 0.1,
+                     fiery: 0.4, frosty: 0.4, shocking: 0.4, venomous: 0.4 },
+    compareEven: 1,
 
     items: {
       // 머리 — 가벼운 가죽이냐, 무겁고 단단한 쇠냐

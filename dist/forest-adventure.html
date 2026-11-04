@@ -154,7 +154,7 @@ html, body {
 }
 
 </style>
-<!-- built 2026-11-04 08:25 by tools/build.js -->
+<!-- built 2026-11-04 08:43 by tools/build.js -->
 </head>
 <body>
   <div id="stage">
@@ -1496,6 +1496,14 @@ const CONFIG = {
     dropChance: 0.12,       // 몬스터 종류·레벨과 무관하게 모두 같은 확률
     armorSoftness: 70,      // armor 70 이면 딱 절반을 막는다
     armorCap: 0.70,         // 아무리 껴입어도 70% 까지만
+    /* 입기 전 비교의 판정 — 수치마다 무게를 달아 더한다. 합이 compareEven 안쪽이면 '비슷함'.
+       방어력은 비율로 막으니 체력보다 무겁고, 공격력은 한 점이 레벨업 하나의 절반이라 가장 무겁다.
+       골드·넉백저항·포션처럼 싸움을 바로 바꾸지 않는 것은 숫자가 커 보여도 가볍게 쳤다.
+       고유 효과는 수치가 아니라서 판정에 넣지 않고 따로 적는다 */
+    compareWeight: { armor: 1.5, maxHp: 0.3, power: 3, speed: 0.8, attackSpeed: 1.5, crit: 1.5, critMult: 0.5,
+                     lifesteal: 2, potion: 0.2, cooldown: 1, knockRes: 0.2, gold: 0.1,
+                     fiery: 0.4, frosty: 0.4, shocking: 0.4, venomous: 0.4 },
+    compareEven: 1,
 
     items: {
       // 머리 — 가벼운 가죽이냐, 무겁고 단단한 쇠냐
@@ -7533,49 +7541,11 @@ class Player {
   recalcStats() {
     const c = CONFIG.player, lu = CONFIG.levelUp, up = this.upgrades || {};
 
-    const g = { armor: 0, maxHp: 0, power: 0, speed: 0 };
-    for (const slot of CONFIG.gear.slots) {
-      const item = this.gear && this.gear[slot];
-      if (!item) continue;
-      const stats = Gear.statsOf(item);
-      for (const k in stats) g[k] = (g[k] || 0) + stats[k];
-    }
-    /* 세트 — 같은 세트를 두 점 이상 입으면 덤이 붙는다.
-       덤도 그냥 수치라서 장비 수치와 똑같이 더하면 된다 (상한도 아래에서 함께 걸린다) */
-    const counts = {};
-    for (const slot of CONFIG.gear.slots) {
-      const item = this.gear && this.gear[slot];
-      if (!item) continue;
-      const key = Gear.setIdOf(item.id);
-      if (key) counts[key] = (counts[key] || 0) + 1;
-    }
-    this.setCounts = counts;
-    for (const key in counts) {
-      const bonus = CONFIG.sets[key].bonus;
-      for (let n = 2; n <= counts[key]; n++) {
-        if (!bonus[n]) continue;
-        for (const k in bonus[n]) g[k] = (g[k] || 0) + bonus[n][k];
-      }
-    }
-
-    // 퍼센트 옵션은 겹쳐 입으면 금세 터무니없어진다 — 총합을 묶어둔다
-    for (const k in CONFIG.affixes.caps) {
-      if (g[k]) g[k] = Math.min(g[k], CONFIG.affixes.caps[k]);
-    }
+    // 장비·세트 덤·상한을 합친 값 (입기 전 비교도 같은 셈을 쓴다)
+    const sum = Gear.totals(this.gear), g = sum.stats;
+    this.setCounts = sum.counts;
     this.gearStats = g;
-
-    /* 전설 고유 효과 — 입은 전설 장비와 보스의 전설 무기에서 모은다.
-       수치가 아니라 규칙이라 합산하지 않고 "켜져 있는가"만 본다 */
-    const uniq = {};
-    for (const slot of CONFIG.gear.slots) {
-      const id = Gear.uniqueIdOf(this.gear && this.gear[slot]);
-      if (id) uniq[id] = true;
-    }
-    if (this.weaponLegend) {
-      const L = CONFIG.weapons.legends[this.weaponLegend];
-      if (L && L.unique) uniq[L.unique] = true;
-    }
-    this.uniques = uniq;
+    this.uniques = Gear.uniquesOf(this.gear, this.weaponLegend);
 
     const gain = (id) => { const u = CONFIG.shop.upgrades.find(x => x.id === id); return u ? u.gain : 0; };
     this.maxHp = c.maxHp + (this.level - 1) * lu.hpGain + (up.hp || 0) * gain('hp') + g.maxHp;
@@ -7919,6 +7889,16 @@ class Player {
     const mult = CONFIG.weapons.levelMult[level - 1] || 1;
     const buff = this.buff ? this.buff.damageMult : 1;
     return Math.max(1, Math.round(this.damage * CONFIG.weapons[weapon].damageMult * mult * buff));
+  }
+
+  /* 그 무기의 초당 피해 기댓값 — 치명타와 손 빠르기까지 든 값이다. 무기를 견줄 때 쓴다.
+     단검은 이어 찌르면 셋째가 반드시 급소라, 이걸 빼고 재면 같은 레벨에서도 늘 손해로 보인다.
+     (검의 마무리는 위력과 쿨다운이 함께 1.3배라 초당으로는 변함이 없다) */
+  dpsWith(weapon, level) {
+    const w = CONFIG.weapons[weapon], m = this.critMult();
+    const hit = 1 + Math.min(1, this.critChance()) * (m - 1);
+    const perHit = w.style === 'thrust' ? ((w.combo - 1) * hit + m) / w.combo : hit;
+    return Math.round(this.damageWith(weapon, level) * perHit * this.attackSpeedMult() / w.cooldown);
   }
 
   // 무기 레벨 색 — HUD·바닥 이름표에 함께 쓴다
@@ -11802,6 +11782,113 @@ const Gear = {
     return out;
   },
 
+  /* 이 차림새의 합계 — 옵션을 더하고, 세트 덤을 붙이고, 퍼센트 옵션의 상한을 건다.
+     플레이어 능력치(recalcStats)와 입기 전 비교가 같은 셈을 쓴다.
+     세트 덤도 그냥 수치라서 장비 수치와 똑같이 더하면 된다 (상한도 함께 걸린다) */
+  totals(gear) {
+    const g = { armor: 0, maxHp: 0, power: 0, speed: 0 }, counts = {};
+    for (const slot of CONFIG.gear.slots) {
+      const item = gear && gear[slot];
+      if (!item) continue;
+      const stats = this.statsOf(item);
+      for (const k in stats) g[k] = (g[k] || 0) + stats[k];
+      const key = this.setIdOf(item.id);
+      if (key) counts[key] = (counts[key] || 0) + 1;
+    }
+    for (const key in counts) {
+      const bonus = CONFIG.sets[key].bonus;
+      for (let n = 2; n <= counts[key]; n++) {
+        if (!bonus[n]) continue;
+        for (const k in bonus[n]) g[k] = (g[k] || 0) + bonus[n][k];
+      }
+    }
+    // 퍼센트 옵션은 겹쳐 입으면 금세 터무니없어진다 — 총합을 묶어둔다
+    for (const k in CONFIG.affixes.caps) {
+      if (g[k]) g[k] = Math.min(g[k], CONFIG.affixes.caps[k]);
+    }
+    return { stats: g, counts: counts };
+  },
+
+  /* 켜지는 고유 효과 — 입은 전설 장비와 보스의 전설 무기에서 모은다.
+     수치가 아니라 규칙이라 합산하지 않고 "켜져 있는가"만 본다 */
+  uniquesOf(gear, weaponLegend) {
+    const uniq = {};
+    for (const slot of CONFIG.gear.slots) {
+      const id = this.uniqueIdOf(gear && gear[slot]);
+      if (id) uniq[id] = true;
+    }
+    const L = weaponLegend && CONFIG.weapons.legends[weaponLegend];
+    if (L && L.unique) uniq[L.unique] = true;
+    return uniq;
+  },
+
+  /* ── 입기 전 비교 ────────────────────────────────────────
+     인벤토리 설명창과 창고가 함께 쓴다. 가방 칸의 세모도 같은 판정을 읽는다. */
+
+  // 이것으로 갈아입은 차림새 (입어 보는 게 아니라 사본이다)
+  wornWith(player, item) {
+    const next = Object.assign({}, player.gear);
+    next[this.slotOf(item)] = item;
+    return next;
+  },
+
+  /* 판정 — 몸에 실제로 더해지는 변화에 무게를 달아 더한다. 1 나아진다 / 0 비슷하다 / -1 나빠진다.
+     장비 두 점만 견주지 않고 합계를 견주므로 세트 덤과 상한까지 든다 */
+  verdict(player, item) {
+    const a = this.totals(player.gear).stats, b = this.totals(this.wornWith(player, item)).stats;
+    let score = 0;
+    for (const k of this.statOrder()) score += ((b[k] || 0) - (a[k] || 0)) * this.statWeight(k);
+    return Math.abs(score) <= CONFIG.gear.compareEven ? 0 : Math.sign(score);
+  },
+
+  /* 설명창에 적을 것 전부
+       worn   지금 그 칸에 입은 것 (없으면 null)
+       rows   수치마다 { key, old, now, diff } — 장비 두 점의 값. 순서가 늘 같아서
+              가방을 옮겨 다니며 같은 자리를 눈으로 짚을 수 있다
+       sets   달라지는 세트 { name, count, total, up, stats }
+       gained / lost  얻고 잃는 고유 효과의 설명 */
+  compare(player, item) {
+    const worn = player.gear[this.slotOf(item)] || null, next = this.wornWith(player, item);
+    const mine = this.statsOf(item), old = worn ? this.statsOf(worn) : {};
+    const rows = this.statOrder().filter(k => mine[k] || old[k]).map(k => (
+      { key: k, old: old[k] || 0, now: mine[k] || 0, diff: (mine[k] || 0) - (old[k] || 0) }));
+    const u = this.uniqueChanges(player.uniques, this.uniquesOf(next, player.weaponLegend));
+    return { worn: worn, rows: rows, verdict: this.verdict(player, item),
+             sets: this.setChanges(this.totals(player.gear).counts, this.totals(next).counts),
+             gained: u.gained, lost: u.lost };
+  },
+
+  // 몇 점에서 몇 점으로 바뀌는지와, 그 사이에서 켜지거나 꺼지는 덤
+  setChanges(was, now) {
+    const out = [];
+    for (const key of Object.keys(CONFIG.sets)) {
+      const a = was[key] || 0, b = now[key] || 0, set = CONFIG.sets[key];
+      if (a === b) continue;
+      const bonus = {};
+      for (let n = Math.min(a, b) + 1; n <= Math.max(a, b); n++) {
+        for (const k in (set.bonus[n] || {})) bonus[k] = (bonus[k] || 0) + (b > a ? set.bonus[n][k] : -set.bonus[n][k]);
+      }
+      out.push({ name: set.name, count: b, total: set.items.length, up: b > a, stats: this.statLine(bonus) });
+    }
+    return out;
+  },
+
+  uniqueChanges(was, now) {
+    const text = (id) => CONFIG.uniques[id].text;
+    return { gained: Object.keys(now).filter(id => !was[id]).map(text),
+             lost: Object.keys(was).filter(id => !now[id]).map(text) };
+  },
+
+  // 한 줄로 줄인 비교 (창고 창) — 크게 달라지는 것부터, 폭에 맞을 때까지만 적는다
+  diffLine(cmp, wide) {
+    const shown = cmp.rows.filter(r => r.diff).sort((p, q) => Math.abs(q.diff * this.statWeight(q.key)) - Math.abs(p.diff * this.statWeight(p.key)));
+    if (!shown.length) return '입은 것과 같다';
+    for (let n = shown.length; n > 0; n--) {
+      const line = shown.slice(0, n).map(r => this.statLabel(r.key) + ' ' + this.statSigned(r.key, r.diff)).join('  ') + (n < shown.length ? ' ..' : '');
+      if (n === 1 || UI.textWidth(line) <= wide) return line;
+    }
+  },
+
   /* ── 이름과 색 ─────────────────────────────────────────── */
 
   // 가장 센 옵션의 말이 앞에 붙는다 (옵션은 굴릴 때 값 순으로 정렬해 뒀다)
@@ -11820,21 +11907,26 @@ const Gear = {
 
   sprite(item) { return SPRITES.gear[this.spec(item.id).sprite]; },
 
-  /* 'ARM +7  HP +12' 처럼 사람이 읽는 줄로.
-     바탕 수치와 옵션이 같은 이름을 쓸 수 있으므로(ARM 등) 이 함수는 받은 것만 그대로 쓴다. */
-  statLine(stats) {
-    const order = ['armor', 'maxHp', 'power', 'speed', 'attackSpeed', 'crit', 'critMult',
-                   'lifesteal', 'potion', 'cooldown', 'knockRes', 'gold'];
-    const base = { armor: '방어', maxHp: '체력', power: '공격', speed: '이속' };
-    const out = [];
-    for (const k of order) {
-      if (!stats[k]) continue;
-      const a = CONFIG.affixes.list[k];
-      const label = (base[k] || (a && a.label) || k);
-      const pct = (a && a.pct) || k === 'speed';
-      out.push(label + ' ' + (stats[k] > 0 ? '+' : '') + stats[k] + (pct ? '%' : ''));
+  /* 수치를 적는 차례 — 늘 있는 넷이 앞서고 나머지는 옵션 표의 순서대로.
+     표에서 읽어 오므로 옵션을 새로 넣어도 설명창에서 빠지지 않는다 */
+  statOrder() {
+    if (!this.order) {
+      const first = ['armor', 'maxHp', 'power', 'speed'];
+      this.order = first.concat(Object.keys(CONFIG.affixes.list).filter(k => first.indexOf(k) < 0));
     }
-    return out;
+    return this.order;
+  },
+  statLabel(k) { const a = this.affixSpec(k); return a ? a.label : k; },
+  statWeight(k) { return CONFIG.gear.compareWeight[k] || 0; },
+  // 18 / 9% — 표의 칸에 적는 값
+  statText(k, v) { const a = this.affixSpec(k); return v + (a && a.pct ? '%' : ''); },
+  // +18 / -9% — 부호까지
+  statSigned(k, v) { return (v > 0 ? '+' : '') + this.statText(k, v); },
+
+  /* '방어 +7  체력 +12' 처럼 사람이 읽는 줄로.
+     바탕 수치와 옵션이 같은 이름을 쓸 수 있으므로(방어 등) 이 함수는 받은 것만 그대로 쓴다. */
+  statLine(stats) {
+    return this.statOrder().filter(k => stats[k]).map(k => this.statLabel(k) + ' ' + this.statSigned(k, stats[k]));
   },
 
   /* ── 세트 ──────────────────────────────────────────────── */
@@ -12317,7 +12409,7 @@ const Inventory = {
   layout(player) {
     const cols = CONFIG.inventory.cols, slot = 18, gap = 2;
     const rows = Math.ceil(player.bag.length / cols);
-    const w = 258, h = 24 + Math.max(rows, 6) * (slot + gap) + 34;   // 오른쪽 설명(세트·고유 효과까지)과 아래쪽 안내 두 줄이 들어갈 자리
+    const w = 258, h = 24 + Math.max(rows, 7) * (slot + gap) + 34;   // 오른쪽 비교 표(양쪽 옵션이 다 달라도 열한 줄 + 세트·고유 효과)와 아래쪽 안내 두 줄이 들어갈 자리
     const x = Math.round((CONFIG.VIEW_W - w) / 2), y = Math.round((CONFIG.VIEW_H - h) / 2);
     const panelX = x + 8 + cols * (slot + gap) + 6;
     return { x: x, y: y, w: w, h: h, gridX: x + 8, gridY: y + 18, cols: cols, rows: rows, slot: slot, gap: gap,
@@ -12361,20 +12453,59 @@ const Inventory = {
     // ── 안내
     const footY = L.y + L.h - 17;
     if (this.message) UI.drawText(ctx, this.message, L.x + L.w / 2, footY, '#9be564', true);
-    else UI.drawText(ctx, 'WASD 고르기  스페이스 쓰기  X 버리기  끌어서 옮기기', L.x + L.w / 2, footY, '#7fa86a', true);
+    else UI.drawText(ctx, 'WASD 고르기  ' + this.useHint(player) + 'X 버리기  끌어서 옮기기', L.x + L.w / 2, footY, '#7fa86a', true);
     UI.drawText(ctx, '일시정지 · I 닫기', L.x + L.w / 2, footY + 8, '#5f6b59', true);
     // 끌고 있는 물건은 창 그림 맨 위에
     if (this.drag && this.drag.active) this.drawDrag(ctx, player, this.cellItem(player, this.drag.from));
   },
 
-  /* 칸 하나 — 바탕, 그림, 테두리. 창고 창도 같은 칸을 쓴다 (Village.drawStashWindow).
+  // 아래쪽 안내의 '스페이스' — 고른 칸에서 실제로 하는 일을 적는다 (할 일이 없으면 뺀다)
+  useHint(player) {
+    const at = this.at(player, this.cursor), s = at.item;
+    if (!s) return '';
+    if (at.zone === 'gear') return '스페이스 벗기  ';
+    if (s.kind === 'gear') return '스페이스 입기  ';
+    if (s.kind === 'weapon') return '스페이스 장착  ';
+    return s.kind === 'potion' ? '스페이스 마시기  ' : '';
+  },
+
+  /* ── 판정 표시 ─────────────────────────────────────────── */
+
+  // 무기 판정 — 초당 피해 기댓값으로 잰다. 1% 안쪽은 같은 것으로 친다
+  weaponVerdict(player, s) {
+    const now = player.dpsWith(player.weapon, player.weaponLevel), d = player.dpsWith(s.weapon, this.weaponLevel(player, s)) - now;
+    return Math.abs(d) <= now * 0.01 ? 0 : Math.sign(d);
+  },
+  verdictOf(player, s) {
+    if (s.kind === 'gear') return Gear.verdict(player, s);
+    return s.kind === 'weapon' ? this.weaponVerdict(player, s) : 0;
+  },
+  verdictWord(v) { return v > 0 ? '더 좋음' : (v < 0 ? '더 나쁨' : '비슷함'); },
+  verdictColor(v) { return v > 0 ? '#9be564' : (v < 0 ? '#ff6b6b' : '#c8d0d8'); },
+
+  // 세모 — 글꼴에 없어서 직접 찍는다 (창고 창의 화살표와 같은 모양)
+  drawTriangle(ctx, x, y, up, color) {
+    ctx.fillStyle = color;
+    for (let k = 0; k < 3; k++) ctx.fillRect(x + 2 - k, y + (up ? k : 2 - k), 1 + k * 2, 1);
+  },
+
+  /* 칸 하나 — 바탕, 그림, 판정 세모, 테두리. 창고 창도 같은 칸을 쓴다 (Village.drawStashWindow).
      테두리는 커서가 먼저고, 그다음 전설 무기는 무지개, 희귀·전설 장비는 등급 색 —
-     칸 테두리만 봐도 귀한 것을 가려낼 수 있다 */
+     칸 테두리만 봐도 귀한 것을 가려낼 수 있다.
+     세모는 지금 입은 것보다 나은지(초록) 못한지(빨강) — 칸을 하나씩 열어 보지 않아도 된다 */
   drawSlot(ctx, player, s, sx, sy, size, selected) {
     // 고른 칸은 바탕도 밝힌다 — 노란 커서 테두리만으로는 전설(주황) 테두리와 헷갈린다
     ctx.fillStyle = selected ? '#4a4a2a' : (s ? '#252c22' : '#1b201a');
     ctx.fillRect(sx, sy, size, size);
-    if (s) this.drawItem(ctx, player, s, sx, sy, size);
+    if (s) {
+      this.drawItem(ctx, player, s, sx, sy, size);
+      const v = this.verdictOf(player, s);
+      if (v) {
+        ctx.fillStyle = 'rgba(10,12,10,0.75)';
+        ctx.fillRect(sx + size - 8, sy + 1, 7, 5);
+        this.drawTriangle(ctx, sx + size - 7, sy + 2, v > 0, this.verdictColor(v));
+      }
+    }
     let edge = null;
     if (selected) edge = '#ffe066';
     else if (s && s.kind === 'weapon' && s.legend) edge = UI.rainbowNow(0);
@@ -12405,16 +12536,23 @@ const Inventory = {
     }
   },
 
-  /* 오른쪽 — 지금 입고 든 것, 그리고 고른 칸의 설명.
+  /* 오른쪽 — 위는 장착 줄, 아래는 고른 칸에 따라 달라진다.
+       가방의 장비·무기          입은 것과 나란히 견주는 표 (drawCompare)
+       장착 칸의 장비            그 장비의 수치 (drawWornGear)
+       포션·전리품·빈 칸         그 설명과, 지금 내 능력치 합계
+
      장착 줄은 [무기][머리][몸][장신구] 네 칸이다. 무기는 보여주기만 하고(바꾸는 건 가방에서),
      장비 세 칸은 커서로 고를 수 있다 — 거기서 Space 는 '벗다'.
-
-     줄 간격이 8px 로 빡빡한 이유: 옵션이 네 개까지 붙을 수 있어서 설명이 일곱 줄까지 간다. */
+     내 능력치 합계를 늘 띄워 두면 견주는 표와 뒤섞여 읽기 어려워서, 견주는 동안은 접어 둔다. */
   drawDetails(ctx, player, L) {
     const x = L.panelX, top = L.gridY, wide = L.x + L.w - 8 - x;
+    const at = this.at(player, this.cursor), s = at.item;
     UI.drawText(ctx, '장착', x, top, '#7fa86a');
 
     const slots = CONFIG.gear.slots;
+    // 가방에서 고른 것이 들어갈 자리 — 장착 줄에 밑줄로 짚어 준다
+    let target = -1;
+    if (s && at.zone === 'bag') target = s.kind === 'weapon' ? 0 : (s.kind === 'gear' ? 1 + slots.indexOf(Gear.slotOf(s)) : -1);
     for (let i = 0; i <= slots.length; i++) {
       const bx = L.boxX + i * (L.box + L.bgap), by = L.boxY;
       const item = i === 0 ? null : player.gear[slots[i - 1]];
@@ -12433,141 +12571,230 @@ const Inventory = {
         ctx.strokeStyle = Gear.color(item);
         ctx.strokeRect(bx + 0.5, by + 0.5, L.box - 1, L.box - 1);
       }
+      if (i === target) {
+        ctx.fillStyle = '#ffe066';
+        ctx.fillRect(bx + 2, by + L.box + 1, L.box - 4, 1);
+      }
     }
+    UI.divider(ctx, x, top + 27, wide);
 
-    // 지금 든 무기 한 줄
-    const spec = player.weaponSpec(), dmg = player.attackDamage();
-    if (player.weaponLegend) UI.drawRainbowText(ctx, player.weaponLabel(), x, top + 26);
-    else UI.drawText(ctx, player.weaponLabel(), x, top + 26, player.weaponColor());
+    const box = { x: x, y: top + 30, w: wide, bottom: L.y + L.h - 19 };
+    if (s && s.kind === 'gear') {
+      if (at.zone === 'gear') this.drawWornGear(ctx, player, s, box);
+      else this.drawCompare(ctx, box, this.gearCompare(player, s, wide));
+      return;
+    }
+    if (s && s.kind === 'weapon') { this.drawCompare(ctx, box, this.weaponCompare(player, s, wide)); return; }
+
+    let y = this.drawTotals(ctx, player, box);
+    const line = (text, color) => { UI.drawText(ctx, text, x, y, color); y += 8; };
+    if (!s) {
+      line(at.zone === 'gear' ? CONFIG.gear.slotNames[at.slot] + ' 칸 비어 있음' : '빈 칸', '#5f6b59');
+      return;
+    }
+    if (s.kind === 'potion') {
+      line('포션 ' + player.potions + '/' + player.maxPotions + '개', '#ffd93d');
+      line('체력 ' + player.potionHeal() + ' 회복  (E 키로도 마신다)', '#f0d9b5');
+      return;
+    }
+    const ls = this.spec(s.id);
+    line(ls.name, ls.color);
+    line(s.amount + '개  값 ' + (ls.value * s.amount) + '골드', '#f0d9b5');
+    line((ls.trophy ? '보스 전리품' : '몬스터 전리품') + ' · 상점에 판다', '#7fa86a');
+  },
+
+  /* 지금 내 능력치 합계 — 다음 줄의 y 를 돌려준다.
+     늘 있는 네 가지 뒤에 굴려 붙은 옵션들. 아무것도 안 입었어도 0 으로 띄운다 (비어 있다는 걸 알려주려고) */
+  drawTotals(ctx, player, box) {
+    const x = box.x, dmg = player.attackDamage(), g = player.gearStats;
+    let y = box.y;
+    const line = (text, color) => { UI.drawText(ctx, text, x, y, color); y += 8; };
+
+    if (player.weaponLegend) UI.drawRainbowText(ctx, player.weaponLabel(), x, y);
+    else UI.drawText(ctx, player.weaponLabel(), x, y, player.weaponColor());
     const eq = player.weaponElement && CONFIG.forge.elements[player.weaponElement];
-    UI.drawText(ctx, '공격력 ' + dmg + '  초당 ' + Math.round(dmg / spec.cooldown), x, top + 34, '#f0d9b5');
-    if (eq) UI.drawText(ctx, eq.name, x + 92, top + 26, eq.color);
-
-    /* 입은 것이 더해주는 것 — 앞줄은 늘 있는 네 가지, 뒷줄은 굴려 붙은 옵션들.
-       아무것도 안 입었어도 0 으로 띄운다 (비어 있다는 걸 알려주려고) */
-    const g = player.gearStats;
-    UI.drawText(ctx, '방어 ' + (g.armor || 0) + ' (-' + Math.round(player.damageReduction() * 100) + '%)  체력 +' + (g.maxHp || 0), x, top + 42, '#7ec8ff');
+    if (eq) UI.drawText(ctx, eq.name, x + 92, y, eq.color);
+    y += 8;
+    line('공격력 ' + dmg + '  초당 ' + player.dpsWith(player.weapon, player.weaponLevel), '#f0d9b5');
+    line('방어 ' + (g.armor || 0) + ' (-' + Math.round(player.damageReduction() * 100) + '%)  체력 +' + (g.maxHp || 0), '#7ec8ff');
     const extras = {};
     for (const k in g) if (k !== 'armor' && k !== 'maxHp' && g[k]) extras[k] = g[k];
-    const extraLine = Gear.statLine(extras).slice(0, 4).join(' ');
-    UI.drawText(ctx, extraLine || '더해지는 능력치 없음', x, top + 50, extraLine ? '#7ec8ff' : '#5f6b59');
+    const lines = this.wrap(Gear.statLine(extras), box.w);
+    for (const t of lines) line(t, '#7ec8ff');
+    if (!lines.length) line('더해지는 능력치 없음', '#5f6b59');
 
-    /* 세트와 고유 효과 — 지금 켜져 있는 것만 한 줄씩. 없으면 그 줄을 쓰지 않는다 */
-    let sy = top + 58;
+    // 세트와 고유 효과 — 지금 켜져 있는 것만 한 줄씩. 없으면 그 줄을 쓰지 않는다
     const onSets = [];
     for (const key in player.setCounts) {
       const n = player.setCounts[key];
       if (n >= 2) onSets.push(CONFIG.sets[key].name + ' ' + n + '점');
     }
-    if (onSets.length) { UI.drawText(ctx, '세트 ' + onSets.join('  '), x, sy, '#9be564'); sy += 7; }
+    if (onSets.length) line('세트 ' + onSets.join('  '), '#9be564');
     const onUniq = Object.keys(player.uniques);
-    if (onUniq.length) {
-      UI.drawText(ctx, onUniq.map(id => CONFIG.uniques[id].name).join(' · ').slice(0, 40), x, sy, '#ffb35c');
-      sy += 7;
+    if (onUniq.length) line(onUniq.map(id => CONFIG.uniques[id].name).join(' · '), '#ffb35c');
+
+    UI.divider(ctx, x, y, box.w);
+    return y + 4;
+  },
+
+  // 낱말 묶음을 폭에 맞춰 여러 줄로 — 세트 덤·합계처럼 길이가 들쭉날쭉한 것에 쓴다
+  wrap(parts, wide) {
+    const lines = [];
+    let cur = '';
+    for (const p of parts) {
+      const next = cur ? cur + '  ' + p : p;
+      if (cur && UI.textWidth(next) > wide) { lines.push(cur); cur = p; }
+      else cur = next;
     }
+    if (cur) lines.push(cur);
+    return lines;
+  },
 
-    UI.divider(ctx, x, sy + 1, wide);
+  /* ── 비교 표 ─────────────────────────────────────────────
+     drawCompare 는 그리기만 하고, 무엇을 적을지는 장비와 무기가 각자 만든다.
+       name, nameColor, legend   고른 것의 이름 (전설 무기는 무지개)
+       sub                       등급·칸·레벨 또는 평타 모양
+       versus                    [지금 입은 것의 이름, 색]
+       verdict, head             판정, 표의 첫 열 머리
+       rows                      { label, old, now, diff, tone, same, rank } — rank 가 작은 줄부터 생략된다
+       notes                     표 아래에 붙는 [글, 색] — 세트 변화, 얻고 잃는 고유 효과 */
 
-    const at = this.at(player, this.cursor);
-    const s = at.item;
-    let y = sy + 5;
-    // 설명은 줄이 아홉까지 갈 수 있어서(옵션 넷 + 세트 + 고유 효과) 7칸 간격으로 촘촘히 적는다
-    const line = (text, color) => { UI.drawText(ctx, text, x, y, color); y += 7; };
+  gearCompare(player, s, wide) {
+    const cmp = Gear.compare(player, s), r = Gear.rarity(s);
+    return {
+      name: Gear.name(s), nameColor: r.color,
+      sub: r.name + ' · ' + CONFIG.gear.slotNames[Gear.slotOf(s)] + ' · ' + s.level + '레벨',
+      versus: cmp.worn ? ['입은 것  ' + Gear.fullName(cmp.worn), Gear.color(cmp.worn)] : ['이 칸은 비어 있다', '#7fa86a'],
+      verdict: cmp.verdict, head: '입은 것',
+      rows: cmp.rows.map(row => ({
+        label: Gear.statLabel(row.key),
+        old: row.old ? Gear.statText(row.key, row.old) : '-',
+        now: row.now ? Gear.statText(row.key, row.now) : '-',
+        diff: row.diff ? Gear.statSigned(row.key, row.diff) : '-',
+        tone: Math.sign(row.diff), same: !row.diff,
+        rank: Math.abs(row.diff * Gear.statWeight(row.key)),
+      })),
+      notes: this.compareNotes(cmp, wide),
+    };
+  },
 
-    if (!s) {
-      line(at.zone === 'gear' ? CONFIG.gear.slotNames[at.slot] + ' 칸 비어 있음' : '빈 칸', '#5f6b59');
-      return;
+  weaponCompare(player, s, wide) {
+    const lv = this.weaponLevel(player, s), w = CONFIG.weapons[s.weapon], cur = player.weaponSpec();
+    const num = (label, old, now) => ({ label: label, old: String(old), now: String(now),
+      diff: now === old ? '-' : (now > old ? '+' : '') + (now - old), tone: Math.sign(now - old), same: now === old, rank: 0 });
+    const word = (label, old, now) => ({ label: label, old: old, now: now, diff: '', tone: 0, same: old === now, rank: 0 });
+    const rows = [
+      num('공격력', player.attackDamage(), player.damageWith(s.weapon, lv)),
+      num('초당 피해', player.dpsWith(player.weapon, player.weaponLevel), player.dpsWith(s.weapon, lv)),
+      num('사거리', cur.reach, w.reach),
+      word('속도', UI.speedWord(cur.cooldown), UI.speedWord(w.cooldown)),
+    ];
+    const oe = player.weaponElement && CONFIG.forge.elements[player.weaponElement];
+    const ne = s.element && CONFIG.forge.elements[s.element];
+    if (oe || ne) rows.push(word('속성', oe ? oe.name : '-', ne ? ne.name : '-'));
+    const u = Gear.uniqueChanges(player.uniques, Gear.uniquesOf(player.gear, s.legend));
+    return {
+      name: this.itemName(player, s), nameColor: CONFIG.weapons.levelColor[levelTier(lv)], legend: !!s.legend,
+      sub: w.name + ' · ' + w.blurb,   // 평타가 어떻게 생겼는지 (찌르기·베기·휩쓸기)
+      versus: ['든 것  ' + player.weaponLabel(), player.weaponColor()],
+      verdict: this.weaponVerdict(player, s), head: '든 것',
+      rows: rows,
+      notes: this.compareNotes({ sets: [], gained: u.gained, lost: u.lost }, wide),
+    };
+  },
+
+  // 표 아래의 줄들 — 세트가 어떻게 바뀌는지, 어떤 고유 효과를 얻고 잃는지
+  compareNotes(cmp, wide) {
+    const out = [];
+    for (const c of cmp.sets) {
+      if (!c.up && !c.stats.length) continue;   // 줄어도 꺼지는 덤이 없으면 적을 것이 없다
+      const color = !c.stats.length ? '#7fa86a' : (c.up ? '#9be564' : '#ff6b6b');
+      const head = '세트 ' + c.name + ' ' + c.count + '/' + c.total + '점';
+      for (const text of this.wrap([head].concat(c.stats), wide)) out.push([text, color]);
     }
+    for (const t of cmp.gained) out.push(['얻는 효과  ' + t, '#ffb35c']);
+    for (const t of cmp.lost) out.push(['잃는 효과  ' + t, '#ff6b6b']);
+    return out;
+  },
 
-    if (s.kind === 'potion') {
-      line('포션 ' + player.potions + '/' + player.maxPotions + '개', '#ffd93d');
-      line('체력 ' + player.potionHeal() + ' 회복', '#f0d9b5');
-      y += 5;
-      line('스페이스 마시기 (E 키도 된다)', '#9be564');
-      return;
+  drawCompare(ctx, box, c) {
+    const x = box.x, right = x + box.w, height = box.bottom - box.y, heads = 4;   // 이름 / 설명 / 입은 것 / 표 머리
+
+    // 다 못 적으면 변화가 작은 줄부터 뺀다 — 값이 같은 줄이 가장 먼저 빠진다
+    let rows = c.rows, hidden = 0;
+    const room = Math.floor(height / 7) - heads - c.notes.length;
+    if (rows.length > room) {
+      const keep = rows.slice().sort((p, q) => q.rank - p.rank).slice(0, Math.max(1, room - 1));
+      hidden = rows.length - keep.length;
+      rows = rows.filter(r => keep.indexOf(r) >= 0);
     }
+    // 줄이 적으면 넉넉하게 — 남는 자리는 덩어리 사이를 띄우는 데 쓴다
+    const lines = heads + rows.length + (hidden ? 1 : 0) + c.notes.length;
+    const step = lines * 8 <= height ? 8 : 7;
+    const gap = Math.min(3, Math.floor((height - lines * step) / 2));
 
-    if (s.kind === 'gear') {
-      const slot = Gear.slotOf(s), r = Gear.rarity(s);
-      line(Gear.name(s), r.color);
-      line(r.name + ' · ' + CONFIG.gear.slotNames[slot] + ' · ' + s.level + '레벨', '#7fa86a');
-      line(Gear.statLine(Gear.baseStats(s)).join('  '), '#f0d9b5');
-      // 굴려 붙은 옵션 — 두 개씩 끊어 적는다
-      const ax = Gear.statLine(Gear.affixStats(s));
-      for (let i = 0; i < ax.length; i += 2) line(ax.slice(i, i + 2).join('  '), '#c79ce8');
+    let y = box.y;
+    if (c.legend) UI.drawRainbowText(ctx, c.name, x, y);
+    else UI.drawText(ctx, c.name, x, y, c.nameColor);
+    this.drawVerdict(ctx, c.verdict, right, y);
+    y += step;
+    UI.drawText(ctx, c.sub, x, y, '#7fa86a');
+    y += step;
+    UI.drawText(ctx, c.versus[0], x, y, c.versus[1]);
+    y += step + gap;
 
-      // 세트 — 지금 몇 점 입었는지 함께 보여준다 (이걸 입으면 몇 점이 되는지가 중요하다)
-      const set = Gear.setOf(s), setKey = Gear.setIdOf(s.id);
-      if (set) {
-        const worn = player.setCounts[setKey] || 0;
-        const have = at.zone === 'gear' ? worn : worn + (player.gear[Gear.slotOf(s)] && Gear.setIdOf(player.gear[Gear.slotOf(s)].id) === setKey ? 0 : 1);
-        line('세트 ' + set.name + ' ' + Math.min(have, set.items.length) + '/' + set.items.length, have >= 2 ? '#9be564' : '#7fa86a');
-      }
-      // 전설 고유 효과 — 수치가 아니라 규칙을 바꾸는 한 줄
-      const uq = Gear.uniqueOf(s);
-      if (uq) line('* ' + uq.text, '#ffb35c');
+    // 숫자는 오른쪽 맞춤 — 세로로 읽힌다. 열 자리는 '치명피해 +120%' 도 겹치지 않는 폭이다
+    const cell = (t, rx, color) => UI.drawText(ctx, t, rx - UI.textWidth(t), y, color);
+    const c1 = right - 58, c2 = right - 29, c3 = right;
+    cell(c.head, c1, '#7fa86a');
+    cell('이것', c2, '#7fa86a');
+    cell('변화', c3, '#7fa86a');
+    y += step;
+    rows.forEach((r, i) => {
+      if (i % 2 === 0) { ctx.fillStyle = 'rgba(255,255,255,0.05)'; ctx.fillRect(x - 1, y - 1, box.w + 2, step); }
+      const dim = '#5f6b59';
+      UI.drawText(ctx, r.label, x, y, r.same ? dim : '#c8d0d8');
+      cell(r.old, c1, r.same ? dim : '#a8b4a0');
+      cell(r.now, c2, r.same ? dim : '#f0d9b5');
+      cell(r.diff, c3, r.tone ? this.verdictColor(r.tone) : dim);
+      y += step;
+    });
+    if (hidden) { UI.drawText(ctx, '변화가 작은 ' + hidden + '줄 생략', x, y, '#5f6b59'); y += step; }
+    y += gap;
+    for (const [text, color] of c.notes) { UI.drawText(ctx, text, x, y, color); y += step; }
+  },
 
-      if (at.zone === 'gear') {
-        y += 4;
-        line('스페이스 벗기  X 버리기', '#9be564');
-        return;
-      }
-      // 입으면 얼마나 달라지는지 — 그 자리에 입고 있는 것과 견준다
-      const worn = player.gear[slot];
-      if (!worn) line('아직 입은 것 없음', '#9be564');
-      else {
-        const mine = Gear.statsOf(s), old = Gear.statsOf(worn), diff = {};
-        for (const k in mine) if ((mine[k] || 0) - (old[k] || 0)) diff[k] = (mine[k] || 0) - (old[k] || 0);
-        for (const k in old) if (diff[k] === undefined && -(old[k] || 0)) diff[k] = -(old[k] || 0);
-        /* 어느 쪽이 나은지는 무게를 달아 더한다 — 방어력은 비율로 막으니 체력보다 무겁고,
-           공격력은 한 점이 레벨업 하나의 절반이라 가장 무겁다 */
-        const w = { armor: 1.5, maxHp: 0.3, power: 3 };
-        const weight = (k) => (w[k] === undefined ? 1 : w[k]);
-        let better = 0;
-        for (const k in diff) better += diff[k] * weight(k);
-        /* 한 줄에 다 못 적으므로 **크게 달라지는 것부터** 세 개만 적고 나머지는 '..' 로 줄인다.
-           (안 보이는 것까지 포함해서 색을 정하므로, 초록인데 적힌 건 작아 보일 수 있다) */
-        const keys = Object.keys(diff).sort((p, q) => Math.abs(diff[q] * weight(q)) - Math.abs(diff[p] * weight(p)));
-        // 옵션 이름이 길면 세 개도 창 밖으로 나간다 — 폭에 맞을 때까지 하나씩 줄인다
-        let vsLine = '입은 것과 같다';
-        for (let n = Math.min(3, keys.length); n > 0; n--) {
-          const shown = {};
-          for (const k of keys.slice(0, n)) shown[k] = diff[k];
-          vsLine = '비교 ' + Gear.statLine(shown).join(' ') + (keys.length > n ? ' ..' : '');
-          if (UI.textWidth(vsLine) <= wide) break;
-        }
-        line(vsLine, better > 0 ? '#9be564' : (better < 0 ? '#c05a5a' : '#7fa86a'));
-      }
-      line('스페이스 입기  X 버리기', '#9be564');
-      return;
+  // 판정 — 오른쪽 끝에 맞춘 세모와 한마디
+  drawVerdict(ctx, v, right, y) {
+    const word = this.verdictWord(v), color = this.verdictColor(v), wx = right - UI.textWidth(word);
+    UI.drawText(ctx, word, wx, y, color);
+    if (v) this.drawTriangle(ctx, wx - 7, y + 1, v > 0, color);
+  },
+
+  // 장착 칸을 고르면 — 견줄 것이 없으니 그 장비의 수치만 적는다
+  drawWornGear(ctx, player, s, box) {
+    const x = box.x, right = x + box.w, r = Gear.rarity(s), stats = Gear.statsOf(s);
+    let y = box.y;
+    const line = (text, color) => { UI.drawText(ctx, text, x, y, color); y += 8; };
+    line(Gear.name(s), r.color);
+    line(r.name + ' · ' + CONFIG.gear.slotNames[Gear.slotOf(s)] + ' · ' + s.level + '레벨', '#7fa86a');
+    y += 3;
+    Gear.statOrder().filter(k => stats[k]).forEach((k, i) => {
+      if (i % 2 === 0) { ctx.fillStyle = 'rgba(255,255,255,0.05)'; ctx.fillRect(x - 1, y - 1, box.w + 2, 8); }
+      const t = Gear.statText(k, stats[k]);
+      UI.drawText(ctx, Gear.statLabel(k), x, y, '#c8d0d8');
+      UI.drawText(ctx, t, right - UI.textWidth(t), y, '#f0d9b5');
+      y += 8;
+    });
+    y += 3;
+    const set = Gear.setOf(s);
+    if (set) {
+      const n = player.setCounts[Gear.setIdOf(s.id)] || 0;
+      line('세트 ' + set.name + ' ' + n + '/' + set.items.length + '점', n >= 2 ? '#9be564' : '#7fa86a');
     }
-
-    if (s.kind === 'weapon') {
-      const lv = this.weaponLevel(player, s);
-      const w = CONFIG.weapons[s.weapon];
-      if (s.legend) { UI.drawRainbowText(ctx, this.itemName(player, s), x, y); y += 8; }
-      else line(this.itemName(player, s), CONFIG.weapons.levelColor[levelTier(lv)]);
-      // 끼면 위력이 얼마나 달라지는지 — 지금 든 무기와 바로 비교
-      const wd = player.damageWith(s.weapon, lv);
-      const d = wd - dmg;
-      line('공격력 ' + wd + '  사거리 ' + w.reach, '#f0d9b5');
-      if (w.blurb) line(w.blurb, '#c8d0d8');   // 평타가 어떻게 생겼는지 (찌르기·베기·휩쓸기)
-      line((d >= 0 ? '+' : '') + d + ' (든 무기 대비)', d > 0 ? '#9be564' : (d < 0 ? '#c05a5a' : '#7fa86a'));
-      line('속도 ' + UI.speedWord(w.cooldown) + '  초당 ' + Math.round(wd / w.cooldown), '#7fa86a');
-      const be = s.element && CONFIG.forge.elements[s.element];
-      if (be) line('* ' + be.name, be.color);
-      y += 5;
-      line('스페이스 장착  X 버리기', '#9be564');
-      return;
-    }
-
-    const ls = this.spec(s.id);
-    line(ls.name, ls.color);
-    line(s.amount + '개  값 ' + (ls.value * s.amount) + '골드', '#f0d9b5');
-    line(ls.trophy ? '보스 전리품' : '몬스터 전리품', '#7fa86a');
-    y += 5;
-    line('상점에 팔 수 있다', '#ffe066');
-    line('X 버리기', '#9be564');
+    // 전설 고유 효과 — 수치가 아니라 규칙을 바꾸는 한 줄
+    const uq = Gear.uniqueOf(s);
+    if (uq) line('고유 효과  ' + uq.text, '#ffb35c');
   },
 };
 
@@ -15529,18 +15756,19 @@ const Village = {
     this.stashScroll();
   },
 
-  /* 고른 물건 두 줄 설명 — 이름(등급 색)과 쓸모 한 줄. 자세한 것은 인벤토리에서 본다 */
+  /* 고른 물건 두 줄 설명 — 이름(등급 색)과, 지금 입은 것과 견준 한 줄. 자세한 표는 인벤토리에서 본다 */
   stashDetail(player, s) {
     if (!s) return [[this.stashZone === 'bag' ? '빈 칸' : '맡긴 것이 없다', '#5f6b59']];
     if (s.kind === 'gear') {
-      const r = Gear.rarity(s);
-      return [[Gear.name(s) + ' ' + s.level + '레벨', r.color],
-        [r.name + '  ' + Gear.statLine(Gear.statsOf(s)).slice(0, 3).join(' '), '#c8d0d8']];
+      const r = Gear.rarity(s), cmp = Gear.compare(player, s);
+      return [[Gear.name(s) + ' ' + s.level + '레벨  ' + r.name, r.color],
+        [Inventory.verdictWord(cmp.verdict) + '  ' + Gear.diffLine(cmp, 210), Inventory.verdictColor(cmp.verdict)]];
     }
     if (s.kind === 'weapon') {
       const w = CONFIG.weapons[s.weapon], el = s.element && CONFIG.forge.elements[s.element];
+      const v = Inventory.weaponVerdict(player, s), d = player.dpsWith(s.weapon, s.level) - player.dpsWith(player.weapon, player.weaponLevel);
       return [[this.stashName(s), s.legend ? 'rainbow' : this.stashColor(s)],
-        ['공격력 ' + player.damageWith(s.weapon, s.level) + '  ' + (w.blurb || '') + (el ? '  ' + el.name : ''), el ? el.color : '#c8d0d8']];
+        [Inventory.verdictWord(v) + '  초당 피해 ' + (d > 0 ? '+' : '') + d + '  ' + (w.blurb || '') + (el ? '  ' + el.name : ''), Inventory.verdictColor(v)]];
     }
     const ls = CONFIG.loot.items[s.id] || {};
     return [[ls.name + ' ' + s.amount + '개', ls.color || '#ffffff'],
@@ -16548,8 +16776,8 @@ const UI = {
 
     if (showInventory) Inventory.draw(ctx, player);   // 여러 칸짜리 가방 창
 
-    // ── 스킬 바 (화면 아래 가운데)
-    if (player.skillCooldowns) this.drawSkillBar(ctx, player);
+    // ── 스킬 바 (화면 아래 가운데) — 가방 창이 그 자리까지 내려오므로 열려 있는 동안은 비켜준다
+    if (player.skillCooldowns && !showInventory) this.drawSkillBar(ctx, player);
 
     // ── 사망 안내
     if (player.dead) {
@@ -16899,6 +17127,12 @@ const PATCH_NOTES = [
   {
     date: '2026-11-04',
     notes: [
+      '장비 설명창을 비교표로 바꿨다 — 입은 것 / 이것 / 변화를 수치마다 나란히 보여주고, 이름 옆에 더 좋음·더 나쁨·비슷함을 적는다',
+      '가방과 창고의 장비·무기 칸에 세모가 붙는다 — 초록은 지금 것보다 낫고 빨강은 못하다. 세트 덤과 능력치 상한까지 따진 판정이다',
+      '입으면 켜지고 꺼지는 세트 덤과, 얻고 잃는 고유 효과를 표 아래에 따로 적는다. 고른 장비가 들어갈 칸에는 밑줄이 그어진다',
+      '무기는 초당 피해로 견준다 — 치명타와 단검의 셋째 급소까지 넣어 계산해서, 같은 레벨 단검이 손해로 보이지 않는다',
+      '내 능력치 합계는 이제 빈 칸·포션·전리품을 고르면 보인다 (장비를 견주는 동안은 접어 둔다). 아래 안내의 스페이스도 입기·벗기·장착·마시기로 맞춰 나온다',
+      '화상·빙결·감전·중독 옵션이 설명창에 나오지 않던 것을 고쳤다',
       '모래의 군주 체력을 17,360에서 13,888로 낮췄다 — 같은 레벨 검으로 85대 걸리던 것이 68대가 된다 (다른 보스는 46~59대)',
       '게임 안의 모든 글자를 한국어로 옮겼다 (아이템·스킬·몬스터 이름, 창, 안내, 패치노트까지). 키 이름만 그대로다',
       '대시가 다시 차는 시간을 두 배로 — 한 칸에 1.7초에서 3.4초로 (환영 효과가 있으면 1.7초)',

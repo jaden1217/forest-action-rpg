@@ -85,6 +85,113 @@ const Gear = {
     return out;
   },
 
+  /* 이 차림새의 합계 — 옵션을 더하고, 세트 덤을 붙이고, 퍼센트 옵션의 상한을 건다.
+     플레이어 능력치(recalcStats)와 입기 전 비교가 같은 셈을 쓴다.
+     세트 덤도 그냥 수치라서 장비 수치와 똑같이 더하면 된다 (상한도 함께 걸린다) */
+  totals(gear) {
+    const g = { armor: 0, maxHp: 0, power: 0, speed: 0 }, counts = {};
+    for (const slot of CONFIG.gear.slots) {
+      const item = gear && gear[slot];
+      if (!item) continue;
+      const stats = this.statsOf(item);
+      for (const k in stats) g[k] = (g[k] || 0) + stats[k];
+      const key = this.setIdOf(item.id);
+      if (key) counts[key] = (counts[key] || 0) + 1;
+    }
+    for (const key in counts) {
+      const bonus = CONFIG.sets[key].bonus;
+      for (let n = 2; n <= counts[key]; n++) {
+        if (!bonus[n]) continue;
+        for (const k in bonus[n]) g[k] = (g[k] || 0) + bonus[n][k];
+      }
+    }
+    // 퍼센트 옵션은 겹쳐 입으면 금세 터무니없어진다 — 총합을 묶어둔다
+    for (const k in CONFIG.affixes.caps) {
+      if (g[k]) g[k] = Math.min(g[k], CONFIG.affixes.caps[k]);
+    }
+    return { stats: g, counts: counts };
+  },
+
+  /* 켜지는 고유 효과 — 입은 전설 장비와 보스의 전설 무기에서 모은다.
+     수치가 아니라 규칙이라 합산하지 않고 "켜져 있는가"만 본다 */
+  uniquesOf(gear, weaponLegend) {
+    const uniq = {};
+    for (const slot of CONFIG.gear.slots) {
+      const id = this.uniqueIdOf(gear && gear[slot]);
+      if (id) uniq[id] = true;
+    }
+    const L = weaponLegend && CONFIG.weapons.legends[weaponLegend];
+    if (L && L.unique) uniq[L.unique] = true;
+    return uniq;
+  },
+
+  /* ── 입기 전 비교 ────────────────────────────────────────
+     인벤토리 설명창과 창고가 함께 쓴다. 가방 칸의 세모도 같은 판정을 읽는다. */
+
+  // 이것으로 갈아입은 차림새 (입어 보는 게 아니라 사본이다)
+  wornWith(player, item) {
+    const next = Object.assign({}, player.gear);
+    next[this.slotOf(item)] = item;
+    return next;
+  },
+
+  /* 판정 — 몸에 실제로 더해지는 변화에 무게를 달아 더한다. 1 나아진다 / 0 비슷하다 / -1 나빠진다.
+     장비 두 점만 견주지 않고 합계를 견주므로 세트 덤과 상한까지 든다 */
+  verdict(player, item) {
+    const a = this.totals(player.gear).stats, b = this.totals(this.wornWith(player, item)).stats;
+    let score = 0;
+    for (const k of this.statOrder()) score += ((b[k] || 0) - (a[k] || 0)) * this.statWeight(k);
+    return Math.abs(score) <= CONFIG.gear.compareEven ? 0 : Math.sign(score);
+  },
+
+  /* 설명창에 적을 것 전부
+       worn   지금 그 칸에 입은 것 (없으면 null)
+       rows   수치마다 { key, old, now, diff } — 장비 두 점의 값. 순서가 늘 같아서
+              가방을 옮겨 다니며 같은 자리를 눈으로 짚을 수 있다
+       sets   달라지는 세트 { name, count, total, up, stats }
+       gained / lost  얻고 잃는 고유 효과의 설명 */
+  compare(player, item) {
+    const worn = player.gear[this.slotOf(item)] || null, next = this.wornWith(player, item);
+    const mine = this.statsOf(item), old = worn ? this.statsOf(worn) : {};
+    const rows = this.statOrder().filter(k => mine[k] || old[k]).map(k => (
+      { key: k, old: old[k] || 0, now: mine[k] || 0, diff: (mine[k] || 0) - (old[k] || 0) }));
+    const u = this.uniqueChanges(player.uniques, this.uniquesOf(next, player.weaponLegend));
+    return { worn: worn, rows: rows, verdict: this.verdict(player, item),
+             sets: this.setChanges(this.totals(player.gear).counts, this.totals(next).counts),
+             gained: u.gained, lost: u.lost };
+  },
+
+  // 몇 점에서 몇 점으로 바뀌는지와, 그 사이에서 켜지거나 꺼지는 덤
+  setChanges(was, now) {
+    const out = [];
+    for (const key of Object.keys(CONFIG.sets)) {
+      const a = was[key] || 0, b = now[key] || 0, set = CONFIG.sets[key];
+      if (a === b) continue;
+      const bonus = {};
+      for (let n = Math.min(a, b) + 1; n <= Math.max(a, b); n++) {
+        for (const k in (set.bonus[n] || {})) bonus[k] = (bonus[k] || 0) + (b > a ? set.bonus[n][k] : -set.bonus[n][k]);
+      }
+      out.push({ name: set.name, count: b, total: set.items.length, up: b > a, stats: this.statLine(bonus) });
+    }
+    return out;
+  },
+
+  uniqueChanges(was, now) {
+    const text = (id) => CONFIG.uniques[id].text;
+    return { gained: Object.keys(now).filter(id => !was[id]).map(text),
+             lost: Object.keys(was).filter(id => !now[id]).map(text) };
+  },
+
+  // 한 줄로 줄인 비교 (창고 창) — 크게 달라지는 것부터, 폭에 맞을 때까지만 적는다
+  diffLine(cmp, wide) {
+    const shown = cmp.rows.filter(r => r.diff).sort((p, q) => Math.abs(q.diff * this.statWeight(q.key)) - Math.abs(p.diff * this.statWeight(p.key)));
+    if (!shown.length) return '입은 것과 같다';
+    for (let n = shown.length; n > 0; n--) {
+      const line = shown.slice(0, n).map(r => this.statLabel(r.key) + ' ' + this.statSigned(r.key, r.diff)).join('  ') + (n < shown.length ? ' ..' : '');
+      if (n === 1 || UI.textWidth(line) <= wide) return line;
+    }
+  },
+
   /* ── 이름과 색 ─────────────────────────────────────────── */
 
   // 가장 센 옵션의 말이 앞에 붙는다 (옵션은 굴릴 때 값 순으로 정렬해 뒀다)
@@ -103,21 +210,26 @@ const Gear = {
 
   sprite(item) { return SPRITES.gear[this.spec(item.id).sprite]; },
 
-  /* 'ARM +7  HP +12' 처럼 사람이 읽는 줄로.
-     바탕 수치와 옵션이 같은 이름을 쓸 수 있으므로(ARM 등) 이 함수는 받은 것만 그대로 쓴다. */
-  statLine(stats) {
-    const order = ['armor', 'maxHp', 'power', 'speed', 'attackSpeed', 'crit', 'critMult',
-                   'lifesteal', 'potion', 'cooldown', 'knockRes', 'gold'];
-    const base = { armor: '방어', maxHp: '체력', power: '공격', speed: '이속' };
-    const out = [];
-    for (const k of order) {
-      if (!stats[k]) continue;
-      const a = CONFIG.affixes.list[k];
-      const label = (base[k] || (a && a.label) || k);
-      const pct = (a && a.pct) || k === 'speed';
-      out.push(label + ' ' + (stats[k] > 0 ? '+' : '') + stats[k] + (pct ? '%' : ''));
+  /* 수치를 적는 차례 — 늘 있는 넷이 앞서고 나머지는 옵션 표의 순서대로.
+     표에서 읽어 오므로 옵션을 새로 넣어도 설명창에서 빠지지 않는다 */
+  statOrder() {
+    if (!this.order) {
+      const first = ['armor', 'maxHp', 'power', 'speed'];
+      this.order = first.concat(Object.keys(CONFIG.affixes.list).filter(k => first.indexOf(k) < 0));
     }
-    return out;
+    return this.order;
+  },
+  statLabel(k) { const a = this.affixSpec(k); return a ? a.label : k; },
+  statWeight(k) { return CONFIG.gear.compareWeight[k] || 0; },
+  // 18 / 9% — 표의 칸에 적는 값
+  statText(k, v) { const a = this.affixSpec(k); return v + (a && a.pct ? '%' : ''); },
+  // +18 / -9% — 부호까지
+  statSigned(k, v) { return (v > 0 ? '+' : '') + this.statText(k, v); },
+
+  /* '방어 +7  체력 +12' 처럼 사람이 읽는 줄로.
+     바탕 수치와 옵션이 같은 이름을 쓸 수 있으므로(방어 등) 이 함수는 받은 것만 그대로 쓴다. */
+  statLine(stats) {
+    return this.statOrder().filter(k => stats[k]).map(k => this.statLabel(k) + ' ' + this.statSigned(k, stats[k]));
   },
 
   /* ── 세트 ──────────────────────────────────────────────── */
