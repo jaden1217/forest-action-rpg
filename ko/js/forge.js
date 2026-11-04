@@ -1,0 +1,386 @@
+'use strict';
+
+/* 대장간 — 무기에 속성을 박아 넣는다 (로드맵 8주차).
+
+   전리품은 지금까지 '팔 것'이기만 했다. 여기서 **재료**가 된다 —
+   상인 옆 모루 앞에서 F 를 누르면 대장장이가 무기에 속성 하나를 입혀준다.
+
+     FLAME 불꽃  때릴 때마다 화상
+     FROST 서리  확률로 빙결
+     SHOCK 뇌전  확률로 감전
+     VENOM 맹독  때릴 때마다 중독
+
+   속성이 붙은 무기는 **추가 피해**도 준다. 그 피해는 **몬스터마다 다르다** —
+   버섯은 불에 약하고, 선인장은 불에 강하고 서리에 약하다.
+   그래서 "숲에서는 불, 사막에서는 서리"처럼 **갈 곳에 맞춰 무기를 바꿔 끼게** 된다.
+
+   속성은 무기 한 자루에 하나다. 새로 박으면 먼저 것이 지워진다. 빼는 것은 공짜. */
+
+const Forge = {
+  open: false,
+  cursor: 0,
+  message: '',
+  messageTimer: 0,
+  npc: null,
+
+  reset() {
+    this.open = false;
+    this.cursor = 0;
+    this.message = '';
+    this.messageTimer = 0;
+  },
+
+  spec(id) { return CONFIG.forge.elements[id]; },
+
+  // 그 몬스터가 이 속성에 약한가 (1.6 약점 / 1.0 보통 / 0.4 강함)
+  affinity(type, element) {
+    const row = CONFIG.forge.affinity[type];
+    return (row && row[element]) || 1;
+  },
+
+  /* ── 대장간 세우기 — 상인 반대편, 게시판과 나란히 ──
+     거점 10주차: 보스 하나를 잡기 전에는 모루만 있고 대장장이가 없다. */
+  place() {
+    const s = Village.spot('forge'), x = s.x, y = s.y;
+    const anvil = World.addProp(SPRITES.anvil, x, y, { solid: [9, 3, 5], footHeight: 3 });
+    anvil.anvil = true;
+    anvil.sign = { text: '대장간', color: '#ff8a3c', dy: 24 };
+    World.anvil = anvil;
+    World.smith = null;
+    this.npc = null;
+    // 조건을 채웠으면 바로 이사 온다 (저장 불러오기·사막 포함)
+    if (typeof Village !== 'undefined' && Village.smithHome && !Village.smithHome()) return;
+    this.spawnSmith();
+  },
+
+  // 마을에 뒤늦게 이사 올 때 (조건을 채운 뒤)
+  spawnSmith() {
+    if (World.smith) return World.smith;
+    const s = Village.spot('forge'), x = s.x, y = s.y;
+    const npc = World.addProp(SPRITES.smith[0], x - 16, y - 2, { footHeight: 2 });
+    npc.smith = true;
+    npc.landmark = 'forge';
+    npc.draw = (ctx, cam) => this.drawNpc(ctx, cam, npc);
+    this.npc = npc;
+    World.smith = npc;
+    if (World.buildGrid) World.buildGrid();
+    return npc;
+  },
+
+  drawNpc(ctx, cam, npc) {
+    const sx = Math.round(npc.x - cam.x), sy = Math.round(npc.y - cam.y);
+    fillEllipse(ctx, sx + 1, sy + 1, 5, 2.1, 'rgba(10,12,20,0.3)');
+    // 4초마다 잠깐 망치질하듯 몸이 숙여진다
+    const t = World.time % 2.4;
+    const sp = (t > 2.1 && t < 2.3) ? SPRITES.smith[1] : SPRITES.smith[0];
+    ctx.drawImage(sp, sx - 8, sy - 14);
+    // 모루 쪽에서 가끔 불똥이 튄다
+    if (Math.random() < 0.02) {
+      FX.burst(npc.x + 16, npc.y - 4, 2, ['#ff8a3c', '#ffe066'], { speed: 22, life: 0.4, gravity: 40, size: 1 });
+    }
+  },
+
+  drawPrompt(ctx, cam) {
+    const n = World.smith;
+    if (!n) return;
+    const sx = Math.round(n.x - cam.x), sy = Math.round(n.y - cam.y);
+    if (Math.floor(World.time * 3) % 2 === 0) return;
+    UI.drawText(ctx, 'F  대장간', sx + 8, sy - 24, '#ff8a3c', true);
+  },
+
+  /* ── 값과 재료 ──────────────────────────────────────── */
+  goldCost(player) {
+    const cfg = CONFIG.forge;
+    return Math.round(cfg.goldBase + player.level * cfg.goldPerLevel);
+  },
+
+  lootHeld(player, id) {
+    let n = 0;
+    for (let i = 1; i < player.bag.length; i++) {
+      const s = player.bag[i];
+      if (s && s.kind === 'loot' && s.id === id) n += s.amount;
+    }
+    return n;
+  },
+
+  takeLoot(player, id, count) {
+    let left = count;
+    for (let i = 1; i < player.bag.length && left > 0; i++) {
+      const s = player.bag[i];
+      if (!s || s.kind !== 'loot' || s.id !== id) continue;
+      const take = Math.min(s.amount, left);
+      s.amount -= take; left -= take;
+      if (s.amount <= 0) player.bag[i] = null;
+    }
+  },
+
+  /* 강화 값 — 지금 든 무기 레벨 기준 */
+  upgradeCost(player) {
+    const u = CONFIG.forge.upgrade;
+    const lv = player.weaponLevel || 1;
+    return {
+      gold: Math.round(u.goldBase + lv * u.goldPerLevel),
+      loot: u.loot,
+      need: Math.round(u.lootBase + lv * u.lootPerLevel / 4),
+    };
+  },
+
+  reforgeCost(item) {
+    const r = CONFIG.forge.reforge;
+    const lv = (item && item.level) || 1;
+    return {
+      gold: Math.round(r.goldBase + lv * r.goldPerLevel),
+      loot: r.loot,
+      need: r.lootBase,
+    };
+  },
+
+  // 재련할 수 있는 장비 목록 — 가방 + 입고 있는 것
+  reforgeTargets(player) {
+    const out = [];
+    for (let i = 1; i < player.bag.length; i++) {
+      const s = player.bag[i];
+      if (s && s.kind === 'gear') out.push({ bagIndex: i, item: s });
+    }
+    for (const slot of CONFIG.gear.slots) {
+      const s = player.gear && player.gear[slot];
+      if (s) out.push({ slot: slot, item: s });
+    }
+    return out;
+  },
+
+  entries(player) {
+    const list = [];
+    for (const id in CONFIG.forge.elements) {
+      const e = this.spec(id);
+      const held = this.lootHeld(player, e.loot);
+      list.push({
+        id: id, name: e.name, color: e.color,
+        loot: CONFIG.loot.items[e.loot].name, need: e.cost, held: held,
+        gold: this.goldCost(player),
+        worn: player.weaponElement === id,
+        ok: held >= e.cost && player.gold >= this.goldCost(player),
+      });
+    }
+    list.push({ id: null, name: '속성 지우기', color: '#8f9aa8', remove: true, ok: !!player.weaponElement });
+    // 강화 — 전설 무기도 레벨이 고정이라 똑같이 올릴 수 있다
+    const up = this.upgradeCost(player);
+    const upHeld = this.lootHeld(player, up.loot);
+    const upMax = player.weaponLevel >= CONFIG.forge.upgrade.maxLevel;
+    list.push({
+      upgrade: true, name: '강화  ' + player.weaponLabel(), color: '#ffe066',
+      loot: CONFIG.loot.items[up.loot].name, need: up.need, held: upHeld,
+      gold: up.gold, worn: false,
+      maxed: upMax,
+      ok: !upMax && upHeld >= up.need && player.gold >= up.gold,
+    });
+    // 재련 — 장비 하나당 한 줄
+    for (const t of this.reforgeTargets(player).slice(0, 6)) {
+      const c = this.reforgeCost(t.item);
+      const held = this.lootHeld(player, c.loot);
+      list.push({
+        reforge: true, target: t, name: '재련  ' + Gear.name(t.item).slice(0, 24),
+        fullName: Gear.name(t.item), color: Gear.color(t.item),
+        loot: CONFIG.loot.items[c.loot].name, need: c.need, held: held,
+        gold: c.gold, worn: false,
+        ok: held >= c.need && player.gold >= c.gold,
+      });
+    }
+    /* 제작 — 설원 자원으로만 만드는 서리심 한 벌 (로드맵 12주차).
+       재료를 하나도 못 모았으면 줄을 띄우지 않는다 — 설원에 가기 전에는 있는 줄도 모른다.
+       한 번 설원을 밟아 전리품이 들어오면 그때부터 목록에 뜬다. */
+    for (const r of CONFIG.forge.craft.recipes) {
+      const spec = Gear.spec(r.id);
+      if (!spec) continue;
+      const parts = [];
+      let have = true, seen = false;
+      for (const lootId in r.loot) {
+        const held = this.lootHeld(player, lootId);
+        if (held > 0) seen = true;
+        if (held < r.loot[lootId]) have = false;
+        parts.push(CONFIG.loot.items[lootId].name + ' ' + held + '/' + r.loot[lootId]);
+      }
+      if (!seen && !have) continue;   // 재료를 한 톨도 못 봤으면 숨긴다
+      const gold = this.craftGold(player);
+      list.push({
+        craft: true, recipe: r, name: spec.name + ' 제작',
+        fullName: spec.name, color: CONFIG.rarity.list[CONFIG.forge.craft.rarity].color,
+        lootText: parts.join('  '), lootOk: have,
+        gold: gold, worn: false,
+        ok: have && player.gold >= gold,
+      });
+    }
+    return list;
+  },
+
+  craftGold(player) {
+    const c = CONFIG.forge.craft;
+    return Math.round(c.goldBase + player.level * c.goldPerLevel);
+  },
+
+  apply(item, player) {
+    if (item.craft) {
+      const r = item.recipe, spec = Gear.spec(r.id);
+      if (!item.lootOk) { this.say('재료가 모자란다'); Sound.play('error'); return; }
+      if (player.gold < item.gold) { this.say('골드가 모자란다'); Sound.play('error'); return; }
+      // 가방에 자리가 있어야 받는다 (바닥에 떨구면 귀한 것을 잃을 수 있다)
+      const made = Gear.roll(r.id, player.level, CONFIG.forge.craft.rarity);
+      if (!Inventory.addGear(player, made)) { this.say('가방이 가득 찼다'); Sound.play('error'); return; }
+      for (const lootId in r.loot) this.takeLoot(player, lootId, r.loot[lootId]);
+      player.gold -= item.gold;
+      Sound.play('levelup');
+      FX.burst(player.x, player.y - 4, 30, ['#bfe8ff', '#ffffff'], { speed: 80, life: 0.8, gravity: 10 });
+      FX.number(player.x, player.y - 30, spec.name, '#bfe8ff', true);
+      this.say(spec.name + ' 제작');
+      return;
+    }
+    if (item.remove) {
+      if (!player.weaponElement) { this.say('지울 속성이 없다'); Sound.play('error'); return; }
+      player.weaponElement = null;
+      Sound.play('blip');
+      this.say('속성을 지웠다');
+      return;
+    }
+    if (item.upgrade) {
+      if (player.weaponLevel >= CONFIG.forge.upgrade.maxLevel) { this.say('이미 최고 레벨이다'); Sound.play('error'); return; }
+      if (item.held < item.need) { this.say(item.loot + ' 모자람'); Sound.play('error'); return; }
+      if (player.gold < item.gold) { this.say('골드가 모자란다'); Sound.play('error'); return; }
+      const up = this.upgradeCost(player);
+      this.takeLoot(player, up.loot, up.need);
+      player.gold -= up.gold;
+      player.weaponLevel = Math.min(CONFIG.forge.upgrade.maxLevel, player.weaponLevel + 1);
+      player.recalcStats();
+      Sound.play('levelup');
+      FX.burst(player.x, player.y - 4, 20, ['#ffe066', '#ffffff'], { speed: 60, life: 0.6, gravity: 20 });
+      FX.number(player.x, player.y - 30, player.weaponLabel() + '!', '#ffe066');
+      this.say(player.weaponLevel + '레벨로 강화');
+      return;
+    }
+    if (item.reforge) {
+      if (item.held < item.need) { this.say(item.loot + ' 모자람'); Sound.play('error'); return; }
+      if (player.gold < item.gold) { this.say('골드가 모자란다'); Sound.play('error'); return; }
+      const t = item.target;
+      const src = t.bagIndex !== undefined ? player.bag[t.bagIndex] : player.gear[t.slot];
+      if (!src || src.kind !== 'gear') { this.say('장비가 없다'); Sound.play('error'); return; }
+      const c = this.reforgeCost(src);
+      this.takeLoot(player, c.loot, c.need);
+      player.gold -= c.gold;
+      // 등급·개수는 그대로, 값만 다시 굴린다
+      const fresh = Gear.roll(src.id, src.level, src.rarity);
+      if (fresh) {
+        src.affixes = fresh.affixes;
+        player.recalcStats();
+      }
+      Sound.play('levelup');
+      FX.burst(player.x, player.y - 4, 18, [Gear.color(src), '#ffffff'], { speed: 55, life: 0.6, gravity: 20 });
+      FX.number(player.x, player.y - 30, Gear.name(src), Gear.color(src));
+      this.say(Gear.spec(src.id).name + ' 재련');
+      return;
+    }
+    if (item.worn) { this.say('이미 박혀 있다'); Sound.play('error'); return; }
+    if (item.held < item.need) { this.say(item.loot + ' 모자람'); Sound.play('error'); return; }
+    if (player.gold < item.gold) { this.say('골드가 모자란다'); Sound.play('error'); return; }
+
+    const e = this.spec(item.id);
+    this.takeLoot(player, e.loot, e.cost);
+    player.gold -= item.gold;
+    player.weaponElement = item.id;
+
+    Sound.play('levelup');
+    FX.burst(player.x, player.y - 4, 24, [e.color, '#ffffff'], { speed: 70, life: 0.7, gravity: 20 });
+    FX.number(player.x, player.y - 30, e.name + ' ' + player.weaponSpec().name, e.color);
+    this.say(e.name + ' 속성을 박았다');
+  },
+
+  say(text) { this.message = text; this.messageTimer = 1.8; },
+
+  openForge() {
+    this.open = true;
+    this.cursor = 0;
+    this.message = '';
+    Sound.play('shopOpen');
+  },
+
+  close() {
+    this.open = false;
+    Sound.play('shopClose');
+  },
+
+  handleInput(player) {
+    this.messageTimer = Math.max(0, this.messageTimer - 1 / 60);
+    if (this.messageTimer <= 0) this.message = '';
+    const list = this.entries(player), P = Input.pressed;
+    if (P.KeyW || P.ArrowUp) this.cursor = (this.cursor + list.length - 1) % list.length;
+    if (P.KeyS || P.ArrowDown) this.cursor = (this.cursor + 1) % list.length;
+    if (P.Space || P.Enter) {
+      this.apply(list[this.cursor], player);
+      delete P.Space; delete P.Enter;
+    }
+    if (P.KeyF || P.Escape) { this.close(); delete P.KeyF; }
+  },
+
+  /* ── 창 ──────────────────────────────────────────────── */
+  draw(ctx, player) {
+    const list = this.entries(player);
+    this.cursor = Util.clamp(this.cursor, 0, Math.max(0, list.length - 1));
+    /* 한 줄이 [이름 … 재료 | 값] 이다. 재료를 왼쪽 고정 자리에서 시작하면 긴 이름
+       (UPGRADE SANDLORD FANG L56, REFORGE …) 위에 겹치므로, 창을 넓히고 재료를 값 앞에 오른쪽 맞춤한다.
+       가장 긴 이름(32자)과 가장 긴 재료(가방 가득 — 3자리 수)가 함께 와도 틈이 남는 너비다 */
+    const w = 250, h = Math.min(190, 52 + list.length * 13 + 22);
+    const x = Math.round((CONFIG.VIEW_W - w) / 2), y = Math.round((CONFIG.VIEW_H - h) / 2);
+    UI.panel(ctx, x, y, w, h, '#ff8a3c');
+    UI.divider(ctx, x + 6, y + 15, w - 12);
+    UI.drawText(ctx, '대장간', x + w / 2, y + 6, '#ff8a3c', true);
+
+    // 지금 든 무기와 박혀 있는 속성
+    const el = player.weaponElement ? this.spec(player.weaponElement) : null;
+    UI.drawText(ctx, player.weaponLabel(), x + 8, y + 19, player.weaponColor());
+    const cur = el ? el.name : '속성 없음';
+    UI.drawText(ctx, cur, x + w - 10 - UI.textWidth(cur), y + 19, el ? el.color : '#5f6b59');
+
+    /* 줄이 많아져서(속성 넷 + 해제 + 강화 + 재련 여섯 + 제작 셋) 창 하나에 다 안 들어간다.
+       커서를 따라 목록이 흐르게 하고, 위아래에 더 있다는 표시를 둔다 */
+    const rowY = y + 32, rowH = 13;
+    const matRight = x + w - 40;   // 재료 글자의 오른쪽 끝 — 값(최대 '1600 G')과 틈을 둔 자리
+    const rows = Math.max(1, Math.floor((h - 56) / rowH));
+    const top = Util.clamp(this.cursor - Math.floor(rows / 2), 0, Math.max(0, list.length - rows));
+    if (top > 0) UI.drawText(ctx, '-', x + w / 2, rowY - 8, '#7f6a52', true);
+    if (top + rows < list.length) UI.drawText(ctx, '-', x + w / 2, rowY + rows * rowH - 3, '#7f6a52', true);
+
+    for (let i = top; i < Math.min(list.length, top + rows); i++) {
+      const it = list[i], ry = rowY + (i - top) * rowH;
+      if (i === this.cursor) {
+        ctx.fillStyle = 'rgba(255,138,60,0.12)';
+        ctx.fillRect(x + 6, ry - 3, w - 12, rowH - 1);
+        UI.drawText(ctx, '>', x + 9, ry, '#ff8a3c');
+      }
+      UI.drawText(ctx, it.name, x + 18, ry, it.worn ? '#9be564' : it.color);
+      if (it.remove) {
+        UI.drawText(ctx, '무료', x + w - 12 - UI.textWidth('무료'), ry, it.ok ? '#f0d9b5' : '#6f7a68');
+        continue;
+      }
+      if (it.maxed) {
+        UI.drawText(ctx, '최대', x + w - 12 - UI.textWidth('최대'), ry, '#6f7a68');
+        continue;
+      }
+      // 제작은 재료가 둘이라 한 줄로 이어 붙인다
+      if (it.craft) {
+        UI.drawText(ctx, it.lootText, matRight - UI.textWidth(it.lootText), ry, it.lootOk ? '#7fa86a' : '#c05a5a');
+        const cp = it.gold + '골드';
+        UI.drawText(ctx, cp, x + w - 12 - UI.textWidth(cp), ry, player.gold >= it.gold ? CONFIG.gold.color : '#c05a5a');
+        continue;
+      }
+      // 재료와 값 — 모자라면 붉게
+      const mat = it.loot + ' ' + it.held + '/' + it.need;
+      UI.drawText(ctx, mat, matRight - UI.textWidth(mat), ry, it.held >= it.need ? '#7fa86a' : '#c05a5a');
+      const price = it.worn ? '적용 중' : it.gold + '골드';
+      UI.drawText(ctx, price, x + w - 12 - UI.textWidth(price), ry,
+        it.worn ? '#9be564' : (player.gold >= it.gold ? CONFIG.gold.color : '#c05a5a'));
+    }
+
+    const footY = y + h - 19;
+    if (this.message) UI.drawText(ctx, this.message, x + w / 2, footY, '#9be564', true);
+    else UI.drawText(ctx, 'W S 고르기   스페이스 실행', x + w / 2, footY, '#7fa86a', true);
+    UI.drawText(ctx, '일시정지 · F 닫기', x + w / 2, footY + 8, '#5f6b59', true);
+  },
+};

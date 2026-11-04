@@ -1,0 +1,425 @@
+'use strict';
+
+/* 2주차: 바닥 드랍, 자석 끌림, 자동 줍기 (포션)
+   3주차: 무기 드랍. 무기는 발밑에서 F 를 눌러야 가방에 들어간다.
+          (지나가다 실수로 좋은 무기가 나쁜 무기로 바뀌면 안 되므로 자동으로는 줍지 않는다)
+   인벤토리: 전리품 드랍 — 포션처럼 끌려와 가방에 쌓인다. 가방이 차면 그 자리에 남는다. */
+
+const Items = {
+  drops: [],
+  fullHintCooldown: 0,   // 가방이 찼을 때 FULL 표시 스팸 방지
+  pickupRequested: false, // F 눌림 — 히트스톱 중에도 놓치지 않게 Game이 미리 받아둔다
+  nearWeapon: null,       // 지금 발밑에 있는 무기 (안내 문구용)
+
+  reset() {
+    this.drops.length = 0;
+    this.fullHintCooldown = 0;
+    this.pickupRequested = false;
+    this.nearWeapon = null;
+  },
+
+  // 몬스터가 죽으면 호출 — 포션과 무기를 각각 확률로 떨군다.
+  // 포션 확률은 레벨이 아니라 색 등급(5단계)으로 본다 — 레벨은 23까지 올라가기 때문이다.
+  dropFor(enemy) {
+    if (enemy.noDrop) return;   // 습격이 끝나며 물러간 것 — 잡은 게 아니다
+    const cfg = CONFIG.items;
+    const tier = levelTier(enemy.level);
+
+    /* 보스 보상
+       포션은 확정으로 여섯 개, 전리품 하나, 그리고 10% 확률로 그 보스의 **전설 무기**.
+       종류는 그 맵에서 몇 번째 보스인가(첫째 단검·둘째 검·셋째 도끼), 레벨은 보스 레벨 + 10 (legendSpec) */
+    if (enemy.isBoss) {
+      const r = enemy.reward;   // 보스마다 다르다 (CONFIG.bosses[*].reward)
+      this.giveGold(enemy, CONFIG.gold.amountByTier[tier] * CONFIG.gold.bossMult);
+      for (let i = 0; i < r.potions; i++) this.spawn(enemy.x, enemy.y, 1);
+      if (r.trophy) this.spawnLoot(enemy.x, enemy.y, r.trophy, 1);   // 보스 전리품은 확정
+      if (Math.random() < r.chance) {
+        const key = Object.keys(CONFIG.bosses).find(k => CONFIG.bosses[k] === enemy.spec) || Game.bossKey(Game.arenaCave);
+        const L = legendSpec(key);
+        if (L) this.spawnWeapon(enemy.x, enemy.y, L.weapon, L.level, { legend: L.key });
+      }
+      return;
+    }
+    /* 엘리트 보상 — "쫓아가 볼까"가 서야 한다.
+       포션은 확정 두 개, 전리품 두 배, 그리고 **장비가 RARE 이상으로 확정** 떨어진다.
+       경험치는 스폰할 때 이미 곱해져 있고(stats.xp), 골드는 여기서 곱한다. */
+    if (enemy.elite) {
+      const el = CONFIG.elite;
+      this.spawn(enemy.x, enemy.y, 2);
+      const gid = Gear.randomId();
+      const rarity = Math.max(el.rarityFloor, Gear.rollRarity());   // 전설도 평소 확률대로 섞여 나온다
+      this.spawnGear(enemy.x, enemy.y, gid, enemy.level, { item: Gear.roll(gid, enemy.level, rarity) });
+      this.dropWeaponFor(enemy);
+      const eLoot = CONFIG.loot.byType[enemy.TYPE];
+      if (eLoot) this.spawnLoot(enemy.x, enemy.y, eLoot, (CONFIG.loot.amountByTier[tier] || 1) * el.loot);
+      const eg = CONFIG.gold;
+      this.giveGold(enemy, Math.max(1, Math.round((eg.amountByTier[tier] || eg.amountByTier[0]) * el.gold)));
+      return;
+    }
+    if (Math.random() < cfg.potionDropChance[tier]) {
+      let amount = 1;
+      if (tier >= 4 && Math.random() < cfg.potionDoubleChance) amount = 2;
+      this.spawn(enemy.x, enemy.y, amount);
+    }
+    this.dropWeaponFor(enemy);
+    // 장비 — 종류는 고르게 섞이고, 레벨은 잡은 몬스터를 따른다 (등급과 옵션은 spawnGear 가 굴린다)
+    if (Math.random() < CONFIG.gear.dropChance) this.spawnGear(enemy.x, enemy.y, Gear.randomId(), enemy.level);
+    // 전리품 — 몬스터 종류마다 정해져 있고, 양은 색 등급이 정한다
+    const loot = CONFIG.loot;
+    const lootId = loot.byType[enemy.TYPE];
+    if (lootId && Math.random() < loot.dropChance) this.spawnLoot(enemy.x, enemy.y, lootId, loot.amountByTier[tier] || 1);
+    // 골드는 잡는 즉시 들어온다 — 양은 색 등급이 정한다
+    const g = CONFIG.gold;
+    const base = g.amountByTier[tier] || g.amountByTier[0];
+    this.giveGold(enemy, Math.max(1, Math.round(base * Util.rand(1 - g.variance, 1 + g.variance))));
+  },
+
+  // 잡은 자리에서 금화가 튀어오르며 액수가 뜨고, 주머니에 바로 더해진다.
+  // 밤에 태어난 놈은 값어치도 더 나간다 (Events 가 배수를 안다)
+  giveGold(enemy, amount) {
+    const mult = (typeof Events !== 'undefined') ? Events.goldMult(enemy) : 1;
+    Game.player.addGold(Math.max(1, Math.round(amount * mult)), enemy.x, enemy.y);
+  },
+
+  /* 무기 드랍 규칙
+     - 떨굴 확률: 몬스터 종류·레벨과 무관하게 모두 같다
+     - 종류: 몬스터마다 정해져 있다 (슬라임=단검, 늑대=검, 버섯=도끼)
+     - 레벨: 잡은 몬스터의 레벨과 같다 (센 몬스터를 잡아야 좋은 무기가 나온다)
+     세 무기의 성능은 같으므로, 이 표는 "원하는 무기를 얻으려면 누구를 노릴지"를 정해줄 뿐이다. */
+  dropWeaponFor(enemy) {
+    if (Math.random() >= CONFIG.equipment.dropChance) return;
+    const id = CONFIG.equipment.weaponByType[enemy.TYPE] || CONFIG.equipment.startWeapon;
+    this.spawnWeapon(enemy.x, enemy.y, id, enemy.level);
+  },
+
+  // 나무 안에 박혀서 못 줍는 일이 없도록 빈 자리를 점점 넓게 찾는다
+  scatter(x, y) {
+    if (World.isFreeSpot(x, y, 4)) return { x: x, y: y };
+    for (let i = 0; i < 28; i++) {
+      const r = 5 + i * 1.5;
+      const a = Math.random() * Math.PI * 2;
+      const cx = x + Math.cos(a) * r, cy = y + Math.sin(a) * r;
+      if (World.isFreeSpot(cx, cy, 4)) return { x: cx, y: cy };
+    }
+    return { x: x, y: y };
+  },
+
+  // 드랍 공통 속성 — 톡 튀어나오는 첫 속도와 수명
+  makeDrop(x, y, life, opts) {
+    const p = this.scatter(x, y);
+    return {
+      x: Util.clamp(p.x, 10, World.w - 10),
+      y: Util.clamp(p.y, 12, World.h - 8),
+      age: Math.random() * 10,   // 통통 튀는 위상을 흩뜨린다
+      life: life,
+      hintTimer: 0,
+      playerNear: false,
+      pickupDelay: (opts && opts.pickupDelay) || 0,
+      // 가방에서 버린 것은 플레이어가 한 번 떨어져야 다시 끌려온다 (버리자마자 도로 주워지면 안 된다)
+      armed: !(opts && opts.dropped),
+      vx: Util.rand(-28, 28),
+      vy: Util.rand(-34, -10),
+    };
+  },
+
+  spawn(x, y, amount) {
+    const d = this.makeDrop(x, y, CONFIG.items.lifetime);
+    d.kind = 'potion';
+    d.amount = amount;
+    this.drops.push(d);
+  },
+
+  // 장비 드랍 (가방에서 버린 것은 opts.dropped)
+  /* 바닥에 장비 한 점. item 을 넘기면 그걸 그대로 두고(가방에서 버린 것),
+     아니면 여기서 등급과 옵션을 굴린다 — 한 번 굴린 뒤로는 바뀌지 않는다. */
+  spawnGear(x, y, id, level, opts) {
+    const item = (opts && opts.item) || Gear.roll(id, level);
+    if (!item) return;
+    const d = this.makeDrop(x, y, CONFIG.equipment.weaponLifetime, opts);
+    d.kind = 'gear';
+    d.item = item;
+    d.id = item.id;
+    d.level = item.level;
+    d.amount = 1;
+    d.auraTimer = 0;
+    this.drops.push(d);
+    // 희귀한 것이 떨어지면 그 색으로 한 번 터져서 멀리서도 눈에 띈다
+    if (item.rarity >= 2) {
+      FX.burst(d.x, d.y - 4, 18, [Gear.color(item), '#ffffff'], { speed: 70, life: 0.7, gravity: 30 });
+    }
+  },
+
+  // 전리품 드랍 (가방에서 버린 것은 opts.dropped)
+  spawnLoot(x, y, id, amount, opts) {
+    if (!CONFIG.loot.items[id]) return;
+    const d = this.makeDrop(x, y, CONFIG.loot.lifetime, opts);
+    d.kind = 'loot';
+    d.id = id;
+    d.amount = Math.max(1, amount | 0);
+    this.drops.push(d);
+  },
+
+  spawnWeapon(x, y, weaponId, level, opts) {
+    const d = this.makeDrop(x, y, CONFIG.equipment.weaponLifetime, opts);
+    d.kind = 'weapon';
+    d.weapon = weaponId;
+    d.element = (opts && opts.element) || null;   // 박아 넣은 속성은 바닥에 둬도 남는다
+    d.legend = (opts && CONFIG.weapons.legends[opts.legend]) ? opts.legend : null;
+    if (d.legend) d.life = 1e9;   // 전설 무기는 사라지지 않는다 (보스 보상이 증발하면 안 된다)
+    // 떨군 몬스터의 레벨을 그대로 따른다 (사막 몬스터는 23을 넘는다). 표 끝(60)이 상한
+    d.level = Util.clamp(Math.round(level || 1), 1, CONFIG.weapons.levelMult.length);
+    d.amount = 1;
+    d.auraTimer = 0;
+    this.drops.push(d);
+    // 전설 무기는 떨어지는 순간 무지개가 크게 터져 멀리서도 눈에 띈다
+    if (d.legend) {
+      FX.burst(d.x, d.y - 4, 36, CONFIG.weapons.rainbow, { speed: 85, life: 0.9, gravity: 40 });
+    }
+  },
+
+  update(dt, player) {
+    const cfg = CONFIG.items;
+    this.fullHintCooldown = Math.max(0, this.fullHintCooldown - dt);
+
+    // F 입력은 프레임당 한 번만 쓴다
+    const wantPickup = this.pickupRequested;
+    this.pickupRequested = false;
+    this.nearWeapon = null;
+
+    let bestWeapon = -1, bestDist = Infinity;
+
+    for (let i = this.drops.length - 1; i >= 0; i--) {
+      const d = this.drops[i];
+      d.age += dt;
+      d.life -= dt;
+      d.hintTimer = Math.max(0, d.hintTimer - dt);
+      d.pickupDelay = Math.max(0, d.pickupDelay - dt);
+      d.playerNear = false;
+      if (d.life <= 0) { this.drops.splice(i, 1); continue; }
+      if (player.dead) continue;
+
+      // 처음엔 톡 튀고, 벽에 막히면 멈춘다
+      if (Math.abs(d.vx) > 1 || Math.abs(d.vy) > 1) {
+        const nx = d.x + d.vx * dt, ny = d.y + d.vy * dt;
+        if (!World.blocked({ x: nx - 3, y: ny - 2, w: 6, h: 5 })) {
+          d.x = Util.clamp(nx, 10, World.w - 10);
+          d.y = Util.clamp(ny, 12, World.h - 8);
+        }
+        d.vx *= Math.pow(0.005, dt);
+        d.vy *= Math.pow(0.005, dt);
+      }
+
+      // 전설 무기 — 무지개 알갱이가 계속 피어오른다. 바닥에 놓여 있어도 오라가 살아 있다
+      if (d.legend) {
+        d.auraTimer -= dt;
+        if (d.auraTimer <= 0) {
+          d.auraTimer = 0.22;
+          FX.burst(d.x + Util.rand(-6, 6), d.y - 2, 1, CONFIG.weapons.rainbow, { speed: 6, life: 0.7, gravity: -30, size: 1 });
+        }
+      }
+
+      if (d.pickupDelay > 0) continue;
+      const dist = Util.dist(d.x, d.y, player.x, player.y);
+      if (!d.armed) {
+        if (dist > cfg.pickupRadius + 10) d.armed = true;
+        continue;
+      }
+
+      // ── 무기: 끌려오지도, 저절로 바뀌지도 않는다. 발밑에 있으면 F 안내만 띄운다
+      if (d.kind === 'weapon') {
+        if (dist < cfg.pickupRadius + 5) {
+          d.playerNear = true;
+          if (dist < bestDist) { bestDist = dist; bestWeapon = i; }
+        }
+        continue;
+      }
+
+      /* ── 장비: 끌려와 가방에 들어간다 (입지는 않는다 — 입는 건 인벤토리에서 고른다).
+            가방에 빈 칸이 없으면 끌려오지도 않고 그 자리에 그대로 둔다 */
+      if (d.kind === 'gear') {
+        if (Inventory.firstEmpty(player) < 0) continue;
+        // 희귀한 것은 바닥에서도 색 알갱이가 피어오른다
+        if (d.item.rarity >= 2) {
+          d.auraTimer -= dt;
+          if (d.auraTimer <= 0) {
+            d.auraTimer = 0.3;
+            FX.burst(d.x + Util.rand(-5, 5), d.y - 2, 1, [Gear.color(d.item), '#ffffff'], { speed: 6, life: 0.7, gravity: -30, size: 1 });
+          }
+        }
+        if (dist < CONFIG.loot.magnetRadius && dist > 1) {
+          const pull = 130 * (1 - dist / CONFIG.loot.magnetRadius) + 40;
+          d.x += (player.x - d.x) / dist * pull * dt;
+          d.y += (player.y - d.y) / dist * pull * dt;
+        }
+        if (dist >= cfg.pickupRadius) continue;
+        if (!Inventory.addGear(player, d.item)) continue;
+        const color = Gear.color(d.item);
+        FX.burst(d.x, d.y - 4, 10, [color, '#ffffff'], { speed: 45, life: 0.4, gravity: 60 });
+        FX.number(d.x, d.y - 14, '+' + Gear.name(d.item), color);
+        Sound.play('pickup');
+        this.drops.splice(i, 1);
+        continue;
+      }
+
+      // ── 전리품: 포션처럼 끌려와 가방에 쌓인다. 자리가 없으면 끌려오지 않는다
+      if (d.kind === 'loot') {
+        if (Inventory.roomFor(player, d.id) <= 0) continue;
+        if (dist < CONFIG.loot.magnetRadius && dist > 1) {
+          const pull = 130 * (1 - dist / CONFIG.loot.magnetRadius) + 40;
+          d.x += (player.x - d.x) / dist * pull * dt;
+          d.y += (player.y - d.y) / dist * pull * dt;
+        }
+        if (dist >= cfg.pickupRadius) continue;
+        const left = Inventory.addLoot(player, d.id, d.amount);
+        const got = d.amount - left;
+        if (got > 0) {
+          const ls = CONFIG.loot.items[d.id];
+          FX.burst(d.x, d.y - 4, 8, [ls.color, '#ffffff'], { speed: 40, life: 0.35, gravity: 60 });
+          FX.number(d.x, d.y - 14, '+' + ls.name + (got > 1 ? ' ' + got + '개' : ''), ls.color);
+          Sound.play('pickup');
+          d.amount = left;
+          if (d.amount <= 0) this.drops.splice(i, 1);
+        }
+        continue;
+      }
+
+      // ── 포션: 가까우면 끌려와서 자동으로 주워진다.
+      //    가방이 꽉 찼으면 끌려오지도 않고 그 자리에 그대로 둔다 — 한 칸 비면 그때 끌려온다
+      if (player.potions >= player.maxPotions) continue;
+      if (dist < cfg.magnetRadius && dist > 1) {
+        const pull = 130 * (1 - dist / cfg.magnetRadius) + 40;
+        d.x += (player.x - d.x) / dist * pull * dt;
+        d.y += (player.y - d.y) / dist * pull * dt;
+      }
+      if (dist >= cfg.pickupRadius) continue;
+
+      const taken = player.addPotion(d.amount);
+      if (taken > 0) {
+        FX.burst(d.x, d.y - 4, 10, ['#e5484d', '#ffffff', '#ffd93d'], { speed: 45, life: 0.4, gravity: 60 });
+        FX.number(d.x, d.y - 14, taken > 1 ? '+포션 ' + taken + '개' : '+포션', '#ffd93d');
+        d.amount -= taken;
+        // 한 칸만 남아 절반만 담았으면 나머지는 바닥에 그대로 둔다
+        if (d.amount <= 0) this.drops.splice(i, 1);
+      } else if (this.fullHintCooldown <= 0 && d.hintTimer <= 0) {
+        FX.number(player.x, player.y - 20, '가득 찼다', '#8f9aa8');
+        d.hintTimer = 1.2;
+        this.fullHintCooldown = 0.4;
+      }
+    }
+
+    // 발밑 무기 중 가장 가까운 것 하나만 F 대상으로 삼는다
+    if (bestWeapon >= 0) {
+      this.nearWeapon = this.drops[bestWeapon];
+      if (wantPickup) this.pickupWeapon(bestWeapon, this.drops[bestWeapon], player);
+    }
+  },
+
+  /* 무기 줍기 = 가방에 넣기 (끼는 건 인벤토리에서 고른다).
+     가방이 꽉 찼으면 예전처럼 손에 든 무기와 맞바꾼다 — 든 무기는 그 자리에 남는다 */
+  pickupWeapon(index, d, player) {
+    if (player.dead) return;
+    if (Inventory.addWeapon(player, d.weapon, d.level, d.legend, d.element)) {
+      const color = d.legend ? CONFIG.weapons.legendColor : (CONFIG.weapons.levelColor[levelTier(d.level)] || '#ffffff');
+      const name = (d.legend ? CONFIG.weapons.legends[d.legend].name : CONFIG.weapons[d.weapon].name) + ' ' + d.level + '레벨';
+      FX.burst(d.x, d.y - 4, 8, [color, '#ffffff'], { speed: 40, life: 0.35, gravity: 60 });
+      FX.number(d.x, d.y - 14, '+' + name, color);
+      Sound.play('pickup');
+      this.drops.splice(index, 1);
+      return;
+    }
+    const oldId = player.weapon, oldLevel = player.weaponLevel, oldLegend = player.weaponLegend;
+    if (oldId === d.weapon && oldLevel === d.level && oldLegend === d.legend) {
+      FX.number(player.x, player.y - 20, '가방이 가득 찼다', '#8f9aa8');
+      return;
+    }
+    const oldEl = player.weaponElement;
+    if (!player.equipWeapon(d.weapon, d.level, d.legend, d.element)) return;
+    this.drops.splice(index, 1);
+    // 바꾸기 전 무기는 버려두고 간다 — 마음이 바뀌면 다시 F로 집을 수 있다
+    this.spawnWeapon(d.x, d.y, oldId, oldLevel, { pickupDelay: 0.35, legend: oldLegend, element: oldEl });
+  },
+
+  /* 전설 무기의 무지개 오라 — 바닥에 옅은 색 원판이 숨쉬듯 커졌다 작아지고,
+     그 둘레를 일곱 색 알갱이가 천천히 돈다. */
+  drawAura(ctx, sx, sy, age) {
+    const pal = CONFIG.weapons.rainbow;
+    const pulse = 1 + Math.sin(age * 3) * 0.5;      // 0.5 ~ 1.5
+    ctx.globalAlpha = 0.16 + pulse * 0.06;
+    fillCircle(ctx, sx, sy + 2, 8 + pulse * 2, UI.rainbowNow(0));
+    ctx.globalAlpha = 1;
+    for (let i = 0; i < pal.length; i++) {
+      const a = age * 1.6 + (i / pal.length) * Math.PI * 2;
+      const r = 10 + Math.sin(age * 3 + i) * 1.5;
+      ctx.fillStyle = pal[i];
+      // 바닥에 누운 타원 궤도 — 위에서 내려다보는 시점이므로 세로를 눌러 그린다
+      ctx.fillRect(Math.round(sx + Math.cos(a) * r), Math.round(sy + 2 + Math.sin(a) * r * 0.5), 1, 1);
+    }
+  },
+
+  // 드랍 하나 그리기. 나무·캐릭터와 같은 y 정렬 목록에 섞여 호출된다
+  drawOne(ctx, cam, d) {
+    // 수명 5초 미만은 깜빡이며 곧 사라짐을 알린다
+    if (d.life < 5 && Math.floor(d.age * 8) % 2 === 0) return;
+    const sx = Math.round(d.x - cam.x);
+    const sy = Math.round(d.y - cam.y);
+    const bob = Math.round(Math.sin(d.age * 4) * 1.5);
+
+    if (d.kind === 'weapon') {
+      const spec = CONFIG.weapons[d.weapon];
+      const color = CONFIG.weapons.levelColor[levelTier(d.level)] || '#ffffff';
+      const set = SPRITES.weapons && SPRITES.weapons[d.weapon];
+      const sp = set && set[levelTier(d.level)];
+      fillEllipse(ctx, sx + 1, sy + 5, 5, 2.1, 'rgba(10,12,20,0.3)');
+      if (d.legend) this.drawAura(ctx, sx, sy, d.age);
+      if (sp) ctx.drawImage(sp, sx - Math.floor(sp.width / 2), sy - 8 + bob);
+      // 어떤 무기가 몇 레벨인지 바닥에서도 바로 보인다
+      if (d.legend) UI.drawRainbowText(ctx, CONFIG.weapons.legends[d.legend].name + ' ' + d.level + '레벨', sx, sy + 8, true);
+      else UI.drawText(ctx, spec.name + ' ' + d.level + '레벨', sx, sy + 8, color, true);
+      // 발밑에 서 있으면 집는 방법을 알려준다 (가방이 차 있으면 맞바꾸기)
+      if (d.playerNear) UI.drawText(ctx, Inventory.firstEmpty(Game.player) >= 0 ? 'F 줍기' : 'F 바꾸기', sx, sy - 19, '#ffffff', true);
+      else if (Math.floor(d.age * 3) % 2 === 0) {
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(sx + 4, sy - 10 + bob, 1, 1);
+      }
+      return;
+    }
+
+    if (d.kind === 'gear') {
+      const sp = Gear.sprite(d.item), color = Gear.color(d.item);
+      fillEllipse(ctx, sx + 1, sy + 5, 5, 2.1, 'rgba(10,12,20,0.3)');
+      // 희귀한 것은 바닥에 옅은 색 원판이 숨쉰다
+      if (d.item.rarity >= 2) {
+        const pulse = 1 + Math.sin(d.age * 3) * 0.5;
+        ctx.globalAlpha = 0.14 + pulse * 0.06;
+        fillCircle(ctx, sx, sy + 2, 7 + pulse * 2, color);
+        ctx.globalAlpha = 1;
+      }
+      ctx.drawImage(sp, sx - Math.floor(sp.width / 2), sy - 8 + bob);
+      UI.drawText(ctx, Gear.name(d.item), sx, sy + 8, color, true);
+      if (Math.floor(d.age * 3) % 2 === 0) { ctx.fillStyle = '#ffffff'; ctx.fillRect(sx + 4, sy - 10 + bob, 1, 1); }
+      return;
+    }
+
+    if (d.kind === 'loot') {
+      const ls = CONFIG.loot.items[d.id], sp = SPRITES.loot[d.id];
+      fillEllipse(ctx, sx + 1, sy + 5, 4, 1.7, 'rgba(10,12,20,0.3)');
+      ctx.drawImage(sp, sx - Math.floor(sp.width / 2), sy - 6 + bob);
+      if (Math.floor(d.age * 3) % 2 === 0) { ctx.fillStyle = '#ffffff'; ctx.fillRect(sx + 3, sy - 8 + bob, 1, 1); }
+      if (ls.trophy) UI.drawText(ctx, ls.name, sx, sy + 8, ls.color, true);   // 보스 전리품은 이름이 보인다
+      else if (d.amount > 1) UI.drawText(ctx, d.amount + '개', sx, sy + 7, ls.color, true);
+      return;
+    }
+
+    fillEllipse(ctx, sx + 1, sy + 5, 4, 1.7, 'rgba(10,12,20,0.3)');
+    const sp = SPRITES.potion;
+    ctx.drawImage(sp, sx - Math.floor(sp.width / 2), sy - 6 + bob);
+    // 반짝임 — 아직 안 주운 드랍이 눈에 띄게
+    if (Math.floor(d.age * 3) % 2 === 0) {
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(sx + 3, sy - 8 + bob, 1, 1);
+    }
+    if (d.amount > 1) {
+      UI.drawText(ctx, d.amount + '개', sx, sy + 7, '#ffd93d', true);
+    }
+  },
+};

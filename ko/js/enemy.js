@@ -1,0 +1,255 @@
+'use strict';
+
+/* 모든 몬스터의 공통 뼈대.
+   체력·피격·넉백·사망·레벨 표시처럼 종류가 달라도 똑같은 부분을 여기 모아두고,
+   종류별 파일(slime / mushroom / wolf)은 "어떻게 움직이고 어떻게 공격하는가"만 쓴다.
+
+   하위 클래스가 채워야 하는 것
+     TYPE       종류 이름 (스폰 표와 미니맵에서 쓴다)
+     stats      CONFIG 에서 가져온 레벨별 능력치 ({hp, atk, xp, knockback, scale, ...})
+     think(dt, player)   매 프레임 행동
+     drawBody(ctx, sx, sy)   몸통 그리기 (그림자와 레벨표시는 공통으로 처리) */
+
+let enemyIdCounter = 0;
+
+class Enemy {
+  constructor(x, y, level, stats) {
+    this.id = ++enemyIdCounter;
+    this.TYPE = 'enemy';
+    this.level = level;
+    // 표의 줄을 그대로 참조하면 한 마리를 고칠 때 같은 레벨 전부가 바뀐다 — 복사해서 쓴다
+    this.stats = Object.assign({}, stats);
+    this.x = x; this.y = y;
+    this.maxHp = stats.hp;
+    this.hp = stats.hp;
+    this.scale = stats.scale;
+    this.radius = 7 * stats.scale;
+    this.dead = false;
+
+    this.status = {};          // 걸려 있는 상태이상 (Status 가 다룬다)
+    this.elite = null;         // 엘리트 접두사 id — 붙이고 다루는 일은 Elite 가 한다
+    this.nightBorn = false;    // 밤에 태어났는가 — 더 세고 이름표에 달이 붙는다
+    this.dir = Math.random() * Math.PI * 2;
+    this.contactTimer = 0;
+    this.hurtFlash = 0;
+    this.showHp = 0;
+    this.kx = 0; this.ky = 0;   // 넉백 속도
+  }
+
+  // 종류 색 (피 튀김·죽을 때 터지는 알갱이·체력바에 쓴다)
+  get palette() {
+    return ENEMY_COLORS[this.TYPE] || ENEMY_COLORS.slime;
+  }
+
+  // 이름표 색 — 지금 내 레벨에 견줘 얼마나 벅찬가 (빨강 / 주황 / 흰색)
+  get labelColor() {
+    return difficultyColor(this.level, Game.player ? Game.player.level : 1);
+  }
+
+  get hurtBox() {
+    const r = this.radius;
+    return { x: this.x - r, y: this.y - r * 0.8, w: r * 2, h: r * 1.8 };
+  }
+
+  get feetBox() {
+    const r = this.radius;
+    return { x: this.x - r * 0.7, y: this.y + 1, w: r * 1.4, h: 5 };
+  }
+
+  distanceTo(player) {
+    if (player.dead) return Infinity;
+    // 마을 안에 있는 플레이어는 바깥에서 안 보인다 — 울타리에 달라붙어 기다리지 않고 물러난다
+    if (typeof Village !== 'undefined' && Village.isSafe && !Village.isSafe(this.x, this.y)
+        && Village.isSafe(player.x, player.y)) return Infinity;
+    return Util.dist(this.x, this.y, player.x, player.y);
+  }
+
+  /* 몸이 벽 안에 끼면 어느 쪽으로도 움직일 수 없어 영영 굳어버린다.
+     (스폰은 빈 자리를 확인하지만, 앞으로 몸집이 더 큰 몬스터가 들어오면 생길 수 있는 상황)
+     가까운 빈 자리를 나선으로 찾아 빠져나온다. */
+  unstick() {
+    if (!World.blocked(this.feetBox)) return;
+    for (let r = 3; r <= 24; r += 3) {
+      for (let i = 0; i < 8; i++) {
+        const a = (i / 8) * Math.PI * 2;
+        const dx = Math.cos(a) * r, dy = Math.sin(a) * r;
+        const box = this.feetBox;
+        box.x += dx; box.y += dy;
+        if (!World.blocked(box)) { this.x += dx; this.y += dy; return; }
+      }
+    }
+  }
+
+  update(dt, player) {
+    if (this.dead) return;
+    Status.update(this, dt, false);
+    if (this.dead) return;     // 화상·중독으로 여기서 쓰러질 수 있다
+    this.unstick();
+    this.contactTimer = Math.max(0, this.contactTimer - dt);
+    this.hurtFlash = Math.max(0, this.hurtFlash - dt);
+    this.showHp = Math.max(0, this.showHp - dt);
+
+    // 기절 (도끼 땅 찍기) — 그동안은 움직이지도 공격하지도 않는다. 밀려나는 것은 그대로
+    if (this.stunTimer > 0) this.stunTimer -= dt;
+    else this.think(dt, player);
+
+    // 넉백은 종류와 무관하게 똑같이 밀리고 잦아든다
+    if (Math.abs(this.kx) > 0.5 || Math.abs(this.ky) > 0.5) {
+      this.moveWithCollision(this.kx * dt, this.ky * dt);
+      this.kx *= Math.pow(0.004, dt);
+      this.ky *= Math.pow(0.004, dt);
+    }
+  }
+
+  think(dt, player) { /* 하위 클래스가 채운다 */ }
+
+  // 몸이 겹쳐 있으면 닿는 피해를 준다 (쿨다운은 종류별로 다르다)
+  touchPlayer(player, cooldown, damage) {
+    if (player.dead || this.contactTimer > 0) return false;
+    if (!Util.aabb(this.hurtBox, player.hurtBox)) return false;
+    player.takeDamage(damage === undefined ? this.stats.atk : damage, this.x, this.y);
+    this.contactTimer = cooldown;
+    if (this.elite) Elite.onTouch(this, player);   // 불타는 엘리트는 닿으면 화상을 옮긴다
+    return true;
+  }
+
+  /* x축과 y축을 따로 밀어 벽에 붙어도 미끄러지듯 움직인다.
+     벽에 막히면 방향을 튕겨 제자리에 끼지 않게 한다.
+     빙결은 여기서 한 번에 처리한다 — 모든 몬스터가 이 길로 움직이므로 종류마다 손볼 것이 없다. */
+  moveWithCollision(dx, dy) {
+    const slow = Status.speedScale(this);
+    dx *= slow; dy *= slow;
+    // 거점 안전구역 — 바깥에서 안으로 들어가는 발걸음은 벽처럼 막는다.
+    // 안에 있던 것은 나가는 길이라 막지 않는다 (Village.update 의 밀어내기가 여기로 나간다)
+    const safeZone = (typeof Village !== 'undefined' && Village.blocksEntry) ? Village : null;
+    const margin = this.radius || 0;   // 중심이 아니라 몸통이 선을 넘지 못하게 한다
+    const step = 2;
+    let remain = dx;
+    while (Math.abs(remain) > 0.001) {
+      const move = Util.clamp(remain, -step, step);
+      const box = this.feetBox; box.x += move;
+      if (World.blocked(box)) { this.dir = Math.PI - this.dir; this.onBlocked(); break; }
+      if (safeZone && safeZone.blocksEntry(this.x, this.y, this.x + move, this.y, margin)) {
+        this.dir = Math.PI - this.dir; this.onBlocked(); break;
+      }
+      this.x += move;
+      remain -= move;
+    }
+    remain = dy;
+    while (Math.abs(remain) > 0.001) {
+      const move = Util.clamp(remain, -step, step);
+      const box = this.feetBox; box.y += move;
+      if (World.blocked(box)) { this.dir = -this.dir; this.onBlocked(); break; }
+      if (safeZone && safeZone.blocksEntry(this.x, this.y, this.x, this.y + move, margin)) {
+        this.dir = -this.dir; this.onBlocked(); break;
+      }
+      this.y += move;
+      remain -= move;
+    }
+  }
+
+  onBlocked() { /* 필요한 종류만 쓴다 (늑대는 돌진을 멈춘다) */ }
+
+  // knockScale — 스킬처럼 더 세게 날려보내야 할 때 쓰는 추가 배수
+  takeHit(damage, angle, crit, player, knockScale) {
+    damage = Math.round(damage * Status.damageTaken(this));   // 감전되어 있으면 더 아프다
+    this.hp -= damage;
+    this.hurtFlash = 0.12;
+    this.showHp = 2.5;
+    // 도끼처럼 무거운 무기는 더 멀리 날려보낸다
+    const weaponKnock = (player && player.weaponSpec) ? player.weaponSpec().knockMult : 1;
+    const knockMult = weaponKnock * (knockScale || 1);
+    this.kx = Math.cos(angle) * this.stats.knockback * knockMult;
+    this.ky = Math.sin(angle) * this.stats.knockback * knockMult;
+
+    const pal = this.palette;
+    FX.spray(this.x, this.y, angle, crit ? 12 : 7, [pal.M, pal.n, '#ffffff']);
+    FX.number(this.x, this.y - 10 - this.radius, damage, crit ? '#ffd93d' : '#ffffff', crit);
+    // 맞은 쪽(때린 사람을 향한 면)에서 불꽃이 튄다
+    FX.spark(this.x - Math.cos(angle) * this.radius * 0.6, this.y - 2 - Math.sin(angle) * this.radius * 0.4, angle, crit);
+    Sound.play(crit ? 'crit' : 'hit');
+
+    this.onHit(damage, player);
+    if (this.hp <= 0) this.die(player);
+  }
+
+  onHit(damage, player) { /* 맞았을 때 반응이 필요한 종류만 쓴다 */ }
+
+  die(player) {
+    this.dead = true;
+    const pal = this.palette;
+    FX.burst(this.x, this.y, 16 + this.level * 3, [pal.M, pal.n, pal.m], { speed: 70, life: 0.55 });
+    FX.ring(this.x, this.y + 2, this.radius + 2, pal.n);
+    Sound.play('kill');
+    FX.number(this.x, this.y - 18, '+' + this.stats.xp + ' 경험치', '#9be564');
+    player.gainXp(this.stats.xp);
+    if (this.elite) Elite.onDie(this, player);     // 불꽃이 퍼지거나, 둘로 갈라진다
+  }
+
+  /* ── 그리기 ────────────────────────────────────────────── */
+
+  draw(ctx, cam) {
+    if (this.dead) return;
+    const sx = Math.round(this.x - cam.x);
+    const sy = Math.round(this.y - cam.y);
+    if (this.elite) Elite.drawAura(ctx, this, sx, sy);   // 발밑 고리는 몸에 가려지지 않게 먼저
+    /* 맞은 직후엔 옆으로 퍼졌다 돌아온다 — 충격이 몸에 전해지는 느낌.
+       예전엔 캔버스를 비정수 배율로 늘려서 도트가 뭉개졌다. 이제는 눌린 크기(hitSX/hitSY)를
+       그리는 쪽에 넘겨 **그 크기로 다시 그린다** (늘리지 않는다) */
+    this.hitK = this.hurtFlash > 0 ? this.hurtFlash / 0.12 : 0;
+    this.drawBody(ctx, sx, sy);
+  }
+
+  drawBody(ctx, sx, sy) { /* 하위 클래스가 채운다 */ }
+
+  // 맞은 순간의 눌림 배수 (그림 크기에 곱한다)
+  get hitSX() { return 1 + (this.hitK || 0) * 0.16; }
+  get hitSY() { return 1 - (this.hitK || 0) * 0.14; }
+
+  // 기절 — 머리 위를 노란 별 셋이 납작하게 돈다 (앞으로 올 때 밝고 크게)
+  drawStunStars(ctx, sx, y) {
+    for (let i = 0; i < 3; i++) {
+      const a = World.time * 6 + i * Math.PI * 2 / 3;
+      const x = Math.round(sx + Math.cos(a) * 7), yy = Math.round(y + Math.sin(a) * 2);
+      const front = Math.sin(a) > 0;
+      ctx.fillStyle = front ? '#ffe066' : '#b8902c';
+      ctx.fillRect(x, yy, 1, 1);
+      if (front) { ctx.fillRect(x - 1, yy, 3, 1); ctx.fillRect(x, yy - 1, 1, 3); }
+    }
+  }
+
+  // 발밑 그림자 — 납작한 타원, 빛 반대편으로 한 칸 (둥근 원은 공처럼 떠 보인다)
+  drawShadow(ctx, sx, sy, radius) {
+    fillEllipse(ctx, sx + 1, sy + 6, radius, Math.max(1.5, radius * 0.42), 'rgba(10,12,20,0.32)');
+  }
+
+  // 레벨 표시와 체력바 — 모든 몬스터가 같은 자리에 같은 모양으로 띄운다
+  drawLabel(ctx, sx, topY) {
+    const pal = this.palette;
+    if (this.stunTimer > 0) this.drawStunStars(ctx, sx, topY - (this.elite ? 15 : 8));
+    // 엘리트는 별과 접두사가 한 줄 더 붙으므로 상태이상 표를 그만큼 위로 올린다
+    Status.drawMarks(ctx, this, sx, topY - (this.elite ? 7 : 0));
+    if (this.elite) Elite.drawName(ctx, this, sx, topY - 12);
+    // 밤에 태어난 놈은 달을 달고 다닌다 — 날이 밝아도 세다는 표시
+    const lvText = this.level + '레벨';
+    if (this.nightBorn) UI.drawText(ctx, '@', sx - UI.textWidth(lvText) / 2 - 6, topY - 5, '#9fc8ff', false);
+    UI.drawText(ctx, lvText, sx, topY - 5, this.labelColor, true);
+
+    if (this.showHp > 0) {
+      const w = Math.max(12, Math.round(14 * this.scale));
+      const x = sx - Math.round(w / 2), y = topY + 2;
+      ctx.fillStyle = '#17110d';
+      ctx.fillRect(x - 1, y - 1, w + 2, 4);
+      ctx.fillStyle = '#4a1f1f';
+      ctx.fillRect(x, y, w, 2);
+      ctx.fillStyle = pal.M;
+      ctx.fillRect(x, y, Math.round(w * Math.max(0, this.hp) / this.maxHp), 2);
+    }
+  }
+
+  // 공격 직전 예고 — 몸 위에 느낌표가 깜빡인다 (버섯·늑대가 함께 쓴다)
+  drawWarning(ctx, sx, topY, progress) {
+    if (Math.floor(progress * 12) % 2 !== 0) return;
+    UI.drawText(ctx, '!', sx, topY - 13, '#ff6b6b', true);
+  }
+}

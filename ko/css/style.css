@@ -1,0 +1,147 @@
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  height: 100%;
+  background: #10140f;
+  color: #9db69a;
+  font-family: "Malgun Gothic", "맑은 고딕", system-ui, sans-serif;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  overflow: hidden;
+}
+
+#stage {
+  /* 게임 캔버스는 384x216 내부 해상도를 정수배로 확대해서 도트를 또렷하게 유지 */
+  position: relative;   /* 패치 노트를 캔버스 위에 겹치기 위해 */
+  line-height: 0;
+  border: 3px solid #2b3327;
+  border-radius: 4px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, .6);
+}
+
+/* 크기는 Game.fitScreen 이 정한다 — 한 도트 3px(1152x648)을 채우고 창이 작으면 비율을 지켜 줄인다.
+   비정수 배율은 한 단계 큰 정수배로 그린 것을 부드럽게 줄여서(sharp bilinear) 도트 크기를 고르게 한다.
+   예전처럼 max-width·max-height 로 따로 줄이면 가로·세로 비율이 어긋나 도트가 직사각형이 된다 */
+#game, #ui {
+  display: block;
+  width: 1152px;   /* 384 * 3 — 스크립트가 덮어쓰기 전 기본값 */
+  height: 648px;   /* 216 * 3 */
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+  cursor: none;   /* 조준점은 게임이 캔버스 안에 직접 그린다 */
+}
+
+#game { background: #2c5c2f; }
+
+/* 글자와 창을 그리는 고운 레이어 — 게임 캔버스 위에 딱 포갠다.
+   안쪽 해상도만 세 배(1152x648)이고 화면에서 차지하는 크기는 같다. */
+#ui {
+  position: absolute;
+  left: 0;
+  top: 0;
+  pointer-events: none;   /* 마우스는 아래 캔버스가 받는다 */
+}
+
+/* 패치 노트 — 캔버스 오른쪽 위(골드 아래)의 작은 버튼. 누르면 목록이 펼쳐진다. 한글이라 HTML 로 그린다 */
+#patchnotes {
+  position: absolute;
+  top: 7%;
+  right: 1.4%;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+  line-height: 1.35;
+  font-size: 11px;
+  color: #c9d8bd;
+  pointer-events: none;      /* 빈 자리의 조준·클릭은 그대로 캔버스로 간다 */
+}
+#patchnotes .pn-btn {
+  pointer-events: auto;
+  position: relative;
+  background: rgba(10, 14, 10, .8);
+  border: 1px solid #3a442f;
+  border-radius: 3px;
+  color: #9be564;
+  font: 600 11px/1 "Malgun Gothic", "맑은 고딕", system-ui, sans-serif;
+  padding: 4px 8px;
+  cursor: pointer;
+}
+#patchnotes .pn-btn:hover { border-color: #9be564; color: #d8e6cf; }
+/* 안 본 소식이 있으면 붉은 느낌표 */
+#patchnotes .pn-badge {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #e5484d;
+  color: #fff;
+  font: 700 10px/14px system-ui, sans-serif;
+  text-align: center;
+  box-shadow: 0 0 0 1px #10140f;
+}
+#patchnotes .pn-panel {
+  pointer-events: auto;
+  width: 240px;
+  max-height: 340px;
+  overflow-y: auto;
+  background: rgba(10, 14, 10, .9);
+  border: 1px solid #3a442f;
+  border-radius: 3px;
+  padding: 5px 8px 6px;
+}
+#patchnotes .pn-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 4px;
+}
+#patchnotes .pn-title { color: #9be564; font-weight: 600; letter-spacing: .3px; }
+#patchnotes .pn-close {
+  background: none;
+  border: none;
+  color: #7fa86a;
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0 2px;
+}
+#patchnotes .pn-close:hover { color: #ffffff; }
+#patchnotes .pn-entry + .pn-entry { margin-top: 6px; padding-top: 5px; border-top: 1px solid #2c3627; }
+#patchnotes .pn-date { color: #ffe066; font-weight: 600; margin-bottom: 1px; }
+#patchnotes ul { margin: 0; padding-left: 14px; }
+#patchnotes li { margin: 1px 0; }
+
+#controls {
+  display: flex;
+  flex-wrap: wrap;            /* 창이 좁으면 줄을 바꾼다 — 칸 안에서 글자가 꺾이지 않게 */
+  justify-content: center;
+  gap: 6px 18px;
+  font-size: 13px;
+  letter-spacing: .2px;
+}
+
+#controls span {
+  white-space: nowrap;
+}
+
+#savenote {
+  margin: -6px 0 0;
+  font-size: 11px;
+  color: #5f7159;
+}
+
+#controls b {
+  color: #d8e6cf;
+  background: #232a1f;
+  border: 1px solid #3a442f;
+  border-radius: 3px;
+  padding: 1px 6px;
+  font-weight: 600;
+}
