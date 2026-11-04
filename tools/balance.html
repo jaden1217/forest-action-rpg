@@ -56,13 +56,14 @@
   const P = CONFIG.player, LU = CONFIG.levelUp, WL = CONFIG.weapons.levelMult;
   const pHp = L => P.maxHp + (L - 1) * LU.hpGain;
   const pBase = L => P.attackDamage + (L - 1) * LU.damageGain;
-  const pDmg = L => Math.round(pBase(L) * WL[Math.min(L, LEVEL_MAX) - 1]);
+  const wMult = L => WL[Math.min(L, WL.length) - 1];   // 무기 레벨은 몬스터 표(23)를 넘어 60까지 간다
+  const pDmg = L => Math.round(pBase(L) * wMult(L));
   const potion = L => Math.max(CONFIG.items.potionHealMin, Math.round(pHp(L) * CONFIG.items.potionHealRatio));
   const levels = [1, 2, 3, 4, 5, 6, 8, 10, 12, 14, 16, 18, 20, 23, 26, 30];
 
   section('플레이어 성장', '공격력 = 기본(레벨당 +' + LU.damageGain + ') × 같은 레벨 무기 배수. 체력은 레벨당 +' + LU.hpGain + '. 포션은 최대 체력의 ' + (CONFIG.items.potionHealRatio * 100) + '% (최소 ' + CONFIG.items.potionHealMin + ').');
   table(['레벨', '체력', '기본 공격', '무기 배수', '실제 공격', '포션 회복', '다음 레벨까지 XP'],
-    levels.map(L => [L, pHp(L), pBase(L), WL[Math.min(L, LEVEL_MAX) - 1].toFixed(3), pDmg(L), potion(L), LU.xpNeed(L)]));
+    levels.map(L => [L, pHp(L), pBase(L), wMult(L).toFixed(3), pDmg(L), potion(L), LU.xpNeed(L)]));
 
   /* ── 몬스터 ── */
   const types = [['슬라임', CONFIG.slime.levels], ['버섯', CONFIG.mushroom.levels], ['늑대', CONFIG.wolf.levels]];
@@ -154,17 +155,17 @@
   const totals = up.map(u => { let s = 0; for (let r = 0; r < u.maxRank; r++) s += Math.round(u.basePrice * Math.pow(u.priceMult, r)); return u.name + ' 전부 ' + s + 'G'; });
   out.appendChild(el('p', 'note', totals.join(' · ') + ' · 포션 ' + CONFIG.shop.potionPrice + 'G'));
 
-  /* ── 보스 셋 ── */
-  const BASES = { slime: CONFIG.slime.levels, wolf: CONFIG.wolf.levels, mushroom: CONFIG.mushroom.levels };
-  const BIG = { slime: ['slam', '내려찍기'], wolf: ['pounce', '덮치기'], mushroom: ['pulse', '맥동'] };
-  const PLV = { slime: [8, 10, 12, 14, 16, 18], wolf: [14, 16, 18, 20, 22, 24], mushroom: [20, 23, 26, 28, 30, 34] };
-  const CAVE_NAME = { slime: '가까운 굴', wolf: '중간 굴', mushroom: '가장자리 굴' };
+  /* ── 보스 ── */
+  const BIG = { slime: ['slam', '내려찍기'], wolf: ['pounce', '덮치기'], mushroom: ['pulse', '맥동'], sandlord: ['dive', '솟구침'] };
+  const PLV = { slime: [8, 10, 12, 14, 16, 18], wolf: [14, 16, 18, 20, 22, 24], mushroom: [20, 23, 26, 28, 30, 34], sandlord: [38, 40, 42, 44, 46, 50] };
+  // 보스가 어느 맵 어느 위험도에 사는지 — 맵마다 동굴 목록을 뒤진다
+  const caveOf = key => { for (const id in CONFIG.maps) { const c = CONFIG.maps[id].caves.find(c => c.boss === key); if (c) return { map: CONFIG.maps[id].name, t: c.t }; } };
   for (const key in CONFIG.bosses) {
-    const B = CONFIG.bosses[key], bs = enemyStatsAt(BASES[B.type], B.level);
+    const B = CONFIG.bosses[key], bs = enemyStatsAt(CONFIG[B.type].levels, B.level), cave = caveOf(key);
     const bHp = Math.round(bs.hp * B.hpMult), bAtk = Math.round(bs.atk * B.atkMult);
     const big = BIG[key];
     const patterns = Object.keys(B).filter(k => B[k] && B[k].damageMult).map(k => k + ' ' + Math.round(bAtk * B[k].damageMult)).join(', ');
-    section('보스 — ' + B.name + ' (Lv' + B.level + ', ' + CAVE_NAME[key] + ' t≈' + CONFIG.maps.forest.caves.find(c => c.boss === key).t + ')',
+    section('보스 — ' + B.name + ' (Lv' + B.level + ', ' + cave.map + ' ' + B.lairName + ' t≈' + cave.t + ')',
       '체력 ' + bHp + ', 몸통 공격 ' + bAtk + '. 패턴 위력: ' + patterns + '. 재도전 ' + (CONFIG.arena.respawnDelay / 60) + '분.');
     table(['플레이어', '체력', '공격', '평타 몇 대', '검으로 몇 초 (쿨 ' + CONFIG.weapons.sword.cooldown + 's)', '몸통에 몇 대', big[1] + ' 몇 대', '포션 회복'],
       PLV[key].map(L => {
@@ -174,15 +175,50 @@
       }));
   }
 
-  /* ── 스킬 ── */
-  section('스킬 — 무기별', '위력은 "무기 종류 배수를 뺀 평타(검 기준)" 대비 배수라 무기끼리 바로 비교된다. 연타 스킬은 (판정 시간 / 간격) 번 맞는다. 강제 치명타는 x1.8 을 더 곱한다.');
+  /* ── 스킬 ──
+     스킬마다 모양이 달라서(연타·두 번 베기·발사·도약…) 수치가 적힌 자리도 다르다.
+     마지막 열은 config.js 스킬 주석의 위력 표와 같은 값이 나와야 한다. */
+  section('스킬 — 무기별', '위력은 "무기 종류 배수를 뺀 평타(검 기준)" 대비 배수라 무기끼리 바로 비교된다. 타수는 대상 하나가 한 번 쓸 때 맞는 수 (마무리 포함). 치명은 x' + P.critMult + ' 를 더 곱한 값이고, 단검의 매복 찌르기와 도끼 광폭화는 총 배수에 넣지 않았다.');
+  const skTiming = s => {
+    if (s.hitWindow) return s.hitWindow.join('~') + 's';
+    if (s.phases) return s.phases.map(p => p.at.join('~')).join(', ') + 's';
+    if (s.launchAt !== undefined) return s.launchAt + 's 발사';
+    if (s.stepTime) return s.stepTime + 's 간격';
+    if (s.air) return s.air + 's 뒤 착지';
+    return s.windup + 's 뒤';
+  };
+  const skArea = s => {
+    if (s.shot) return s.shot.range + 'px 날아감';
+    if (s.range) return '둘레 ' + s.range;
+    if (s.radius) return '반경 ' + s.radius;
+    if (s.length) return '길이 ' + s.length;
+    if (s.lineWidth) return '띠 반폭 ' + s.lineWidth;
+    return s.arc >= Math.PI ? '사방' : '반각 ' + s.arc;
+  };
+  const skExtra = s => s.finalBurst || s.finale || s.slam;   // 본 공격과 따로 들어가는 한 방
+  const skHits = s => {
+    if (s.phases) return s.phases.length;
+    if (s.stabs || s.slashes) return s.stabs || s.slashes;
+    const cap = s.perTarget || (s.shot && s.shot.perTarget);   // 비수·사신 — 한 적이 맞는 수의 상한
+    if (cap) return cap;
+    return s.hitInterval ? Math.floor((s.hitWindow[1] - s.hitWindow[0]) / s.hitInterval) + 1 : 1;
+  };
+  const skMult = s => {
+    if (s.phases) return s.phases.map(p => 'x' + p.damageMult).join(' + ');
+    return 'x' + s.damageMult + (skExtra(s) ? ' + x' + skExtra(s).damageMult : '') + (s.forceCrit ? ' 치명' : '')
+      + (s.lastCrit ? ' 막타 치명' : '') + (s.finalMult ? ' 막타 x' + s.finalMult : '');
+  };
+  const skTotal = s => {
+    if (s.phases) return s.phases.reduce((t, p) => t + p.damageMult, 0);
+    const crit = s.forceCrit ? P.critMult : 1;
+    const last = s.lastCrit ? P.critMult : (s.finalMult || 1);   // 마지막 한 번만 더 센 스킬 (연속찌르기·사신)
+    return s.damageMult * crit * (skHits(s) - 1 + last) + (skExtra(s) ? skExtra(s).damageMult : 0);
+  };
   const skRows = [];
   for (const w in CONFIG.skills.byWeapon) {
     for (const s of CONFIG.skills.byWeapon[w]) {
       if (s.buff) { skRows.push([CONFIG.weapons[w].name + ' ' + s.name + ' (' + s.key + ')', 'Lv' + s.unlockLevel, s.cooldown + 's', '-', s.buff.time + 's 강화', '공속 x' + s.buff.attackSpeed + ', 위력 x' + s.buff.damageMult, '-', '-']); continue; }
-      const hits = s.hitInterval ? Math.floor((s.hitWindow[1] - s.hitWindow[0]) / s.hitInterval) + 1 : 1;
-      const crit = s.forceCrit ? CONFIG.player.critMult : 1;
-      skRows.push([CONFIG.weapons[w].name + ' ' + s.name + ' (' + s.key + ')', 'Lv' + s.unlockLevel, s.cooldown + 's', 'x' + s.damageMult + (s.forceCrit ? ' 치명' : ''), s.duration + 's', s.hitWindow.join('~') + 's' + (s.arc >= Math.PI ? ' 사방' : ' 반각 ' + s.arc), hits, 'x' + (s.damageMult * hits * crit).toFixed(2)]);
+      skRows.push([CONFIG.weapons[w].name + ' ' + s.name + ' (' + s.key + ')', 'Lv' + s.unlockLevel, s.cooldown + 's', skMult(s), s.duration + 's', skTiming(s) + ' · ' + skArea(s), skHits(s) + (skExtra(s) ? 1 : 0), 'x' + skTotal(s).toFixed(2)]);
     }
   }
   table(['스킬', '해금', '쿨다운', '배수', '지속', '판정', '대략 타수', '마리당 총 배수'], skRows);
