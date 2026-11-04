@@ -154,7 +154,7 @@ html, body {
 }
 
 </style>
-<!-- built 2026-10-28 08:59 by tools/build.js -->
+<!-- built 2026-11-04 07:42 by tools/build.js -->
 </head>
 <body>
   <div id="stage">
@@ -401,7 +401,7 @@ const CONFIG = {
     speed: 265,
     time: 0.16,          // 대시가 이어지는 시간
     invuln: 0.22,        // 대시하는 동안 붙는 무적 (대시 시간보다 살짝 길게)
-    recharge: 1.7,       // 충전 하나가 다시 차기까지 (초)
+    recharge: 3.4,       // 충전 하나가 다시 차기까지 (초)
     gap: 0.18,           // 연속으로 쓸 때 최소 간격
     buffer: 0.18,        // 대시 입력도 잠깐 기억해둔다
   },
@@ -16815,6 +16815,12 @@ const UI = {
    새 작업을 올릴 때 PATCH_NOTES 맨 앞에 한 항목을 추가하면 된다. */
 
 const PATCH_NOTES = [
+  {
+    date: '2026-11-04',
+    notes: [
+      '대시가 다시 차는 시간을 두 배로 — 한 칸에 1.7초에서 3.4초로 (PHANTOM 효과가 있으면 1.7초)',
+    ],
+  },
   {
     date: '2026-10-28',
     notes: [
