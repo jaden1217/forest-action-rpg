@@ -700,8 +700,6 @@ const Game = {
       this.handleMenuInput();
       this.player.bufferInput();
       if (Input.pickupPressed()) Items.pickupRequested = true;
-      // 거점 귀환 — T 로 마을 시작점으로 (보스 방·일시정지 중에는 안 된다)
-      if (Input.pressed.KeyT && typeof Village !== 'undefined') Village.tryReturn(this.player);
       // 귀환 주문 — B 를 누르고 5초 동안 맞지 않으면 돌아간다
       if (Input.pressed.KeyB && typeof Village !== 'undefined') Village.pressRecall(this.player);
 

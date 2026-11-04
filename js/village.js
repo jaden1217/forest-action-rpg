@@ -8,8 +8,7 @@
      대장장이  강화·재련·속성 부여 — 보스 하나를 잡아야 이사 온다
      연금술사  포션·해독제 제작 — 전리품 50개를 팔아야 이사 온다
      창고      가방 밖 보관 — 처음부터 있다 (맡기는 데 조건은 없다)
-     귀환      T 를 누르면 마을 시작점으로 돌아온다 (보스 방 안에서는 안 된다)
-     귀환 주문 B 를 누르고 5초 동안 피해를 받지 않으면 마을로 순간이동한다
+     귀환 주문 B 를 누르고 5초 동안 피해를 받지 않으면 마을로 순간이동한다 (보스 방 안에서는 안 된다)
 
    테라리아처럼 조건을 걸어 "마을이 커지는 맛"을 준다.
    조건을 채운 뒤 마을에 가면 새 집과 함께 알림이 뜬다. */
@@ -441,20 +440,7 @@ const Village = {
     this.checkMoveIns(false);
   },
 
-  /* ── 귀환 (T) ────────────────────────────────────────────
-     보스 방 안·창이 열려 있을 때·죽어 있을 땐 안 된다.
-     마을 시작점 앞으로 돌아온다 — "사냥 끝에 마을로 돌아간다"는 동작이다. */
-  tryReturn(player) {
-    if (!player || player.dead) return false;
-    if (Game.inArena || Game.transition) return false;
-    if (Game.paused()) return false;
-    this.recall = null;
-    Game.beginTransition(() => this.landHome(player));
-    Sound.play('blip');
-    return true;
-  },
-
-  // 마을 시작점 앞에 내려선다 — T 와 귀환 주문이 같은 자리로 돌아온다
+  // 마을 시작점 앞에 내려선다 — 귀환 주문이 끝나면 여기로 돌아온다
   landHome(player) {
     const tx = World.startX, ty = World.startY + 10;
     player.x = tx; player.y = ty;

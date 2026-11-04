@@ -154,7 +154,7 @@ html, body {
 }
 
 </style>
-<!-- built 2026-11-04 08:54 by tools/build.js -->
+<!-- built 2026-11-04 08:56 by tools/build.js -->
 </head>
 <body>
   <div id="stage">
@@ -174,7 +174,6 @@ html, body {
     <span><b>E</b> 포션</span>
     <span><b>I</b> 인벤토리 <span style="opacity:.6">스페이스 사용 · X 버리기</span></span>
     <span><b>F</b> 무기 줍기 / 동굴 / 상점 / 의뢰 / 대장간 / 연금 / 창고 / 보물 / 비석</span>
-    <span><b>T</b> 마을로 귀환</span>
     <span><b>B</b> 귀환 주문 <span style="opacity:.6">5초 동안 맞지 않으면 마을로</span></span>
     <span><b>M</b> 지도</span>
     <span><b>V</b> 소리</span>
@@ -1682,8 +1681,7 @@ const CONFIG = {
        대장장이  강화·재련·속성 부여 (보스 하나 처치하면 이사 온다)
        연금술사  포션·해독제 제작 (전리품 50개 팔면 이사 온다)
        창고      가방 밖 보관 (처음부터 있다 — 맡기는 데 조건은 없다)
-       귀환      T 를 누르면 마을 시작점으로 돌아온다 (보스 방 안에서는 안 된다)
-       귀환 주문 B 를 누르고 recallTime 초 동안 피해를 받지 않으면 마을로 순간이동한다
+       귀환 주문 B 를 누르고 recallTime 초 동안 피해를 받지 않으면 마을로 순간이동한다 (보스 방 안에서는 안 된다)
 
      이사 조건을 테라리아처럼 건 이유: "보스가 관문"에 이어
      "마을이 커지는 맛"을 주려고. 조건을 채우면 다음에 마을에 갈 때
@@ -1761,7 +1759,6 @@ const CONFIG = {
     // 대장장이 = 보스 하나 처치, 연금술사 = 전리품 50개 판매
     smithNeedBoss: 1,
     alchemistNeedLootSold: 50,
-    returnKey: 'KeyT',
     recallTime: 5,   // 귀환 주문 — 이만큼(초) 맞지 않고 버티면 마을로 돌아간다
     /* 안전구역 — 시작점을 중심으로 한 직사각형 안에는 몬스터가 들어오지 못한다.
        시작점 주위 8타일(128px)은 나무·물이 비워져 있으므로, 모서리도 그 안에 들게
@@ -14851,8 +14848,7 @@ const Elite = {
      대장장이  강화·재련·속성 부여 — 보스 하나를 잡아야 이사 온다
      연금술사  포션·해독제 제작 — 전리품 50개를 팔아야 이사 온다
      창고      가방 밖 보관 — 처음부터 있다 (맡기는 데 조건은 없다)
-     귀환      T 를 누르면 마을 시작점으로 돌아온다 (보스 방 안에서는 안 된다)
-     귀환 주문 B 를 누르고 5초 동안 피해를 받지 않으면 마을로 순간이동한다
+     귀환 주문 B 를 누르고 5초 동안 피해를 받지 않으면 마을로 순간이동한다 (보스 방 안에서는 안 된다)
 
    테라리아처럼 조건을 걸어 "마을이 커지는 맛"을 준다.
    조건을 채운 뒤 마을에 가면 새 집과 함께 알림이 뜬다. */
@@ -15284,20 +15280,7 @@ const Village = {
     this.checkMoveIns(false);
   },
 
-  /* ── 귀환 (T) ────────────────────────────────────────────
-     보스 방 안·창이 열려 있을 때·죽어 있을 땐 안 된다.
-     마을 시작점 앞으로 돌아온다 — "사냥 끝에 마을로 돌아간다"는 동작이다. */
-  tryReturn(player) {
-    if (!player || player.dead) return false;
-    if (Game.inArena || Game.transition) return false;
-    if (Game.paused()) return false;
-    this.recall = null;
-    Game.beginTransition(() => this.landHome(player));
-    Sound.play('blip');
-    return true;
-  },
-
-  // 마을 시작점 앞에 내려선다 — T 와 귀환 주문이 같은 자리로 돌아온다
+  // 마을 시작점 앞에 내려선다 — 귀환 주문이 끝나면 여기로 돌아온다
   landHome(player) {
     const tx = World.startX, ty = World.startY + 10;
     player.x = tx; player.y = ty;
@@ -17195,6 +17178,7 @@ const PATCH_NOTES = [
     date: '2026-11-04',
     notes: [
       '귀환 주문이 생겼다 — B 를 누르고 5초 동안 피해를 받지 않으면 지금 맵의 마을로 순간이동한다. 걷고 싸워도 되지만 맞으면 끊기고(독·화상·모래폭풍도), 다시 누르면 취소된다. 보스 방에서는 못 쓴다',
+      'T 키 즉시 귀환을 없앴다 — 전투 중에 바로 빠져나갈 수 있어서 귀환 주문의 5초가 의미 없어졌다',
       '장비 설명창을 비교표로 바꿨다 — 입은 것 / 이것 / 변화를 수치마다 나란히 보여주고, 이름 옆에 더 좋음·더 나쁨·비슷함을 적는다',
       '가방과 창고의 장비·무기 칸에 세모가 붙는다 — 초록은 지금 것보다 낫고 빨강은 못하다. 세트 덤과 능력치 상한까지 따진 판정이다',
       '입으면 켜지고 꺼지는 세트 덤과, 얻고 잃는 고유 효과를 표 아래에 따로 적는다. 고른 장비가 들어갈 칸에는 밑줄이 그어진다',
@@ -18320,8 +18304,6 @@ const Game = {
       this.handleMenuInput();
       this.player.bufferInput();
       if (Input.pickupPressed()) Items.pickupRequested = true;
-      // 거점 귀환 — T 로 마을 시작점으로 (보스 방·일시정지 중에는 안 된다)
-      if (Input.pressed.KeyT && typeof Village !== 'undefined') Village.tryReturn(this.player);
       // 귀환 주문 — B 를 누르고 5초 동안 맞지 않으면 돌아간다
       if (Input.pressed.KeyB && typeof Village !== 'undefined') Village.pressRecall(this.player);
 
