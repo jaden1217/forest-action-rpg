@@ -159,9 +159,9 @@ const Inventory = {
   /* ── 쓰기 / 버리기 ─────────────────────────────────────── */
 
   itemName(player, s) {
-    if (s.kind === 'potion') return 'POTION';
+    if (s.kind === 'potion') return '포션';
     if (s.kind === 'weapon') {
-      return (s.legend ? CONFIG.weapons.legends[s.legend].name : CONFIG.weapons[s.weapon].name) + ' L' + s.level;
+      return (s.legend ? CONFIG.weapons.legends[s.legend].name : CONFIG.weapons[s.weapon].name) + ' ' + s.level + '레벨';
     }
     if (s.kind === 'gear') return Gear.name(s);
     return this.spec(s.id).name;
@@ -176,14 +176,14 @@ const Inventory = {
     const at = this.at(player, index);
     // 장비 칸에서 Space = 벗어서 가방으로
     if (at.zone === 'gear') {
-      if (!at.item) { this.say('NOTHING TO TAKE OFF'); return; }
+      if (!at.item) { this.say('벗을 것이 없다'); return; }
       const free = this.firstEmpty(player);
-      if (free < 0) { this.say('BAG IS FULL'); Sound.play('error'); return; }
+      if (free < 0) { this.say('가방이 가득 찼다'); Sound.play('error'); return; }
       player.bag[free] = at.item;
       player.gear[at.slot] = null;
       player.recalcStats();
       Sound.play('blip');
-      this.say('TOOK OFF ' + Gear.spec(at.item.id).name);
+      this.say(Gear.spec(at.item.id).name + ' 벗음');
       return;
     }
     const s = at.item;
@@ -196,15 +196,15 @@ const Inventory = {
       player.bag[index] = old || null;
       player.recalcStats();
       Sound.play('pickup');
-      this.say('WEARING ' + Gear.spec(s.id).name);
+      this.say(Gear.spec(s.id).name + ' 입음');
       return;
     }
     if (s.kind === 'potion') {
-      if (player.potions <= 0) { this.say('NO POTIONS'); Sound.play('error'); return; }
-      if (player.hp >= player.maxHp) { this.say('HP IS FULL'); Sound.play('error'); return; }
+      if (player.potions <= 0) { this.say('포션이 없다'); Sound.play('error'); return; }
+      if (player.hp >= player.maxHp) { this.say('체력이 가득하다'); Sound.play('error'); return; }
       player.potionCooldown = 0;
       player.usePotion();
-      this.say('DRANK A POTION');
+      this.say('포션을 마셨다');
       return;
     }
     if (s.kind === 'weapon') {
@@ -213,17 +213,17 @@ const Inventory = {
       const r = player.equipWeapon(s.weapon, this.weaponLevel(player, s), s.legend, s.element);
       if (!r) return;
       player.bag[index] = old;
-      this.say('EQUIPPED ' + this.itemName(player, s));
+      this.say(this.itemName(player, s) + ' 장착');
       return;
     }
-    this.say('SELL IT AT THE SHOP');
+    this.say('상점에 팔 수 있다');
   },
 
   drop(player, index) {
     const at = this.at(player, index);
     const s = at.item;
     if (!s) return;
-    if (s.kind === 'potion') { this.say('DRINK IT WITH E'); return; }
+    if (s.kind === 'potion') { this.say('E 키로 마신다'); return; }
     if (s.kind === 'weapon') {
       Items.spawnWeapon(player.x, player.y, s.weapon, this.weaponLevel(player, s), { legend: s.legend, element: s.element, pickupDelay: 0.6 });
     } else if (s.kind === 'gear') {
@@ -235,7 +235,7 @@ const Inventory = {
     if (at.zone === 'gear') { player.gear[at.slot] = null; player.recalcStats(); }
     else player.bag[index] = null;
     Sound.play('blip');
-    this.say('DROPPED ' + this.itemName(player, s));
+    this.say(this.itemName(player, s) + ' 버림');
   },
 
   say(text) {
@@ -306,7 +306,7 @@ const Inventory = {
      0번(포션 주머니)은 늘 그 자리다. 안 되면 까닭을 돌려준다 (창고 창도 쓴다) */
   moveBag(player, i, j) {
     if (i === j) return null;
-    if (i === 0 || j === 0) return 'POTIONS STAY PUT';
+    if (i === 0 || j === 0) return '포션 칸은 옮길 수 없다';
     const s = player.bag[i], t = player.bag[j];
     if (!s) return null;
     const room = (t && s.kind === 'loot' && t.kind === 'loot' && s.id === t.id) ? this.stackMax(t.id) - t.amount : 0;
@@ -334,7 +334,7 @@ const Inventory = {
     if (!to) {
       const L = this.layout(player);
       if (m.x >= L.x && m.x < L.x + L.w && m.y >= L.y && m.y < L.y + L.h) return;   // 창 안 빈 곳 — 내려놓기 취소
-      if (from.zone === 'weapon') return fail('KEEP A WEAPON IN HAND');
+      if (from.zone === 'weapon') return fail('무기는 늘 들고 있어야 한다');
       this.drop(player, this.cellIndex(player, from));
       return;
     }
@@ -350,34 +350,34 @@ const Inventory = {
         return;
       }
       if (to.zone === 'gear') {
-        if (s.kind !== 'gear') return fail('NOT WEARABLE');
-        if (Gear.slotOf(s) !== to.slot) return fail('GOES ON ' + CONFIG.gear.slotNames[Gear.slotOf(s)]);
+        if (s.kind !== 'gear') return fail('입는 물건이 아니다');
+        if (Gear.slotOf(s) !== to.slot) return fail(CONFIG.gear.slotNames[Gear.slotOf(s)] + ' 칸에 입는다');
         this.use(player, from.index);
         this.cursor = this.cellIndex(player, to);
         return;
       }
-      if (s.kind !== 'weapon') return fail('NOT A WEAPON');
+      if (s.kind !== 'weapon') return fail('무기가 아니다');
       this.use(player, from.index);
       return;
     }
 
     if (from.zone === 'gear') {
-      if (to.zone !== 'bag') return fail(to.zone === 'gear' ? 'GOES ON ' + CONFIG.gear.slotNames[from.slot] : 'NOT A WEAPON');
-      if (to.index === 0) return fail('POTIONS STAY PUT');
-      if (t && !(t.kind === 'gear' && Gear.slotOf(t) === from.slot)) return fail('SLOT IS TAKEN');
+      if (to.zone !== 'bag') return fail(to.zone === 'gear' ? CONFIG.gear.slotNames[from.slot] + ' 칸에 입는다' : '무기가 아니다');
+      if (to.index === 0) return fail('포션 칸은 옮길 수 없다');
+      if (t && !(t.kind === 'gear' && Gear.slotOf(t) === from.slot)) return fail('그 칸은 차 있다');
       this.cursor = to.index;
       if (t) { this.use(player, to.index); return; }   // 같은 칸 장비 위 — 맞바꿔 입는다
       player.bag[to.index] = s;
       player.gear[from.slot] = null;
       player.recalcStats();
       Sound.play('blip');
-      this.say('TOOK OFF ' + Gear.spec(s.id).name);
+      this.say(Gear.spec(s.id).name + ' 벗음');
       return;
     }
 
     // 든 무기 — 가방의 다른 무기 위에 놓으면 맞바꿔 든다
     if (to.zone === 'bag' && t && t.kind === 'weapon') { this.cursor = to.index; this.use(player, to.index); return; }
-    fail('KEEP A WEAPON IN HAND');
+    fail('무기는 늘 들고 있어야 한다');
   },
 
   /* ── 입력 (시간이 멈춘 동안 Game.handleMenuInput 에서 매 프레임 호출) ── */
@@ -453,8 +453,8 @@ const Inventory = {
     UI.panel(ctx, L.x, L.y, L.w, L.h, '#9be564');
     UI.divider(ctx, L.x + 6, L.y + 14, L.w - 12);
 
-    UI.drawText(ctx, 'INVENTORY', L.x + 8, L.y + 5, '#9be564');
-    const bagText = 'BAG ' + this.count(player) + '/' + (player.bag.length - 1);
+    UI.drawText(ctx, '인벤토리', L.x + 8, L.y + 5, '#9be564');
+    const bagText = '가방 ' + this.count(player) + '/' + (player.bag.length - 1);
     UI.drawText(ctx, bagText, L.gridX + L.cols * (L.slot + L.gap) - 2 - UI.textWidth(bagText), L.y + 6, '#7fa86a');
     const g = String(player.gold);
     ctx.drawImage(SPRITES.coin, L.x + L.w - 10 - UI.textWidth(g) - 10, L.y + 5);
@@ -471,8 +471,8 @@ const Inventory = {
     // ── 안내
     const footY = L.y + L.h - 17;
     if (this.message) UI.drawText(ctx, this.message, L.x + L.w / 2, footY, '#9be564', true);
-    else UI.drawText(ctx, 'WASD PICK  SPACE USE  X DROP  DRAG MOVE', L.x + L.w / 2, footY, '#7fa86a', true);
-    UI.drawText(ctx, 'PAUSED - I TO CLOSE', L.x + L.w / 2, footY + 8, '#5f6b59', true);
+    else UI.drawText(ctx, 'WASD 고르기  스페이스 쓰기  X 버리기  끌어서 옮기기', L.x + L.w / 2, footY, '#7fa86a', true);
+    UI.drawText(ctx, '일시정지 · I 닫기', L.x + L.w / 2, footY + 8, '#5f6b59', true);
     // 끌고 있는 물건은 창 그림 맨 위에
     if (this.drag && this.drag.active) this.drawDrag(ctx, player, this.cellItem(player, this.drag.from));
   },
@@ -522,7 +522,7 @@ const Inventory = {
      줄 간격이 8px 로 빡빡한 이유: 옵션이 네 개까지 붙을 수 있어서 설명이 일곱 줄까지 간다. */
   drawDetails(ctx, player, L) {
     const x = L.panelX, top = L.gridY, wide = L.x + L.w - 8 - x;
-    UI.drawText(ctx, 'EQUIPPED', x, top, '#7fa86a');
+    UI.drawText(ctx, '장착', x, top, '#7fa86a');
 
     const slots = CONFIG.gear.slots;
     for (let i = 0; i <= slots.length; i++) {
@@ -550,29 +550,29 @@ const Inventory = {
     if (player.weaponLegend) UI.drawRainbowText(ctx, player.weaponLabel(), x, top + 26);
     else UI.drawText(ctx, player.weaponLabel(), x, top + 26, player.weaponColor());
     const eq = player.weaponElement && CONFIG.forge.elements[player.weaponElement];
-    UI.drawText(ctx, 'DMG ' + dmg + '  DPS ' + Math.round(dmg / spec.cooldown), x, top + 34, '#f0d9b5');
+    UI.drawText(ctx, '공격력 ' + dmg + '  초당 ' + Math.round(dmg / spec.cooldown), x, top + 34, '#f0d9b5');
     if (eq) UI.drawText(ctx, eq.name, x + 92, top + 26, eq.color);
 
     /* 입은 것이 더해주는 것 — 앞줄은 늘 있는 네 가지, 뒷줄은 굴려 붙은 옵션들.
        아무것도 안 입었어도 0 으로 띄운다 (비어 있다는 걸 알려주려고) */
     const g = player.gearStats;
-    UI.drawText(ctx, 'ARM ' + (g.armor || 0) + ' (-' + Math.round(player.damageReduction() * 100) + '%)  HP +' + (g.maxHp || 0), x, top + 42, '#7ec8ff');
+    UI.drawText(ctx, '방어 ' + (g.armor || 0) + ' (-' + Math.round(player.damageReduction() * 100) + '%)  체력 +' + (g.maxHp || 0), x, top + 42, '#7ec8ff');
     const extras = {};
     for (const k in g) if (k !== 'armor' && k !== 'maxHp' && g[k]) extras[k] = g[k];
     const extraLine = Gear.statLine(extras).slice(0, 4).join(' ');
-    UI.drawText(ctx, extraLine || 'NO BONUSES YET', x, top + 50, extraLine ? '#7ec8ff' : '#5f6b59');
+    UI.drawText(ctx, extraLine || '더해지는 능력치 없음', x, top + 50, extraLine ? '#7ec8ff' : '#5f6b59');
 
     /* 세트와 고유 효과 — 지금 켜져 있는 것만 한 줄씩. 없으면 그 줄을 쓰지 않는다 */
     let sy = top + 58;
     const onSets = [];
     for (const key in player.setCounts) {
       const n = player.setCounts[key];
-      if (n >= 2) onSets.push(CONFIG.sets[key].name + ' ' + n);
+      if (n >= 2) onSets.push(CONFIG.sets[key].name + ' ' + n + '점');
     }
-    if (onSets.length) { UI.drawText(ctx, 'SET ' + onSets.join('  '), x, sy, '#9be564'); sy += 7; }
+    if (onSets.length) { UI.drawText(ctx, '세트 ' + onSets.join('  '), x, sy, '#9be564'); sy += 7; }
     const onUniq = Object.keys(player.uniques);
     if (onUniq.length) {
-      UI.drawText(ctx, onUniq.map(id => CONFIG.uniques[id].name).join(' . ').slice(0, 40), x, sy, '#ffb35c');
+      UI.drawText(ctx, onUniq.map(id => CONFIG.uniques[id].name).join(' · ').slice(0, 40), x, sy, '#ffb35c');
       sy += 7;
     }
 
@@ -585,22 +585,22 @@ const Inventory = {
     const line = (text, color) => { UI.drawText(ctx, text, x, y, color); y += 7; };
 
     if (!s) {
-      line(at.zone === 'gear' ? CONFIG.gear.slotNames[at.slot] + ' — EMPTY' : 'EMPTY SLOT', '#5f6b59');
+      line(at.zone === 'gear' ? CONFIG.gear.slotNames[at.slot] + ' 칸 비어 있음' : '빈 칸', '#5f6b59');
       return;
     }
 
     if (s.kind === 'potion') {
-      line('POTION X' + player.potions + '/' + player.maxPotions, '#ffd93d');
-      line('HEALS ' + player.potionHeal() + ' HP', '#f0d9b5');
+      line('포션 ' + player.potions + '/' + player.maxPotions + '개', '#ffd93d');
+      line('체력 ' + player.potionHeal() + ' 회복', '#f0d9b5');
       y += 5;
-      line('SPACE DRINK (OR E)', '#9be564');
+      line('스페이스 마시기 (E 키도 된다)', '#9be564');
       return;
     }
 
     if (s.kind === 'gear') {
       const slot = Gear.slotOf(s), r = Gear.rarity(s);
       line(Gear.name(s), r.color);
-      line(r.name + ' . ' + CONFIG.gear.slotNames[slot] + ' . L' + s.level, '#7fa86a');
+      line(r.name + ' · ' + CONFIG.gear.slotNames[slot] + ' · ' + s.level + '레벨', '#7fa86a');
       line(Gear.statLine(Gear.baseStats(s)).join('  '), '#f0d9b5');
       // 굴려 붙은 옵션 — 두 개씩 끊어 적는다
       const ax = Gear.statLine(Gear.affixStats(s));
@@ -611,7 +611,7 @@ const Inventory = {
       if (set) {
         const worn = player.setCounts[setKey] || 0;
         const have = at.zone === 'gear' ? worn : worn + (player.gear[Gear.slotOf(s)] && Gear.setIdOf(player.gear[Gear.slotOf(s)].id) === setKey ? 0 : 1);
-        line('SET ' + set.name + ' ' + Math.min(have, set.items.length) + '/' + set.items.length, have >= 2 ? '#9be564' : '#7fa86a');
+        line('세트 ' + set.name + ' ' + Math.min(have, set.items.length) + '/' + set.items.length, have >= 2 ? '#9be564' : '#7fa86a');
       }
       // 전설 고유 효과 — 수치가 아니라 규칙을 바꾸는 한 줄
       const uq = Gear.uniqueOf(s);
@@ -619,12 +619,12 @@ const Inventory = {
 
       if (at.zone === 'gear') {
         y += 4;
-        line('SPACE TAKE OFF  X DROP', '#9be564');
+        line('스페이스 벗기  X 버리기', '#9be564');
         return;
       }
       // 입으면 얼마나 달라지는지 — 그 자리에 입고 있는 것과 견준다
       const worn = player.gear[slot];
-      if (!worn) line('NOTHING WORN YET', '#9be564');
+      if (!worn) line('아직 입은 것 없음', '#9be564');
       else {
         const mine = Gear.statsOf(s), old = Gear.statsOf(worn), diff = {};
         for (const k in mine) if ((mine[k] || 0) - (old[k] || 0)) diff[k] = (mine[k] || 0) - (old[k] || 0);
@@ -638,13 +638,17 @@ const Inventory = {
         /* 한 줄에 다 못 적으므로 **크게 달라지는 것부터** 세 개만 적고 나머지는 '..' 로 줄인다.
            (안 보이는 것까지 포함해서 색을 정하므로, 초록인데 적힌 건 작아 보일 수 있다) */
         const keys = Object.keys(diff).sort((p, q) => Math.abs(diff[q] * weight(q)) - Math.abs(diff[p] * weight(p)));
-        const top = {};
-        for (const k of keys.slice(0, 3)) top[k] = diff[k];
-        const text = Gear.statLine(top);
-        line(keys.length ? 'VS ' + text.join(' ') + (keys.length > 3 ? ' ..' : '') : 'SAME AS WORN',
-          better > 0 ? '#9be564' : (better < 0 ? '#c05a5a' : '#7fa86a'));
+        // 옵션 이름이 길면 세 개도 창 밖으로 나간다 — 폭에 맞을 때까지 하나씩 줄인다
+        let vsLine = '입은 것과 같다';
+        for (let n = Math.min(3, keys.length); n > 0; n--) {
+          const shown = {};
+          for (const k of keys.slice(0, n)) shown[k] = diff[k];
+          vsLine = '비교 ' + Gear.statLine(shown).join(' ') + (keys.length > n ? ' ..' : '');
+          if (UI.textWidth(vsLine) <= wide) break;
+        }
+        line(vsLine, better > 0 ? '#9be564' : (better < 0 ? '#c05a5a' : '#7fa86a'));
       }
-      line('SPACE WEAR  X DROP', '#9be564');
+      line('스페이스 입기  X 버리기', '#9be564');
       return;
     }
 
@@ -656,23 +660,23 @@ const Inventory = {
       // 끼면 위력이 얼마나 달라지는지 — 지금 든 무기와 바로 비교
       const wd = player.damageWith(s.weapon, lv);
       const d = wd - dmg;
-      line('DMG ' + wd + ' RNG ' + w.reach, '#f0d9b5');
+      line('공격력 ' + wd + '  사거리 ' + w.reach, '#f0d9b5');
       if (w.blurb) line(w.blurb, '#c8d0d8');   // 평타가 어떻게 생겼는지 (찌르기·베기·휩쓸기)
-      line((d >= 0 ? '+' : '') + d + ' VS EQUIPPED', d > 0 ? '#9be564' : (d < 0 ? '#c05a5a' : '#7fa86a'));
-      line('SPD ' + UI.speedWord(w.cooldown) + ' DPS ' + Math.round(wd / w.cooldown), '#7fa86a');
+      line((d >= 0 ? '+' : '') + d + ' (든 무기 대비)', d > 0 ? '#9be564' : (d < 0 ? '#c05a5a' : '#7fa86a'));
+      line('속도 ' + UI.speedWord(w.cooldown) + '  초당 ' + Math.round(wd / w.cooldown), '#7fa86a');
       const be = s.element && CONFIG.forge.elements[s.element];
       if (be) line('* ' + be.name, be.color);
       y += 5;
-      line('SPACE EQUIP  X DROP', '#9be564');
+      line('스페이스 장착  X 버리기', '#9be564');
       return;
     }
 
     const ls = this.spec(s.id);
     line(ls.name, ls.color);
-    line('X' + s.amount + '  WORTH ' + (ls.value * s.amount) + ' G', '#f0d9b5');
-    line(ls.trophy ? 'BOSS TROPHY' : 'MONSTER LOOT', '#7fa86a');
+    line(s.amount + '개  값 ' + (ls.value * s.amount) + '골드', '#f0d9b5');
+    line(ls.trophy ? '보스 전리품' : '몬스터 전리품', '#7fa86a');
     y += 5;
-    line('SELL AT THE SHOP', '#ffe066');
-    line('X DROP', '#9be564');
+    line('상점에 팔 수 있다', '#ffe066');
+    line('X 버리기', '#9be564');
   },
 };

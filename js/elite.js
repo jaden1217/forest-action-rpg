@@ -86,7 +86,7 @@ const Elite = {
     const p = this.spec(enemy);
     if (!p) return;
     FX.ring(enemy.x, enemy.y + 2, enemy.radius + 6, p.color);
-    FX.number(enemy.x, enemy.y - 32, p.name + ' SLAIN', p.color, true);
+    FX.number(enemy.x, enemy.y - 32, p.name + ' 정예 처치', p.color, true);
     FX.addShake(3);
     if (p.burn) this.nova(enemy, p, player);
     if (p.split) this.split(enemy, p);

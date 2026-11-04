@@ -247,7 +247,7 @@ const CONFIG = {
       sword: [
         {
           // 십자베기 — 누르기만 하면 넓게 두 번 벤다: 한쪽에서 베고, 반대쪽에서 되받아 더 세게. 벨 때마다 앞으로 파고든다
-          id: 'cross', name: 'CROSS', key: 'Q', unlockLevel: 10,
+          id: 'cross', name: '십자베기', key: 'Q', unlockLevel: 10,
           cooldown: 6.0,
           arc: 1.5,            // 평타(0.95)보다 훨씬 넓게
           reachBonus: 6,
@@ -261,7 +261,7 @@ const CONFIG = {
           color: '#ffb35c',
         },
         {
-          id: 'spin', name: 'SPIN', key: 'R', unlockLevel: 20,
+          id: 'spin', name: '회전베기', key: 'R', unlockLevel: 20,
           cooldown: 10.5,
           damageMult: 0.63,    // 한 번 맞는 위력은 낮다 — 대신 오래 돌며 여러 번 맞힌다
           arc: Math.PI,        // 360도 — 둘러싸였을 때 빠져나오는 기술
@@ -278,7 +278,7 @@ const CONFIG = {
         },
         {
           // 검기 — 크게 한 번 휘둘러 초승달 검기를 날린다. 멀리(180px) 날아가며 닿는 적을 전부 벤다 (x11)
-          id: 'wave', name: 'WAVE', key: 'Z', unlockLevel: 30,
+          id: 'wave', name: '검기', key: 'Z', unlockLevel: 30,
           cooldown: 13,
           damageMult: 11,
           duration: 0.38,
@@ -290,7 +290,7 @@ const CONFIG = {
         {
           /* 검무 — 1초 동안 좌우로 몰아 베고(열 번, 마우스를 따라간다) 마지막에 크게 마무리 (0.9 x 10 + 7 = 16).
              베는 동안 천천히 걸을 수 있다 */
-          id: 'storm', name: 'STORM', key: 'X', unlockLevel: 40,
+          id: 'storm', name: '검무', key: 'X', unlockLevel: 40,
           cooldown: 18,
           damageMult: 0.9,
           arc: 1.2,
@@ -311,7 +311,7 @@ const CONFIG = {
         {
           /* 연속 찌르기 — 다섯 번 찌른다. 평타처럼 판정이 가는 띠이고, 찌를 때마다 **마우스 쪽으로 다시 겨눈다**
              (훑으며 찌를 수 있다). 찌르는 동안 걸을 수 있고, 다섯 번째는 반드시 급소 (1 x 4 + 1.8 = 5.8) */
-          id: 'flurry', name: 'FLURRY', key: 'Q', unlockLevel: 10,
+          id: 'flurry', name: '연속찌르기', key: 'Q', unlockLevel: 10,
           cooldown: 6.0,
           damageMult: 1.0,
           lineWidth: 6,
@@ -328,7 +328,7 @@ const CONFIG = {
         },
         {
           // 그림자 밟기 — 겨냥한 쪽으로 순간 이동하듯 파고들며 지나친 적을 전부 치명타로 벤다. 지나가는 동안 무적
-          id: 'shadow', name: 'SHADOW', key: 'R', unlockLevel: 20,
+          id: 'shadow', name: '그림자밟기', key: 'R', unlockLevel: 20,
           cooldown: 9.0,
           damageMult: 3.6,
           forceCrit: true,     // 반드시 치명타 (x1.8) — 실질 6.5배, 매복 찌르기까지 약 7.5
@@ -346,7 +346,7 @@ const CONFIG = {
         {
           /* 비수 — 부채꼴로 다섯 자루를 던진다. 비수는 급소만 노린다 (전부 치명타 2.2 x 1.8 = 4).
              처음 닿은 적에서 멈추고, 한 적은 한 번에 세 자루까지만 맞는다 (최대 12) */
-          id: 'knives', name: 'KNIVES', key: 'Z', unlockLevel: 30,
+          id: 'knives', name: '비수', key: 'Z', unlockLevel: 30,
           cooldown: 12,
           damageMult: 2.2,
           forceCrit: true,
@@ -360,7 +360,7 @@ const CONFIG = {
         {
           /* 사신 — 둘레 120 안의 적에게 차례로 순간 이동하며 일곱 번 벤다. 전부 급소, 그동안 무적.
              한 적은 세 번까지 (보스 하나면 2.8 x 1.8 x 3 + 마지막 일격 x1.4 = 약 17), 끝나면 매복 */
-          id: 'reaper', name: 'REAPER', key: 'X', unlockLevel: 40,
+          id: 'reaper', name: '사신', key: 'X', unlockLevel: 40,
           cooldown: 18,
           damageMult: 2.8,
           forceCrit: true,
@@ -379,7 +379,7 @@ const CONFIG = {
       axe: [
         {
           // 땅 찍기 — 도끼를 들어올렸다 내리찍어 주위 전체를 때리고 멀리 밀어낸다. 예고(들어올림)가 길다
-          id: 'quake', name: 'QUAKE', key: 'Q', unlockLevel: 10,
+          id: 'quake', name: '땅찍기', key: 'Q', unlockLevel: 10,
           cooldown: 8.0,
           damageMult: 2.4,
           arc: Math.PI,
@@ -397,7 +397,7 @@ const CONFIG = {
              손이 빨라지고(쿨다운 x1.5, 휘두르기 자체도 x1.4 빠르게) 위력 x1.2,
              휘두르면서 걸을 수 있고(15% → 55%), 맞아도 밀리지 않는다.
              6초 내내 휘두르면 평소보다 약 10 만큼 더 넣는다 (30레벨 스킬보다 약하게 맞췄다) */
-          id: 'rage', name: 'RAGE', key: 'R', unlockLevel: 20,
+          id: 'rage', name: '광폭화', key: 'R', unlockLevel: 20,
           cooldown: 20.0,
           duration: 0.3,       // 발동 동작
           buff: { time: 6, attackSpeed: 1.5, damageMult: 1.2, swingSpeed: 1.4, moveScale: 0.55, steady: true },
@@ -407,7 +407,7 @@ const CONFIG = {
         {
           /* 대지 가르기 — 들어올렸다 내리찍으면 겨눈 쪽으로 땅이 150px 갈라지며 솟는다.
              찍은 자리 둘레(반경 30)는 x5, 갈라진 금 위의 적은 x10 을 맞고 1.6초 기절 (찍은 자리 앞이면 둘 다 — 15) */
-          id: 'rift', name: 'RIFT', key: 'Z', unlockLevel: 30,
+          id: 'rift', name: '대지가르기', key: 'Z', unlockLevel: 30,
           cooldown: 14,
           damageMult: 10,
           windup: 0.3,
@@ -424,7 +424,7 @@ const CONFIG = {
         {
           /* 거인의 일격 — 마우스 쪽(최대 120px)으로 뛰어올라 내리찍는다. 공중에선 무적,
              착지하면 반경 64 안 전부 x20, 2초 기절, 크게 날린다 */
-          id: 'titan', name: 'TITAN', key: 'X', unlockLevel: 40,
+          id: 'titan', name: '거인의일격', key: 'X', unlockLevel: 40,
           cooldown: 22,
           damageMult: 20,
           leap: 120,
@@ -454,16 +454,16 @@ const CONFIG = {
        cleave 도끼 — 뒤로 들어올렸다가(windup) 반원 가까이 크게 휩쓴다. 맞은 적은 바깥으로 튕겨 나가고,
                      휘두르는 동안은 거의 못 걷는다
        moveScale 휘두르는 동안 걸음 배수 · combo 이어 치기 칸 수 */
-    dagger: { name: 'DAGGER', style: 'thrust', damageMult: 0.55, cooldown: 0.26, duration: 0.18, hitWindow: [0.03, 0.12],
+    dagger: { name: '단검', style: 'thrust', damageMult: 0.55, cooldown: 0.26, duration: 0.18, hitWindow: [0.03, 0.12],
               reach: 22, arc: 0.86, lineWidth: 5, knockMult: 0.60, moveScale: 0.8, combo: 3,
-              blurb: 'THRUST  3RD STAB CRITS' },
-    sword:  { name: 'SWORD', style: 'slash', damageMult: 1.00, cooldown: 0.40, duration: 0.26, hitWindow: [0.04, 0.20],
-              reach: 21, arc: 0.95, knockMult: 1.00, moveScale: 0.4, combo: 3, blurb: 'SLASH  3RD HIT FINISHER',
+              blurb: '찌르기 · 셋째는 급소' },
+    sword:  { name: '검', style: 'slash', damageMult: 1.00, cooldown: 0.40, duration: 0.26, hitWindow: [0.04, 0.20],
+              reach: 21, arc: 0.95, knockMult: 1.00, moveScale: 0.4, combo: 3, blurb: '베기 · 셋째는 마무리',
               // 마무리 — 1.3배 위력에 1.3배 쿨다운이라 초당 데미지는 그대로, 대신 넓고 멀리 밀어낸다
               finisher: { damageMult: 1.3, cooldownMult: 1.3, arc: 1.3, reachBonus: 4, knockMult: 1.8, lunge: 70 } },
-    axe:    { name: 'AXE', style: 'cleave', damageMult: 1.55, cooldown: 0.62, duration: 0.40, windup: 0.12, hitWindow: [0.15, 0.32],
+    axe:    { name: '도끼', style: 'cleave', damageMult: 1.55, cooldown: 0.62, duration: 0.40, windup: 0.12, hitWindow: [0.15, 0.32],
               reach: 24, arc: 1.45, knockMult: 1.70, moveScale: 0.15, combo: 2,
-              blurb: 'CLEAVE  WIDE KNOCKBACK' },
+              blurb: '휩쓸기 · 넓게 밀어낸다' },
     comboWindow: 0.45,   // 공격이 끝나고 이 안에 다시 휘두르면 이어 치기가 이어진다 (넘기면 첫 타부터)
 
     /* 무기 레벨 — 레벨당 +2.5% 로 아주 완만하다 (L1 x1.00 -> L23 x1.55 -> L36 x1.875 -> L60 x2.475).
@@ -490,10 +490,10 @@ const CONFIG = {
     legendOrder: ['dagger', 'sword', 'axe'],
     legendLevelBonus: 10,
     legends: {
-      slime:    { name: 'SLIME MONARCH', unique: 'momentum' },
-      wolf:     { name: 'ALPHA HOWL',    unique: 'swiftFoot' },
-      mushroom: { name: 'ELDER BLIGHT',  unique: 'executioner' },
-      sandlord: { name: 'SANDLORD FANG', unique: 'phantom' },
+      slime:    { name: '점액 군주', unique: 'momentum' },
+      wolf:     { name: '우두머리의 포효',    unique: 'swiftFoot' },
+      mushroom: { name: '태고의 마름병',  unique: 'executioner' },
+      sandlord: { name: '군주의 송곳니', unique: 'phantom' },
     },
     /* 전설 무기의 이름표와 바닥 오라에 쓰는 무지개.
        hsl 로 매끈하게 돌리지 않고 일곱 색을 딱딱 끊어 쓴다 — 도트 그림에는 이쪽이 어울린다 */
@@ -563,19 +563,19 @@ const CONFIG = {
     prefixes: {
       // weight = 뽑히는 비율. speed/hp 같은 값은 그 몬스터 능력치에 곱한다
       swift: {
-        name: 'SWIFT', color: '#7ec8ff', weight: 30,
+        name: '날쌘', color: '#7ec8ff', weight: 30,
         speed: 1.6, interval: 0.6, hp: 0.8,     // 빠르고 자주 쏘는 대신 물렁하다
       },
       tough: {
-        name: 'TOUGH', color: '#c8d0d8', weight: 30,
+        name: '단단한', color: '#c8d0d8', weight: 30,
         hp: 1.5, knockback: 0.12, scale: 1.12,  // 거의 밀리지 않는다
       },
       burning: {
-        name: 'BURNING', color: '#ff8a3c', weight: 22,
+        name: '불타는', color: '#ff8a3c', weight: 22,
         atk: 1.1, burn: true, novaRadius: 42,   // 닿으면 화상, 죽을 때 불꽃이 퍼진다
       },
       splitting: {
-        name: 'SPLITTING', color: '#9be564', weight: 18,
+        name: '분열하는', color: '#9be564', weight: 18,
         hp: 0.85, split: 2, splitLevelBelow: 2, // 죽으면 평범한 개체 둘로 갈라진다
       },
     },
@@ -592,7 +592,7 @@ const CONFIG = {
   maps: {
     forest: {
       id: 'forest', theme: 'forest',
-      name: 'PRIMEVAL FOREST',     // 태초의 숲 (도트 폰트가 영문 대문자뿐이라 영문으로 띄운다)
+      name: '태초의 숲',     // 태초의 숲 (도트 폰트가 영문 대문자뿐이라 영문으로 띄운다)
       color: '#9be564',
       wobble: 0.10,                // 위험도 고리를 울퉁불퉁하게 흔드는 정도
 
@@ -643,7 +643,7 @@ const CONFIG = {
        바닥은 모래, 물기가 많은 곳만 오아시스(물 + 풀), 개방도가 낮은 곳은 갈라진 땅. */
     desert: {
       id: 'desert', theme: 'desert',
-      name: 'SCORCHED SANDS',      // 작열하는 사막
+      name: '작열하는 사막',      // 작열하는 사막
       color: '#ffb35c',
       wobble: 0.10,
 
@@ -686,7 +686,7 @@ const CONFIG = {
        바닥은 눈, 물기 많은 곳은 얼어붙은 못, 개방도 낮은 곳은 맨 얼음(미끄럽지는 않다). */
     tundra: {
       id: 'tundra', theme: 'snow',
-      name: 'FROZEN HIGHLANDS',    // 얼어붙은 고원
+      name: '얼어붙은 고원',    // 얼어붙은 고원
       color: '#bfe8ff',
       wobble: 0.10,
 
@@ -755,10 +755,10 @@ const CONFIG = {
        전설 고유 효과·세트는 바뀌지 않으므로 "아깝게 굴러간 것"을 고치는 용도다. */
     reforge: { goldBase: 40, goldPerLevel: 10, loot: 'gel', lootBase: 3 },
     elements: {
-      flame: { name: 'FLAME', status: 'burn',   color: '#ff8a3c', chance: 1.0, loot: 'cap',     cost: 8 },
-      frost: { name: 'FROST', status: 'freeze', color: '#9fe8ff', chance: 0.4, loot: 'gel',     cost: 10 },
-      shock: { name: 'SHOCK', status: 'shock',  color: '#ffe066', chance: 0.6, loot: 'fang',    cost: 8 },
-      venom: { name: 'VENOM', status: 'poison', color: '#7dff8a', chance: 1.0, loot: 'stinger', cost: 6 },
+      flame: { name: '불꽃', status: 'burn',   color: '#ff8a3c', chance: 1.0, loot: 'cap',     cost: 8 },
+      frost: { name: '서리', status: 'freeze', color: '#9fe8ff', chance: 0.4, loot: 'gel',     cost: 10 },
+      shock: { name: '뇌전', status: 'shock',  color: '#ffe066', chance: 0.6, loot: 'fang',    cost: 8 },
+      venom: { name: '맹독', status: 'poison', color: '#7dff8a', chance: 1.0, loot: 'stinger', cost: 6 },
     },
     /* 약점과 강함 — 적혀 있지 않은 것은 1.0.
        숲은 대체로 불, 사막은 대체로 서리. 늑대와 모래벌레만 뇌전이라 외우기만 해서는 안 된다 */
@@ -789,22 +789,22 @@ const CONFIG = {
   status: {
     list: {
       burn: {
-        name: 'BURNING', short: 'BRN', color: '#ff8a3c',
+        name: '화상', short: '화상', color: '#ff8a3c',
         time: 4, tick: 0.5, ratio: 0.16, rise: true, puff: 0.5,
         puffColors: ['#ff8a3c', '#ffd27a', '#c93f3f'],
       },
       poison: {
-        name: 'POISONED', short: 'PSN', color: '#7dff8a',
+        name: '중독', short: '중독', color: '#7dff8a',
         time: 6, tick: 0.5, ratio: 0.08, blockRegen: true, rise: true, puff: 0.3,
         puffColors: ['#7dff8a', '#3fa347'],
       },
       freeze: {
-        name: 'FROZEN', short: 'FRZ', color: '#9fe8ff',
+        name: '빙결', short: '빙결', color: '#9fe8ff',
         time: 2.5, slow: 0.5, puff: 0.3,
         puffColors: ['#9fe8ff', '#ffffff'],
       },
       shock: {
-        name: 'SHOCKED', short: 'SHK', color: '#ffe066',
+        name: '감전', short: '감전', color: '#ffe066',
         time: 3, amp: 1.3, rise: true, puff: 0.35,
         puffColors: ['#ffe066', '#ffffff'],
       },
@@ -879,9 +879,9 @@ const CONFIG = {
     goldMult: { kill: 1.0, collect: 0.9, explore: 1.25 },
     rarityWeights: [0, 55, 32, 13],   // COMMON 은 보상으로 안 나온다
     monsterNames: {
-      slime: 'SLIMES', wolf: 'WOLVES', mushroom: 'MUSHROOMS',
-      scorpion: 'SCORPIONS', cactus: 'CACTI', sandworm: 'SANDWORMS',
-      wisp: 'WISPS', yeti: 'YETIS', golem: 'GOLEMS',   // 여기 없으면 불러올 때 그 의뢰가 버려진다
+      slime: '슬라임', wolf: '늑대', mushroom: '버섯',
+      scorpion: '전갈', cactus: '선인장', sandworm: '모래벌레',
+      wisp: '서리 망령', yeti: '설인', golem: '얼음 골렘',   // 여기 없으면 불러올 때 그 의뢰가 버려진다
     },
   },
 
@@ -1065,7 +1065,7 @@ const CONFIG = {
   bosses: {
     // 가까운 동굴 — 거대 슬라임: 느리지만 덩치와 분열로 밀어붙인다
     slime: {
-      type: 'slime', name: 'GIANT SLIME', lairName: 'SLIME LAIR',
+      type: 'slime', name: '거대 슬라임', lairName: '슬라임 굴',
       level: 12,
       hpMult: 18,             // 같은 레벨 슬라임의 18배
       atkMult: 2.2,
@@ -1105,7 +1105,7 @@ const CONFIG = {
 
     // 중간 동굴 — 우두머리 늑대: 빠르다. 돌진을 피하고 벽에 부딪힌 빈틈을 노려야 한다
     wolf: {
-      type: 'wolf', name: 'ALPHA WOLF', lairName: 'WOLF DEN',
+      type: 'wolf', name: '우두머리 늑대', lairName: '늑대 굴',
       level: 20,
       hpMult: 13,
       atkMult: 1.2,             // 늑대는 원래 공격이 세고 빨라서 배수는 낮게
@@ -1147,7 +1147,7 @@ const CONFIG = {
 
     // 가장자리 동굴 — 늙은 버섯: 거의 움직이지 않는 대신 방 전체를 포자로 덮는다
     mushroom: {
-      type: 'mushroom', name: 'ELDER SHROOM', lairName: 'SPORE NEST',
+      type: 'mushroom', name: '늙은 버섯', lairName: '포자 둥지',
       level: 30,                // 몬스터 표(23)보다 위 — enemyStatsAt 이 같은 곡선으로 늘려 잡는다
       hpMult: 9,              // 버섯은 같은 레벨 체력이 가장 높아서 배수는 낮게 (약 4,000)
       atkMult: 1.15,
@@ -1191,7 +1191,7 @@ const CONFIG = {
        모래벌레의 수법("땅속으로 와서 발밑에서 솟구친다")을 보스 규모로 키운다.
        땅속에 있는 동안은 때릴 수 없으므로, 이 보스는 **때릴 틈을 기다리는** 싸움이다. */
     sandlord: {
-      type: 'sandworm', name: 'SAND LORD', lairName: 'THE SINKHOLE',
+      type: 'sandworm', name: '모래의 군주', lairName: '모래 구덩이',
       level: 46,
       /* 46레벨 모래벌레의 표는 이미 숫자가 크다. 앞선 보스 셋은 모두
          "한 대에 플레이어 체력의 20% 안팎, 50~70대쯤 때려야 잡힌다"에 맞춰져 있어서
@@ -1285,10 +1285,10 @@ const CONFIG = {
     interactRange: 26,      // 상인에게서 이 거리 안이면 말을 걸 수 있다
     potionPrice: 20,
     upgrades: [
-      { id: 'hp',    name: 'MAX HP +10',    stat: 'maxHp',      gain: 10, basePrice: 40, priceMult: 1.4, maxRank: 10 },
-      { id: 'atk',   name: 'ATTACK +1',     stat: 'damage',     gain: 1,  basePrice: 60, priceMult: 1.4, maxRank: 10 },
-      { id: 'bag',   name: 'POTIONS +1',    stat: 'maxPotions', gain: 1,  basePrice: 50, priceMult: 1.5, maxRank: 5 },
-      { id: 'slots', name: 'BAG +5 SLOTS',  stat: 'bagSlots',   gain: 5,  basePrice: 80, priceMult: 1.6, maxRank: 3 },
+      { id: 'hp',    name: '최대 체력 +10',    stat: 'maxHp',      gain: 10, basePrice: 40, priceMult: 1.4, maxRank: 10 },
+      { id: 'atk',   name: '공격력 +1',     stat: 'damage',     gain: 1,  basePrice: 60, priceMult: 1.4, maxRank: 10 },
+      { id: 'bag',   name: '포션 소지 +1',    stat: 'maxPotions', gain: 1,  basePrice: 50, priceMult: 1.5, maxRank: 5 },
+      { id: 'slots', name: '가방 +5칸',  stat: 'bagSlots',   gain: 5,  basePrice: 80, priceMult: 1.6, maxRank: 3 },
     ],
   },
 
@@ -1306,42 +1306,42 @@ const CONFIG = {
      비율이면 어느 구간에서나 같은 일을 한다. */
   gear: {
     slots: ['head', 'body', 'trinket'],
-    slotNames: { head: 'HEAD', body: 'BODY', trinket: 'TRINKET' },
+    slotNames: { head: '머리', body: '몸', trinket: '장신구' },
     dropChance: 0.12,       // 몬스터 종류·레벨과 무관하게 모두 같은 확률
     armorSoftness: 70,      // armor 70 이면 딱 절반을 막는다
     armorCap: 0.70,         // 아무리 껴입어도 70% 까지만
 
     items: {
       // 머리 — 가벼운 가죽이냐, 무겁고 단단한 쇠냐
-      leatherCap: { slot: 'head', name: 'LEATHER CAP', sprite: 'cap', unique: 'executioner',
+      leatherCap: { slot: 'head', name: '가죽 모자', sprite: 'cap', unique: 'executioner',
         stats: { armor: [4, 0.14], maxHp: [4, 0.6] } },
-      ironHelm: { slot: 'head', name: 'IRON HELM', sprite: 'helm', unique: 'thorns',
+      ironHelm: { slot: 'head', name: '쇠 투구', sprite: 'helm', unique: 'thorns',
         stats: { armor: [8, 0.26], speed: [-2, 0] } },
 
       // 몸 — 방어력의 중심. 사슬 갑옷은 느려지는 대신 가장 단단하다
-      leatherArmor: { slot: 'body', name: 'LEATHER VEST', sprite: 'vest', unique: 'swiftFoot',
+      leatherArmor: { slot: 'body', name: '가죽 조끼', sprite: 'vest', unique: 'swiftFoot',
         stats: { armor: [7, 0.2], maxHp: [6, 0.9] } },
-      chainMail: { slot: 'body', name: 'CHAIN MAIL', sprite: 'mail', unique: 'aegis',
+      chainMail: { slot: 'body', name: '사슬 갑옷', sprite: 'mail', unique: 'aegis',
         stats: { armor: [13, 0.38], speed: [-6, 0] } },
-      travelCloak: { slot: 'body', name: 'TRAVEL CLOAK', sprite: 'cloak', unique: 'phantom',
+      travelCloak: { slot: 'body', name: '여행 망토', sprite: 'cloak', unique: 'phantom',
         stats: { armor: [4, 0.12], speed: [7, 0] } },
 
       // 장신구 — 방어력 대신 성격을 준다
-      swiftRing: { slot: 'trinket', name: 'SWIFT RING', sprite: 'ring', unique: 'momentum',
+      swiftRing: { slot: 'trinket', name: '바람 반지', sprite: 'ring', unique: 'momentum',
         stats: { speed: [9, 0] } },
-      powerAmulet: { slot: 'trinket', name: 'POWER AMULET', sprite: 'amulet', unique: 'overload',
+      powerAmulet: { slot: 'trinket', name: '힘의 목걸이', sprite: 'amulet', unique: 'overload',
         stats: { power: [1, 0.3] } },
-      vitalCharm: { slot: 'trinket', name: 'VITAL CHARM', sprite: 'charm', unique: 'secondWind',
+      vitalCharm: { slot: 'trinket', name: '생명 부적', sprite: 'charm', unique: 'secondWind',
         stats: { maxHp: [14, 1.8] } },
 
       /* ── 서리심 — 설원 자원으로만 **만드는** 최상위 한 벌 (로드맵 12주차).
          떨어지지 않는다 (craftOnly). 대장간에서 설원 전리품으로 빚어야 한다.
          바탕 수치가 기존 최고치보다 한 단 위고, 세 점을 다 갖추면 서리 보호막이 생긴다. */
-      frostHelm: { slot: 'head', name: 'FROSTHEART CROWN', sprite: 'helm', craftOnly: true, unique: 'thorns',
+      frostHelm: { slot: 'head', name: '서리심 왕관', sprite: 'helm', craftOnly: true, unique: 'thorns',
         stats: { armor: [12, 0.34], maxHp: [8, 1.0] } },
-      frostPlate: { slot: 'body', name: 'FROSTHEART PLATE', sprite: 'mail', craftOnly: true, unique: 'aegis',
+      frostPlate: { slot: 'body', name: '서리심 판금', sprite: 'mail', craftOnly: true, unique: 'aegis',
         stats: { armor: [18, 0.46], maxHp: [12, 1.4], speed: [-3, 0] } },
-      frostSigil: { slot: 'trinket', name: 'FROSTHEART SIGIL', sprite: 'amulet', craftOnly: true, unique: 'overload',
+      frostSigil: { slot: 'trinket', name: '서리심 인장', sprite: 'amulet', craftOnly: true, unique: 'overload',
         stats: { power: [2, 0.4], maxHp: [10, 1.2] } },
     },
   },
@@ -1354,21 +1354,21 @@ const CONFIG = {
      세트가 있으면 **조금 약한 걸 일부러 입는 선택**이 생긴다. */
   sets: {
     ranger: {
-      name: 'RANGER', items: ['leatherCap', 'leatherArmor', 'swiftRing'],
+      name: '사냥꾼', items: ['leatherCap', 'leatherArmor', 'swiftRing'],
       bonus: { 2: { speed: 8, attackSpeed: 8 }, 3: { crit: 8 } },
     },
     guardian: {
-      name: 'GUARDIAN', items: ['ironHelm', 'chainMail', 'vitalCharm'],
+      name: '파수꾼', items: ['ironHelm', 'chainMail', 'vitalCharm'],
       bonus: { 2: { armor: 12 }, 3: { maxHp: 40, knockRes: 25 } },
     },
     wanderer: {
-      name: 'WANDERER', items: ['travelCloak', 'powerAmulet'],
+      name: '방랑자', items: ['travelCloak', 'powerAmulet'],
       bonus: { 2: { cooldown: 10, gold: 25 } },
     },
     /* 서리심 — 설원에서 빚는 한 벌. 세 점이 최대이고, 다 갖추면 덤이 가장 크다.
        "그 지역 자원으로만 만드는 최상위 장비 한 벌"이라 세 점을 다 모으는 것이 목표가 된다 */
     frostheart: {
-      name: 'FROSTHEART', items: ['frostHelm', 'frostPlate', 'frostSigil'],
+      name: '서리심', items: ['frostHelm', 'frostPlate', 'frostSigil'],
       bonus: { 2: { armor: 20, frosty: 20 }, 3: { maxHp: 90, critMult: 40, knockRes: 40 } },
     },
   },
@@ -1381,14 +1381,14 @@ const CONFIG = {
      여기서는 '포션을 마시면 무적', '치명타가 쿨다운을 깎는다' 같은 것만 둔다.
      보스의 전설 무기(SLIME MONARCH 등)도 같은 목록에서 하나씩 가져간다 (weapons.legends). */
   uniques: {
-    executioner: { name: 'EXECUTIONER', text: 'LOW HP FOES TAKE +50%',      ratio: 0.25, mult: 1.5 },
-    thorns:      { name: 'THORNS',      text: 'STRIKE BACK WHEN HURT',      ratio: 0.6, radius: 34 },
-    swiftFoot:   { name: 'SWIFT FOOT',  text: '+1 DASH CHARGE' },
-    aegis:       { name: 'AEGIS',       text: 'POTION GIVES 3S SHIELD',     time: 3 },
-    phantom:     { name: 'PHANTOM',     text: 'DASH REFILLS TWICE AS FAST', mult: 2 },
-    momentum:    { name: 'MOMENTUM',    text: 'CRIT CUTS SKILL COOLDOWN',   cut: 0.7 },
-    overload:    { name: 'OVERLOAD',    text: 'SKILL DAMAGE +25%',          mult: 1.25 },
-    secondWind:  { name: 'SECOND WIND', text: 'AUTO POTION AT LOW HP',      ratio: 0.3, cooldown: 30 },
+    executioner: { name: '처형자', text: '빈사의 적에게 피해 +50%',      ratio: 0.25, mult: 1.5 },
+    thorns:      { name: '가시',      text: '맞으면 주위에 되돌려준다',      ratio: 0.6, radius: 34 },
+    swiftFoot:   { name: '빠른 발',  text: '대시 충전 +1' },
+    aegis:       { name: '수호',       text: '포션을 마시면 3초 무적',     time: 3 },
+    phantom:     { name: '환영',     text: '대시가 두 배로 빨리 찬다', mult: 2 },
+    momentum:    { name: '기세',    text: '치명타가 스킬 대기시간을 줄인다',   cut: 0.7 },
+    overload:    { name: '과부하',    text: '스킬 피해 +25%',          mult: 1.25 },
+    secondWind:  { name: '재기', text: '위급하면 포션을 알아서 마신다',      ratio: 0.3, cooldown: 30 },
   },
 
   /* ── 등급과 랜덤 옵션 (로드맵 2주차) ─────────────────────
@@ -1403,10 +1403,10 @@ const CONFIG = {
   rarity: {
     // [이름, 색, 옵션 수, 뽑기 가중치]
     list: [
-      { name: 'COMMON', color: '#c8d0d8', affixes: 1, weight: 60 },
-      { name: 'FINE',   color: '#8fe0a8', affixes: 2, weight: 27 },
-      { name: 'RARE',   color: '#7ec8ff', affixes: 3, weight: 10 },
-      { name: 'LEGEND', color: '#ffb35c', affixes: 4, weight: 3 },
+      { name: '일반', color: '#c8d0d8', affixes: 1, weight: 60 },
+      { name: '고급',   color: '#8fe0a8', affixes: 2, weight: 27 },
+      { name: '희귀',   color: '#7ec8ff', affixes: 3, weight: 10 },
+      { name: '전설', color: '#ffb35c', affixes: 4, weight: 3 },
     ],
   },
 
@@ -1416,23 +1416,23 @@ const CONFIG = {
        range — 1레벨에서 뽑는 범위, perLevel — 레벨마다 더해지는 양
        pct   — 퍼센트로 읽는 값 */
     list: {
-      attackSpeed: { word: 'QUICK',    label: 'ASPD',  range: [3, 7],  perLevel: 0.12, pct: true },
-      crit:        { word: 'KEEN',     label: 'CRIT',  range: [2, 5],  perLevel: 0.08, pct: true },
-      critMult:    { word: 'CRUEL',    label: 'CDMG',  range: [6, 14], perLevel: 0.25, pct: true },
-      speed:       { word: 'SWIFT',    label: 'SPD',   range: [3, 7],  perLevel: 0.08, pct: true },
-      lifesteal:   { word: 'VAMPIRIC', label: 'LEECH', range: [1, 3],  perLevel: 0.05, pct: true },
-      potion:      { word: 'HEALERS',  label: 'POTION',range: [5, 12], perLevel: 0.3,  pct: true },
-      cooldown:    { word: 'ARCANE',   label: 'CDR',   range: [3, 8],  perLevel: 0.12, pct: true },
-      knockRes:    { word: 'STEADY',   label: 'BRACE', range: [6, 14], perLevel: 0.3,  pct: true },
-      gold:        { word: 'GILDED',   label: 'GOLD',  range: [8, 18], perLevel: 0.4,  pct: true },
-      armor:       { word: 'STURDY',   label: 'ARM',   range: [2, 5],  perLevel: 0.12 },
-      maxHp:       { word: 'HEARTY',   label: 'HP',    range: [5, 12], perLevel: 0.8 },
-      power:       { word: 'BRUTAL',   label: 'ATK',   range: [1, 2],  perLevel: 0.12 },
+      attackSpeed: { word: '재빠른',    label: '공속',  range: [3, 7],  perLevel: 0.12, pct: true },
+      crit:        { word: '예리한',     label: '치명',  range: [2, 5],  perLevel: 0.08, pct: true },
+      critMult:    { word: '잔혹한',    label: '치명피해',  range: [6, 14], perLevel: 0.25, pct: true },
+      speed:       { word: '날렵한',    label: '이속',   range: [3, 7],  perLevel: 0.08, pct: true },
+      lifesteal:   { word: '흡혈의', label: '흡혈', range: [1, 3],  perLevel: 0.05, pct: true },
+      potion:      { word: '치유사의',  label: '포션',range: [5, 12], perLevel: 0.3,  pct: true },
+      cooldown:    { word: '비전의',   label: '대기시간',   range: [3, 8],  perLevel: 0.12, pct: true },
+      knockRes:    { word: '굳건한',   label: '넉백저항', range: [6, 14], perLevel: 0.3,  pct: true },
+      gold:        { word: '황금의',   label: '골드',  range: [8, 18], perLevel: 0.4,  pct: true },
+      armor:       { word: '튼튼한',   label: '방어',   range: [2, 5],  perLevel: 0.12 },
+      maxHp:       { word: '강인한',   label: '체력',    range: [5, 12], perLevel: 0.8 },
+      power:       { word: '난폭한',   label: '공격',   range: [1, 2],  perLevel: 0.12 },
       // 때릴 때 확률로 상태이상을 건다 (7주차) — 이 넷이 붙어야 플레이어도 불을 붙일 수 있다
-      fiery:       { word: 'FIERY',    label: 'BURN',  range: [6, 12], perLevel: 0.15, pct: true, status: 'burn' },
-      frosty:      { word: 'FROSTY',   label: 'FREEZE',range: [6, 12], perLevel: 0.15, pct: true, status: 'freeze' },
-      shocking:    { word: 'SHOCKING', label: 'SHOCK', range: [6, 12], perLevel: 0.15, pct: true, status: 'shock' },
-      venomous:    { word: 'VENOMOUS', label: 'VENOM', range: [6, 12], perLevel: 0.15, pct: true, status: 'poison' },
+      fiery:       { word: '불타는',    label: '화상',  range: [6, 12], perLevel: 0.15, pct: true, status: 'burn' },
+      frosty:      { word: '얼어붙은',   label: '빙결',range: [6, 12], perLevel: 0.15, pct: true, status: 'freeze' },
+      shocking:    { word: '전격의', label: '감전', range: [6, 12], perLevel: 0.15, pct: true, status: 'shock' },
+      venomous:    { word: '맹독의', label: '중독', range: [6, 12], perLevel: 0.15, pct: true, status: 'poison' },
     },
     // 여러 점을 겹쳐 입었을 때의 총합 상한 (없는 것은 안 묶는다)
     caps: {
@@ -1462,19 +1462,19 @@ const CONFIG = {
     byType: { slime: 'gel', wolf: 'fang', mushroom: 'cap', scorpion: 'stinger', cactus: 'cactusFruit', sandworm: 'wormScale',
               wisp: 'wispEmber', yeti: 'yetiPelt', golem: 'frostCore' },
     items: {
-      gel:        { name: 'SLIME GEL',   value: 4,   color: '#8fe098' },
-      fang:       { name: 'WOLF FANG',   value: 6,   color: '#e9f1f7' },
-      cap:        { name: 'SPORE CAP',   value: 5,   color: '#e08a4f' },
-      stinger:    { name: 'STINGER',     value: 12,  color: '#ffd27a' },   // 사막
-      cactusFruit:{ name: 'CACTUS FRUIT', value: 10, color: '#e56b7a' },
-      wormScale:  { name: 'WORM SCALE',  value: 15,  color: '#c9bb9c' },
-      wispEmber:  { name: 'WISP EMBER',  value: 26,  color: '#4fb8e0' },   // 설원
-      yetiPelt:   { name: 'YETI PELT',   value: 32,  color: '#f0e2cc' },
-      frostCore:  { name: 'FROST CORE',  value: 40,  color: '#e8fbff' },
-      slimeCore:  { name: 'SLIME CORE',  value: 150, color: '#7ec8ff', trophy: true },
-      alphaFang:  { name: 'ALPHA FANG',  value: 250, color: '#ff6b6b', trophy: true },
-      elderSpore: { name: 'ELDER SPORE', value: 400, color: '#c79ce8', trophy: true },
-      lordScale:  { name: 'LORD SCALE',  value: 700, color: '#ffb35c', trophy: true },   // 모래의 군주
+      gel:        { name: '슬라임 젤',   value: 4,   color: '#8fe098' },
+      fang:       { name: '늑대 이빨',   value: 6,   color: '#e9f1f7' },
+      cap:        { name: '포자 갓',   value: 5,   color: '#e08a4f' },
+      stinger:    { name: '독침',     value: 12,  color: '#ffd27a' },   // 사막
+      cactusFruit:{ name: '선인장 열매', value: 10, color: '#e56b7a' },
+      wormScale:  { name: '벌레 비늘',  value: 15,  color: '#c9bb9c' },
+      wispEmber:  { name: '망령 불씨',  value: 26,  color: '#4fb8e0' },   // 설원
+      yetiPelt:   { name: '설인 가죽',   value: 32,  color: '#f0e2cc' },
+      frostCore:  { name: '서리 핵',  value: 40,  color: '#e8fbff' },
+      slimeCore:  { name: '슬라임 핵',  value: 150, color: '#7ec8ff', trophy: true },
+      alphaFang:  { name: '우두머리 송곳니',  value: 250, color: '#ff6b6b', trophy: true },
+      elderSpore: { name: '늙은 포자', value: 400, color: '#c79ce8', trophy: true },
+      lordScale:  { name: '군주 비늘',  value: 700, color: '#ffb35c', trophy: true },   // 모래의 군주
     },
     magnetRadius: 30,       // 이 거리 안이면 끌려온다 (포션과 같다)
     lifetime: 60,           // 바닥에 남아있는 시간 (초)
@@ -1586,13 +1586,13 @@ const CONFIG = {
     interactRange: 26,
     recipes: {
       // 가벼운 전리품 몇 개로 포션 한 병 — 상점(20G)보다 싸다
-      potion: { name: 'BREW POTION', color: '#e5484d', gold: 4, loot: { gel: 3 }, gain: 1 },
+      potion: { name: '포션 빚기', color: '#e5484d', gold: 4, loot: { gel: 3 }, gain: 1 },
       // 묵직한 전리품으로 포션 두 병
-      potionBig: { name: 'BREW 2 POTIONS', color: '#ffd93d', gold: 8, loot: { fang: 3, cap: 3 }, gain: 2 },
+      potionBig: { name: '포션 2병 빚기', color: '#ffd93d', gold: 8, loot: { fang: 3, cap: 3 }, gain: 2 },
       // 걸린 상태이상을 전부 지우고 잠깐 해독 상태가 된다 (그 동안 새로 안 걸린다)
-      antidote: { name: 'ANTIDOTE', color: '#7dff8a', gold: 10, loot: { cap: 2, stinger: 1 }, wardTime: 15 },
+      antidote: { name: '해독제', color: '#7dff8a', gold: 10, loot: { cap: 2, stinger: 1 }, wardTime: 15 },
       // 중독·화상에 걸려도 자연 회복이 멈추지 않는 약 (다음에 걸릴 때부터 적용, 60초)
-      tonic: { name: 'TONIC', color: '#5ff0ff', gold: 14, loot: { cactusFruit: 2, wormScale: 1 }, tonicTime: 60 },
+      tonic: { name: '강장제', color: '#5ff0ff', gold: 14, loot: { cactusFruit: 2, wormScale: 1 }, tonicTime: 60 },
     },
     wardTime: 15,     // 해독제 해독 지속
     tonicTime: 60,    // 강장제 지속

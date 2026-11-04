@@ -757,7 +757,7 @@ const World = {
     const p = this.addProp(SPRITES.obelisk[0], x, y, { solid: [7, 3, 5], footHeight: 3 });
     p.portal = true;
     p.landmark = 'portal';   // 미니맵에 하늘색으로 찍힌다
-    p.sign = { text: 'PORTAL', color: '#5ff0ff', dy: 26 };
+    p.sign = { text: '비석', color: '#5ff0ff', dy: 26 };
     p.draw = (ctx, cam) => {
       const sx = Math.round(p.x - cam.x), sy = Math.round(p.y - cam.y);
       fillEllipse(ctx, sx + 1, sy + 1, 7, 2.9, 'rgba(10,12,20,0.3)');

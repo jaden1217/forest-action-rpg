@@ -44,7 +44,7 @@ const Quests = {
     const p = World.addProp(SPRITES.questBoard, x, y, { solid: [10, 4, 6], footHeight: 3 });
     p.board = true;
     p.landmark = 'board';   // 미니맵에 따로 찍힌다
-    p.sign = { text: 'QUESTS', color: '#e8dcc0', dy: 30 };
+    p.sign = { text: '의뢰', color: '#e8dcc0', dy: 30 };
     this.board = p;
     World.board = p;
   },
@@ -55,9 +55,9 @@ const Quests = {
     const sx = Math.round(b.x - cam.x), sy = Math.round(b.y - cam.y);
     // 다 한 의뢰가 있으면 깜빡이지 않고 초록으로 또렷하게 알려준다
     const ready = this.list.some(q => this.isDone(q, Game.player));
-    if (ready) { UI.drawText(ctx, 'F  CLAIM', sx, sy - 34, '#9be564', true); return; }
+    if (ready) { UI.drawText(ctx, 'F  보상 받기', sx, sy - 34, '#9be564', true); return; }
     if (Math.floor(World.time * 3) % 2 === 0) return;
-    UI.drawText(ctx, 'F  QUESTS', sx, sy - 34, '#e8dcc0', true);
+    UI.drawText(ctx, 'F  의뢰', sx, sy - 34, '#e8dcc0', true);
   },
 
   /* ── 의뢰 만들기 ───────────────────────────────────────
@@ -159,7 +159,7 @@ const Quests = {
 
   finishExplore(q) {
     q.progress = 1;
-    FX.number(Game.player.x, Game.player.y - 26, 'QUEST DONE', '#9be564');
+    FX.number(Game.player.x, Game.player.y - 26, '의뢰 완료', '#9be564');
     Sound.play('banner');
   },
 
@@ -168,7 +168,7 @@ const Quests = {
   claim(index, player) {
     const q = this.list[index];
     if (!q) return;
-    if (!this.isDone(q, player)) { this.say('NOT DONE YET'); Sound.play('error'); return; }
+    if (!this.isDone(q, player)) { this.say('아직 끝나지 않았다'); Sound.play('error'); return; }
 
     if (q.type === 'collect') {
       let left = q.need;
@@ -186,9 +186,9 @@ const Quests = {
       if (!Inventory.addGear(player, q.reward)) {
         // 가방이 꽉 찼으면 발밑에 둔다 — 보상을 그냥 날리지는 않는다
         Items.spawnGear(player.x, player.y, q.reward.id, q.reward.level, { item: q.reward, dropped: true });
-        this.say('BAG FULL - DROPPED');
+        this.say('가방이 가득 차 발밑에 두었다');
       } else {
-        this.say('GOT ' + Gear.name(q.reward));
+        this.say(Gear.name(q.reward) + ' 획득');
       }
     }
     Sound.play('levelup');
@@ -230,9 +230,9 @@ const Quests = {
 
   title(q) {
     const cfg = CONFIG.quests;
-    if (q.type === 'kill') return 'SLAY ' + (cfg.monsterNames[q.target] || q.target.toUpperCase());
-    if (q.type === 'collect') return 'BRING ' + CONFIG.loot.items[q.target].name;
-    return 'REACH ' + this.placeName(q.target);
+    if (q.type === 'kill') return (cfg.monsterNames[q.target] || q.target) + ' 처치';
+    if (q.type === 'collect') return CONFIG.loot.items[q.target].name + ' 가져오기';
+    return this.placeName(q.target) + ' 찾아가기';
   },
 
   placeName(t) {
@@ -267,7 +267,7 @@ const Quests = {
     const x = Math.round((CONFIG.VIEW_W - w) / 2), y = Math.round((CONFIG.VIEW_H - h) / 2);
     UI.panel(ctx, x, y, w, h, '#e8dcc0');
     UI.divider(ctx, x + 6, y + 15, w - 12);
-    UI.drawText(ctx, 'QUEST BOARD', x + w / 2, y + 6, '#e8dcc0', true);
+    UI.drawText(ctx, '의뢰 게시판', x + w / 2, y + 6, '#e8dcc0', true);
 
     const rowY = y + 22, rowH = 26;
     for (let i = 0; i < this.list.length; i++) {
@@ -284,14 +284,14 @@ const Quests = {
       // 진행도 — 숫자와 막대를 함께 (탐험은 막대 대신 한마디)
       const p = this.progressOf(q, player);
       if (q.type === 'explore') {
-        UI.drawText(ctx, done ? 'FOUND' : 'NOT YET', x + 18, ry + 9, done ? '#9be564' : '#7fa86a');
+        UI.drawText(ctx, done ? '찾았다' : '아직 못 갔다', x + 18, ry + 9, done ? '#9be564' : '#7fa86a');
       } else {
         UI.bar(ctx, x + 18, ry + 10, 60, 3, p / q.need, done ? '#9be564' : '#7ec8ff', '#2a3222');
         UI.drawText(ctx, p + '/' + q.need, x + 82, ry + 8, done ? '#9be564' : '#7fa86a');
       }
 
       // 보상 — 골드와 장비 한 점 (등급 색으로)
-      const g = q.gold + ' G';
+      const g = q.gold + '골드';
       UI.drawText(ctx, g, x + w - 12 - UI.textWidth(g), ry, CONFIG.gold.color);
       if (q.reward) {
         const r = Gear.rarity(q.reward).name + ' ' + CONFIG.gear.items[q.reward.id].name;
@@ -301,8 +301,8 @@ const Quests = {
 
     const footY = y + h - 19;
     if (this.message) UI.drawText(ctx, this.message, x + w / 2, footY, '#9be564', true);
-    else UI.drawText(ctx, 'W S SELECT   SPACE CLAIM', x + w / 2, footY, '#7fa86a', true);
-    UI.drawText(ctx, 'PAUSED - F TO CLOSE', x + w / 2, footY + 8, '#5f6b59', true);
+    else UI.drawText(ctx, 'W S 고르기   스페이스 받기', x + w / 2, footY, '#7fa86a', true);
+    UI.drawText(ctx, '일시정지 · F 닫기', x + w / 2, footY + 8, '#5f6b59', true);
   },
 
   /* ── 저장 ──────────────────────────────────────────────── */

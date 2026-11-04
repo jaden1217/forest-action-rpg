@@ -36,7 +36,7 @@ const Shop = {
     const npc = World.addProp(SPRITES.merchant[0], x, y + 6, { footHeight: 2 });
     npc.merchant = true;
     npc.landmark = 'shop';        // 미니맵에 따로 찍힌다
-    npc.sign = { text: 'SHOP', color: '#ffe066', dy: 42 };   // 가판대 차양 위로 (마을 안에서만 뜬다)
+    npc.sign = { text: '상점', color: '#ffe066', dy: 42 };   // 가판대 차양 위로 (마을 안에서만 뜬다)
     npc.draw = (ctx, cam) => this.drawNpc(ctx, cam, npc);
     this.npc = npc;
     World.merchant = npc;
@@ -56,29 +56,29 @@ const Shop = {
     if (!this.npc) return;
     const sx = Math.round(this.npc.x - cam.x), sy = Math.round(this.npc.y - cam.y);
     if (Math.floor(World.time * 3) % 2 === 0) return;
-    UI.drawText(ctx, 'F  SHOP', sx, sy - 24, '#ffe066', true);
+    UI.drawText(ctx, 'F  상점', sx, sy - 24, '#ffe066', true);
   },
 
   /* ── 목록 ──────────────────────────────────────────────
      첫 줄은 포션, 나머지는 강화. 매번 새로 만들어 값과 랭크가 항상 최신이다. */
   entries(player) {
     const list = [{
-      id: 'potion', name: 'POTION', price: CONFIG.shop.potionPrice,
-      detail: 'X' + player.potions + '/' + player.maxPotions,
+      id: 'potion', name: '포션', price: CONFIG.shop.potionPrice,
+      detail: player.potions + '/' + player.maxPotions + '개',
       soldOut: player.potions >= player.maxPotions,
     }];
     // 전리품 팔기 — 가방 속 전리품 전부를 한 번에
     const lv = Inventory.lootValue(player);
     list.push({
-      id: 'loot', name: 'SELL LOOT', sell: true, price: lv.value,
-      detail: lv.items + ' ITEMS', soldOut: lv.items === 0,
+      id: 'loot', name: '전리품 팔기', sell: true, price: lv.value,
+      detail: lv.items + '개', soldOut: lv.items === 0,
     });
     for (const u of CONFIG.shop.upgrades) {
       const rank = player.upgrades[u.id] || 0;
       list.push({
         id: u.id, name: u.name, spec: u, rank: rank,
         price: this.priceOf(u, rank),
-        detail: 'RANK ' + rank + '/' + u.maxRank,
+        detail: rank + '/' + u.maxRank + '단계',
         soldOut: rank >= u.maxRank,
       });
     }
@@ -113,23 +113,23 @@ const Shop = {
 
   buy(item, player) {
     if (item.soldOut) {
-      this.say(item.id === 'potion' ? 'POUCH IS FULL' : (item.sell ? 'NO LOOT TO SELL' : 'MAX RANK'));
+      this.say(item.id === 'potion' ? '포션 주머니가 가득 찼다' : (item.sell ? '팔 전리품이 없다' : '이미 최고 단계다'));
       Sound.play('error');
       return;
     }
     if (item.sell) {
       const v = Inventory.sellLoot(player);
       Sound.play('gold');
-      this.say('SOLD ' + v.items + ' FOR ' + v.value + ' G');
+      this.say(v.items + '개를 ' + v.value + '골드에 팔았다');
       return;
     }
-    if (player.gold < item.price) { this.say('NOT ENOUGH GOLD'); Sound.play('error'); return; }
+    if (player.gold < item.price) { this.say('골드가 모자란다'); Sound.play('error'); return; }
     player.gold -= item.price;
     Sound.play('buy');
 
     if (item.id === 'potion') {
       player.addPotion(1);
-      this.say('BOUGHT POTION');
+      this.say('포션을 샀다');
       return;
     }
     const u = item.spec;
@@ -137,7 +137,7 @@ const Shop = {
     player.recalcStats();   // 랭크가 오르면 파생 능력치를 다시 구한다 (가방 칸도 여기서 늘어난다)
     // 체력 강화는 늘어난 만큼 바로 채워준다 — 사자마자 체감이 있어야 한다
     if (u.stat === 'maxHp') player.hp = Math.min(player.maxHp, player.hp + u.gain);
-    this.say(u.name + '  RANK ' + player.upgrades[u.id]);
+    this.say(u.name + '  ' + player.upgrades[u.id] + '단계');
   },
 
   say(text) {
@@ -164,7 +164,7 @@ const Shop = {
     UI.panel(ctx, x, y, w, h, '#ffe066');
     UI.divider(ctx, x + 6, y + 15, w - 12);
 
-    UI.drawText(ctx, 'SHOP', x + w / 2, y + 6, '#ffe066', true);
+    UI.drawText(ctx, '상점', x + w / 2, y + 6, '#ffe066', true);
     ctx.drawImage(SPRITES.coin, x + w - 14 - UI.textWidth(String(player.gold)) - 10, y + 6);
     UI.drawText(ctx, String(player.gold), x + w - 14 - UI.textWidth(String(player.gold)), y + 7, '#ffe066');
 
@@ -181,7 +181,7 @@ const Shop = {
       const canBuy = !it.soldOut && player.gold >= it.price;
       UI.drawText(ctx, it.name, x + 20, ry, it.soldOut ? '#6f7a68' : '#f0d9b5');
       UI.drawText(ctx, it.detail, x + 92, ry, '#7fa86a');
-      const priceText = it.sell ? (it.soldOut ? '-' : '+' + it.price + ' G') : (it.soldOut ? 'MAX' : it.price + ' G');
+      const priceText = it.sell ? (it.soldOut ? '-' : '+' + it.price + '골드') : (it.soldOut ? '최대' : it.price + '골드');
       UI.drawText(ctx, priceText, x + w - 12 - UI.textWidth(priceText), ry,
         it.soldOut ? '#6f7a68' : (it.sell ? '#9be564' : (canBuy ? '#ffe066' : '#c05a5a')));
     }
@@ -191,8 +191,8 @@ const Shop = {
     if (this.message) {
       UI.drawText(ctx, this.message, x + w / 2, footY, '#9be564', true);
     } else {
-      UI.drawText(ctx, 'W S SELECT   SPACE BUY', x + w / 2, footY, '#7fa86a', true);
+      UI.drawText(ctx, 'W S 고르기   스페이스 사기', x + w / 2, footY, '#7fa86a', true);
     }
-    UI.drawText(ctx, 'PAUSED - F TO CLOSE', x + w / 2, footY + 9, '#7fa86a', true);
+    UI.drawText(ctx, '일시정지 · F 닫기', x + w / 2, footY + 9, '#7fa86a', true);
   },
 };

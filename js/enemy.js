@@ -181,7 +181,7 @@ class Enemy {
     FX.burst(this.x, this.y, 16 + this.level * 3, [pal.M, pal.n, pal.m], { speed: 70, life: 0.55 });
     FX.ring(this.x, this.y + 2, this.radius + 2, pal.n);
     Sound.play('kill');
-    FX.number(this.x, this.y - 18, '+' + this.stats.xp + 'XP', '#9be564');
+    FX.number(this.x, this.y - 18, '+' + this.stats.xp + ' 경험치', '#9be564');
     player.gainXp(this.stats.xp);
     if (this.elite) Elite.onDie(this, player);     // 불꽃이 퍼지거나, 둘로 갈라진다
   }
@@ -231,8 +231,9 @@ class Enemy {
     Status.drawMarks(ctx, this, sx, topY - (this.elite ? 7 : 0));
     if (this.elite) Elite.drawName(ctx, this, sx, topY - 12);
     // 밤에 태어난 놈은 달을 달고 다닌다 — 날이 밝아도 세다는 표시
-    if (this.nightBorn) UI.drawText(ctx, '@', sx - 10, topY - 5, '#9fc8ff', false);
-    UI.drawText(ctx, 'L' + this.level, sx - 4, topY - 5, this.labelColor, false);
+    const lvText = this.level + '레벨';
+    if (this.nightBorn) UI.drawText(ctx, '@', sx - UI.textWidth(lvText) / 2 - 6, topY - 5, '#9fc8ff', false);
+    UI.drawText(ctx, lvText, sx, topY - 5, this.labelColor, true);
 
     if (this.showHp > 0) {
       const w = Math.max(12, Math.round(14 * this.scale));

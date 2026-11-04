@@ -340,7 +340,7 @@ class Player {
 
     if (this.level < spec.unlockLevel) {
       if (this.lockedHint <= 0) {
-        FX.number(this.x, this.y - 22, 'LV' + spec.unlockLevel, '#8f9aa8');
+        FX.number(this.x, this.y - 22, spec.unlockLevel + '레벨', '#8f9aa8');
         this.lockedHint = 0.8;
       }
       this.skillQueued = null;
@@ -528,7 +528,7 @@ class Player {
   weaponLabel() {
     // 전설 무기는 보스에게서 따 온 이름으로
     const L = this.weaponLegend && CONFIG.weapons.legends[this.weaponLegend];
-    return (L ? L.name : this.weaponSpec().name) + ' L' + this.weaponLevel;
+    return (L ? L.name : this.weaponSpec().name) + ' ' + this.weaponLevel + '레벨';
   }
 
   update(dt, enemies) {
@@ -767,7 +767,7 @@ class Player {
       if (Math.random() < el.chance) Status.apply(s, el.status, dmg, this);
       FX.burst(s.x, s.y - 4, aff >= 1.5 ? 6 : 3, [el.color, '#ffffff'], { speed: 34, life: 0.3, gravity: 10, size: 1 });
       // 약점이면 한 번씩 알려준다 — "얘한테는 불" 이 눈에 보이게
-      if (aff >= 1.5 && Math.random() < 0.34) FX.number(s.x, s.y - 22 - s.radius, 'WEAK', el.color);
+      if (aff >= 1.5 && Math.random() < 0.34) FX.number(s.x, s.y - 22 - s.radius, '약점!', el.color);
     }
 
     dmg = Math.max(1, dmg);
@@ -879,9 +879,9 @@ class Player {
       this.recalcStats();
       this.hp = this.maxHp;
       this.xpNeed = CONFIG.levelUp.xpNeed(this.level);
-      FX.number(this.x, this.y - 22, 'LEVEL UP', '#ffe066', true);
+      FX.number(this.x, this.y - 22, '레벨 업!', '#ffe066', true);
       const opened = this.currentSkills().find(s => s.unlockLevel === this.level);
-      if (opened) FX.number(this.x, this.y - 34, 'NEW SKILL ' + opened.key + ' ' + opened.name, opened.color, true);
+      if (opened) FX.number(this.x, this.y - 34, '새 스킬 ' + opened.key + ' ' + opened.name, opened.color, true);
       FX.ring(this.x, this.y + 4, 10, '#ffe066');
       Sound.play('levelup');
       FX.burst(this.x, this.y, 26, ['#ffe066', '#ffffff', '#9be564'], { speed: 60, life: 0.8, gravity: 40 });
@@ -893,7 +893,7 @@ class Player {
     amount = Math.max(1, Math.round(amount * (1 + this.stat('gold') / 100)));   // GILDED 옵션만큼 더 번다
     this.gold += amount;
     if (x === undefined) { x = this.x; y = this.y; }
-    FX.number(x, y - 14, '+' + amount + ' G', CONFIG.gold.color);
+    FX.number(x, y - 14, '+' + amount + ' 골드', CONFIG.gold.color);
     FX.burst(x, y - 2, 6, [CONFIG.gold.color, '#ffffff'], { speed: 38, life: 0.4, gravity: 90, size: 1 });
     Sound.play('gold');
   }
@@ -938,7 +938,7 @@ class Player {
     this.secondWindTimer = u.cooldown;
     this.potionCooldown = 0;
     this.usePotion();
-    FX.number(this.x, this.y - 30, 'SECOND WIND', '#ffb35c');
+    FX.number(this.x, this.y - 30, '재기', '#ffb35c');
   }
 
   // 포션 한 개가 채우는 양 — 최대 체력의 30%, 최소 30
@@ -952,12 +952,12 @@ class Player {
     if (this.dead || this.potionCooldown > 0) return;
     const cfg = CONFIG.items;
     if (this.potions <= 0) {
-      FX.number(this.x, this.y - 20, 'EMPTY', '#8f9aa8');
+      FX.number(this.x, this.y - 20, '포션이 없다', '#8f9aa8');
       this.potionCooldown = cfg.potionCooldown;
       return;
     }
     if (this.hp >= this.maxHp) {
-      FX.number(this.x, this.y - 20, 'FULL HP', '#8f9aa8');
+      FX.number(this.x, this.y - 20, '체력이 가득하다', '#8f9aa8');
       this.potionCooldown = cfg.potionCooldown;
       return;
     }
@@ -971,7 +971,7 @@ class Player {
     if (this.has('aegis')) {
       this.invuln = Math.max(this.invuln, this.uniq('aegis').time);
       FX.ring(this.x, this.y + 2, 16, '#7ec8ff');
-      FX.number(this.x, this.y - 30, 'AEGIS', '#7ec8ff');
+      FX.number(this.x, this.y - 30, '수호', '#7ec8ff');
     }
     FX.number(this.x, this.y - 20, '+' + healed, '#7dff8a');
     FX.burst(this.x, this.y, 14, ['#7dff8a', '#ffffff', '#e5484d'], { speed: 45, life: 0.5, gravity: 30 });

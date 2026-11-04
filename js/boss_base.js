@@ -134,7 +134,7 @@ class Boss extends Enemy {
     FX.addShake(7);
     FX.flash('#ff3b3b', 0.3, 0.4);
     Sound.play('roar');
-    FX.number(this.x, this.y - 30, 'ENRAGED', '#ff6b6b', true);
+    FX.number(this.x, this.y - 30, '격노!', '#ff6b6b', true);
     const pal = this.palette;
     FX.burst(this.x, this.y, 30, [pal.M, pal.n, '#ffffff'], { speed: 90, life: 0.7 });
   }
@@ -194,7 +194,7 @@ class Boss extends Enemy {
     FX.ring(this.x, this.y + 6, 24, '#ffffff');
     FX.flash('#ffffff', 0.5, 0.35);
     FX.freeze(0.18);
-    FX.number(this.x, this.y - 34, 'DEFEATED', '#ffd93d', true);
+    FX.number(this.x, this.y - 34, '처치!', '#ffd93d', true);
     Sound.play('bossDead');
   }
 

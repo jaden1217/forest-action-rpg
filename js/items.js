@@ -275,7 +275,7 @@ const Items = {
         if (got > 0) {
           const ls = CONFIG.loot.items[d.id];
           FX.burst(d.x, d.y - 4, 8, [ls.color, '#ffffff'], { speed: 40, life: 0.35, gravity: 60 });
-          FX.number(d.x, d.y - 14, '+' + ls.name + (got > 1 ? ' X' + got : ''), ls.color);
+          FX.number(d.x, d.y - 14, '+' + ls.name + (got > 1 ? ' ' + got + '개' : ''), ls.color);
           Sound.play('pickup');
           d.amount = left;
           if (d.amount <= 0) this.drops.splice(i, 1);
@@ -296,12 +296,12 @@ const Items = {
       const taken = player.addPotion(d.amount);
       if (taken > 0) {
         FX.burst(d.x, d.y - 4, 10, ['#e5484d', '#ffffff', '#ffd93d'], { speed: 45, life: 0.4, gravity: 60 });
-        FX.number(d.x, d.y - 14, taken > 1 ? '+POTION X' + taken : '+POTION', '#ffd93d');
+        FX.number(d.x, d.y - 14, taken > 1 ? '+포션 ' + taken + '개' : '+포션', '#ffd93d');
         d.amount -= taken;
         // 한 칸만 남아 절반만 담았으면 나머지는 바닥에 그대로 둔다
         if (d.amount <= 0) this.drops.splice(i, 1);
       } else if (this.fullHintCooldown <= 0 && d.hintTimer <= 0) {
-        FX.number(player.x, player.y - 20, 'FULL', '#8f9aa8');
+        FX.number(player.x, player.y - 20, '가득 찼다', '#8f9aa8');
         d.hintTimer = 1.2;
         this.fullHintCooldown = 0.4;
       }
@@ -320,7 +320,7 @@ const Items = {
     if (player.dead) return;
     if (Inventory.addWeapon(player, d.weapon, d.level, d.legend, d.element)) {
       const color = d.legend ? CONFIG.weapons.legendColor : (CONFIG.weapons.levelColor[levelTier(d.level)] || '#ffffff');
-      const name = (d.legend ? CONFIG.weapons.legends[d.legend].name : CONFIG.weapons[d.weapon].name) + ' L' + d.level;
+      const name = (d.legend ? CONFIG.weapons.legends[d.legend].name : CONFIG.weapons[d.weapon].name) + ' ' + d.level + '레벨';
       FX.burst(d.x, d.y - 4, 8, [color, '#ffffff'], { speed: 40, life: 0.35, gravity: 60 });
       FX.number(d.x, d.y - 14, '+' + name, color);
       Sound.play('pickup');
@@ -329,7 +329,7 @@ const Items = {
     }
     const oldId = player.weapon, oldLevel = player.weaponLevel, oldLegend = player.weaponLegend;
     if (oldId === d.weapon && oldLevel === d.level && oldLegend === d.legend) {
-      FX.number(player.x, player.y - 20, 'BAG FULL', '#8f9aa8');
+      FX.number(player.x, player.y - 20, '가방이 가득 찼다', '#8f9aa8');
       return;
     }
     const oldEl = player.weaponElement;
@@ -373,10 +373,10 @@ const Items = {
       if (d.legend) this.drawAura(ctx, sx, sy, d.age);
       if (sp) ctx.drawImage(sp, sx - Math.floor(sp.width / 2), sy - 8 + bob);
       // 어떤 무기가 몇 레벨인지 바닥에서도 바로 보인다
-      if (d.legend) UI.drawRainbowText(ctx, CONFIG.weapons.legends[d.legend].name + ' L' + d.level, sx, sy + 8, true);
-      else UI.drawText(ctx, spec.name + ' L' + d.level, sx, sy + 8, color, true);
+      if (d.legend) UI.drawRainbowText(ctx, CONFIG.weapons.legends[d.legend].name + ' ' + d.level + '레벨', sx, sy + 8, true);
+      else UI.drawText(ctx, spec.name + ' ' + d.level + '레벨', sx, sy + 8, color, true);
       // 발밑에 서 있으면 집는 방법을 알려준다 (가방이 차 있으면 맞바꾸기)
-      if (d.playerNear) UI.drawText(ctx, Inventory.firstEmpty(Game.player) >= 0 ? 'F TAKE' : 'F SWAP', sx, sy - 19, '#ffffff', true);
+      if (d.playerNear) UI.drawText(ctx, Inventory.firstEmpty(Game.player) >= 0 ? 'F 줍기' : 'F 바꾸기', sx, sy - 19, '#ffffff', true);
       else if (Math.floor(d.age * 3) % 2 === 0) {
         ctx.fillStyle = '#ffffff';
         ctx.fillRect(sx + 4, sy - 10 + bob, 1, 1);
@@ -406,7 +406,7 @@ const Items = {
       ctx.drawImage(sp, sx - Math.floor(sp.width / 2), sy - 6 + bob);
       if (Math.floor(d.age * 3) % 2 === 0) { ctx.fillStyle = '#ffffff'; ctx.fillRect(sx + 3, sy - 8 + bob, 1, 1); }
       if (ls.trophy) UI.drawText(ctx, ls.name, sx, sy + 8, ls.color, true);   // 보스 전리품은 이름이 보인다
-      else if (d.amount > 1) UI.drawText(ctx, 'X' + d.amount, sx, sy + 7, ls.color, true);
+      else if (d.amount > 1) UI.drawText(ctx, d.amount + '개', sx, sy + 7, ls.color, true);
       return;
     }
 
@@ -419,7 +419,7 @@ const Items = {
       ctx.fillRect(sx + 3, sy - 8 + bob, 1, 1);
     }
     if (d.amount > 1) {
-      UI.drawText(ctx, 'X' + d.amount, sx, sy + 7, '#ffd93d', true);
+      UI.drawText(ctx, d.amount + '개', sx, sy + 7, '#ffd93d', true);
     }
   },
 };

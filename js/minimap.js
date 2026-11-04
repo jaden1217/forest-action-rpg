@@ -91,7 +91,7 @@ const Minimap = {
 
     // 지역 이름 대신 이 자리의 몬스터 기준 레벨을 붙여둔다 — 어디까지 왔는지 한눈에 보인다
     const lv = World.levelAt(player.x, player.y);
-    const label = 'LV ' + lv + ' AREA';
+    const label = lv + '레벨 지역';
     UI.drawText(ctx, label, x + bw - UI.textWidth(label), y - 7, difficultyColor(lv, player.level), false);
   },
 
@@ -118,8 +118,8 @@ const Minimap = {
 
     // 얼마나 밝혔는지 — 지도가 '내가 만든 기록'이 되는 숫자
     const pct = Math.round(Fog.percent(World.mapId) * 100);
-    UI.drawText(ctx, 'MAP  ' + pct + '%', CONFIG.VIEW_W / 2, y - 11, '#9be564', true);
-    UI.drawText(ctx, 'M TO CLOSE', CONFIG.VIEW_W / 2, y + h + 5, '#7fa86a', true);
+    UI.drawText(ctx, '지도  ' + pct + '%', CONFIG.VIEW_W / 2, y - 11, '#9be564', true);
+    UI.drawText(ctx, 'M 닫기', CONFIG.VIEW_W / 2, y + h + 5, '#7fa86a', true);
   },
 
   /* ── 움직이는 것들 ─────────────────────────────────────── */

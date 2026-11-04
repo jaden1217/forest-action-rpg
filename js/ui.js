@@ -67,7 +67,64 @@ const FONT = {
   '%': ['##..#', '##.#.', '...#.', '..#..', '.#...', '.#.##', '#..##'],
   '(': ['...#.', '..#..', '.#...', '.#...', '.#...', '..#..', '...#.'],
   ')': ['.#...', '..#..', '...#.', '...#.', '...#.', '..#..', '.#...'],
+  '~': ['.....', '.....', '.##.#', '#..#.', '.....', '.....', '.....'],   // 24~40레벨
+  '·': ['.....', '.....', '.....', '..#..', '.....', '.....', '.....'],   // 나열
+  ',': ['.....', '.....', '.....', '.....', '.....', '..#..', '.#...'],
   ' ': ['.....', '.....', '.....', '.....', '.....', '.....', '.....'],
+};
+
+/* 한글 — 5x7 격자에는 한글을 담을 수 없어서, 시스템 한글 글꼴로 한 글자씩 그린 뒤
+   **반투명한 칸을 없애 도트처럼 또렷하게 깎는다** (이미지 파일을 쓰지 않으니 HTML 한 장 그대로 돈다).
+   글자마다 (글자·배율·색) 별로 한 번만 깎아 두고 그 뒤로는 찍기만 한다 — 이름표와 데미지 숫자가
+   매 프레임 지나가는 길이라 fillRect 로 칸마다 칠하면 무겁다.
+   영문 키 이름과 숫자는 원래의 5x7 글꼴 그대로다. 그 글꼴에 없는 글자는 전부 이쪽으로 온다. */
+const Hangul = {
+  FAMILY: '"Malgun Gothic", "맑은 고딕", "Apple SD Gothic Neo", "Noto Sans KR", "Noto Sans CJK KR", "NanumGothic", sans-serif',
+  SIZE: 8,          // 글자 크기 (5x7 글꼴의 한 칸 단위) — 글꼴의 여백을 빼면 영문·숫자의 키(7칸)와 비슷해진다
+  ADVANCE: 8,       // 다음 글자까지 (같은 단위)
+  CUT: 150,         // 이 불투명도 아래의 칸은 버리고, 위의 칸은 꽉 채운다 (0~255)
+  masks: new Map(),
+  tints: new Map(),
+
+  // 흰색으로 깎은 글자 한 장
+  mask(ch, scale) {
+    const key = ch + '|' + scale;
+    let cv = this.masks.get(key);
+    if (cv) return cv;
+    const px = this.SIZE * scale;
+    cv = makeCanvas(Math.ceil(px * 1.25), Math.ceil(px * 1.3) + scale);
+    const c = cv.getContext('2d', { willReadFrequently: true });
+    c.font = '700 ' + px + 'px ' + this.FAMILY;
+    c.textBaseline = 'middle';
+    c.fillStyle = '#ffffff';
+    // 세로 가운데를 영문·숫자(7칸)의 가운데에 맞춘다. 위로 한 칸 삐져나오므로 그만큼 비워 두고 찍는다 (blitFine)
+    c.fillText(ch, 0, scale + Math.round(3.5 * scale));
+    const img = c.getImageData(0, 0, cv.width, cv.height), d = img.data;
+    for (let i = 0; i < d.length; i += 4) {
+      const on = d[i + 3] >= this.CUT;
+      d[i] = d[i + 1] = d[i + 2] = 255;
+      d[i + 3] = on ? 255 : 0;
+    }
+    c.putImageData(img, 0, 0);
+    this.masks.set(key, cv);
+    return cv;
+  },
+
+  // 그 색으로 물들인 글자 한 장
+  glyph(ch, scale, color) {
+    const key = ch + '|' + scale + '|' + color;
+    let cv = this.tints.get(key);
+    if (cv) return cv;
+    const m = this.mask(ch, scale);
+    cv = makeCanvas(m.width, m.height);
+    const c = cv.getContext('2d');
+    c.drawImage(m, 0, 0);
+    c.globalCompositeOperation = 'source-in';
+    c.fillStyle = color;
+    c.fillRect(0, 0, cv.width, cv.height);
+    this.tints.set(key, cv);
+    return cv;
+  },
 };
 
 const UI = {
@@ -115,7 +172,16 @@ const UI = {
   // 글자가 차지하는 너비 (게임 단위). scale 은 글자 배율 — 기본값이 예전 폰트와 같은 크기다
   textWidth(text, scale) {
     scale = scale || this.TEXT_SCALE;
-    return (String(text).length * (FONT_W + FONT_GAP) - FONT_GAP) * scale / this.FINE;
+    text = String(text);
+    let cells = 0;
+    for (let i = 0; i < text.length; i++) cells += this.charCells(text[i]);
+    return Math.max(0, cells - FONT_GAP) * scale / this.FINE;
+  },
+
+  // 글자 하나가 차지하는 폭 (5x7 글꼴의 한 칸 단위). 띄어쓰기는 한글에 맞춰 좁게, 한글은 영문보다 넓다
+  charCells(ch) {
+    if (ch === ' ') return 4;
+    return FONT[ch] ? FONT_W + FONT_GAP : Hangul.ADVANCE;
   },
 
   textHeight(scale) {
@@ -141,23 +207,22 @@ const UI = {
     text = String(text).toUpperCase();
     if (centered) x -= this.textWidth(text, scale) / 2;
     const fx = Math.round(x * this.FINE), fy = Math.round(y * this.FINE);
-    const adv = (FONT_W + FONT_GAP) * scale;
     const pal = CONFIG.weapons.rainbow;
     const shift = Math.floor(World.time * 9);
     const g = this.fx;
 
     this.blitFine(text, fx + scale, fy + scale, '#000000', scale);
     g.globalAlpha = 0.28;
-    for (let i = 0; i < text.length; i++) {
+    for (let i = 0, gx = fx; i < text.length; gx += this.charCells(text[i]) * scale, i++) {
       const c = pal[(i + shift) % pal.length];
-      this.blitFine(text[i], fx + i * adv - scale, fy, c, scale);
-      this.blitFine(text[i], fx + i * adv + scale, fy, c, scale);
-      this.blitFine(text[i], fx + i * adv, fy - scale, c, scale);
-      this.blitFine(text[i], fx + i * adv, fy + scale, c, scale);
+      this.blitFine(text[i], gx - scale, fy, c, scale);
+      this.blitFine(text[i], gx + scale, fy, c, scale);
+      this.blitFine(text[i], gx, fy - scale, c, scale);
+      this.blitFine(text[i], gx, fy + scale, c, scale);
     }
     g.globalAlpha = 1;
-    for (let i = 0; i < text.length; i++) {
-      this.blitFine(text[i], fx + i * adv, fy, pal[(i + shift) % pal.length], scale);
+    for (let i = 0, gx = fx; i < text.length; gx += this.charCells(text[i]) * scale, i++) {
+      this.blitFine(text[i], gx, fy, pal[(i + shift) % pal.length], scale);
     }
   },
 
@@ -174,10 +239,14 @@ const UI = {
     g.save();
     g.setTransform(1, 0, 0, 1, 0, 0);
     g.fillStyle = color;
-    const adv = (FONT_W + FONT_GAP) * scale;
-    for (let i = 0; i < text.length; i++) {
-      const glyph = FONT[text[i]] || FONT[' '];
-      const gx = fx + i * adv;
+    let gx = fx;
+    for (let i = 0; i < text.length; gx += this.charCells(text[i]) * scale, i++) {
+      const glyph = FONT[text[i]];
+      if (!glyph) {
+        // 5x7 글꼴에 없는 글자 — 한글이다 (깎아 둔 한 장을 찍는다)
+        g.drawImage(Hangul.glyph(text[i], scale, color), gx, fy - scale);
+        continue;
+      }
       for (let r = 0; r < FONT_H; r++) {
         const row = glyph[r];
         let c = 0;
@@ -244,13 +313,13 @@ const UI = {
     if (player.regenerating && player.regenerating() && Math.floor(World.time * 3) % 2 === 0) {
       this.drawText(ctx, '+', 83, 9, '#7dff8a');   // 자연 회복 중
     }
-    this.drawText(ctx, 'HP', 8, 16, '#f0d9b5');
-    this.drawText(ctx, Math.max(0, Math.ceil(player.hp)) + '/' + player.maxHp, 20, 16, '#f0d9b5');
+    this.drawText(ctx, '체력', 8, 16, '#f0d9b5');
+    this.drawText(ctx, Math.max(0, Math.ceil(player.hp)) + '/' + player.maxHp, 22, 16, '#f0d9b5');
 
 
     // ── 레벨 / 경험치
     this.bar(ctx, 8, 25, 72, 4, player.xp / player.xpNeed, '#9be564', '#25401c');
-    this.drawText(ctx, 'LV' + player.level, 8, 31, '#9be564');
+    this.drawText(ctx, player.level + '레벨', 8, 31, '#9be564');
     this.drawText(ctx, player.xp + '/' + player.xpNeed, 32, 31, '#7fa86a');
 
     // ── 처치 수
@@ -283,7 +352,7 @@ const UI = {
           }
         }
       }
-      this.drawText(ctx, 'DASH', 8 + charges * 12 + 2, 76, '#7ec8ff');
+      this.drawText(ctx, '대시', 8 + charges * 12 + 2, 76, '#7ec8ff');
     }
 
     // ── 걸려 있는 상태이상 — 색 칩에 남은 시간이 아래부터 어두워진다
@@ -292,7 +361,7 @@ const UI = {
     // ── 가방 — 몇 칸이 찼는지. 꽉 차면 붉게 (전리품이 더 안 끌려온다는 뜻)
     if (player.bag) {
       const used = Inventory.count(player), total = player.bag.length - 1;
-      this.drawText(ctx, 'BAG ' + used + '/' + total + ' I', 8, 86, used >= total ? '#ff6b6b' : '#7fa86a');
+      this.drawText(ctx, '가방 ' + used + '/' + total + ' I', 8, 86, used >= total ? '#ff6b6b' : '#7fa86a');
     }
 
     // ── 공격 쿨다운 (짧아서 눈에 잘 안 띄지만 리듬 파악에 도움이 된다)
@@ -306,7 +375,7 @@ const UI = {
     if (typeof SPRITES !== 'undefined' && SPRITES.potion) {
       ctx.drawImage(SPRITES.potion, 8, 44);
     }
-    this.drawText(ctx, 'X' + player.potions + '/' + player.maxPotions + ' E', 21, 48, '#ffd93d');
+    this.drawText(ctx, player.potions + '/' + player.maxPotions + '개  E', 21, 48, '#ffd93d');
 
     // ── 장착 무기 HUD (종류 + 레벨)
     if (player.weaponSpec) {
@@ -326,7 +395,7 @@ const UI = {
     // 체력이 낮고 포션이 있으면 깜빡이며 마시라고 알린다
     if (!player.dead && player.potions > 0 && player.hp / player.maxHp < 0.3 &&
         Math.floor(performance.now() / 350) % 2 === 0) {
-      const hint = 'PRESS E!';
+      const hint = 'E 키로 포션!';
       this.drawText(ctx, hint, CONFIG.VIEW_W / 2, 8, '#ff6b6b', true);
     }
 
@@ -339,8 +408,8 @@ const UI = {
     if (player.dead) {
       ctx.fillStyle = 'rgba(20,8,8,0.55)';
       ctx.fillRect(0, 0, CONFIG.VIEW_W, CONFIG.VIEW_H);
-      this.drawText(ctx, 'YOU DIED', CONFIG.VIEW_W / 2, CONFIG.VIEW_H / 2 - 8, '#ff6b6b', true);
-      this.drawText(ctx, 'RESPAWNING', CONFIG.VIEW_W / 2, CONFIG.VIEW_H / 2 + 4, '#c9a0a0', true);
+      this.drawText(ctx, '쓰러졌다', CONFIG.VIEW_W / 2, CONFIG.VIEW_H / 2 - 8, '#ff6b6b', true);
+      this.drawText(ctx, '곧 다시 일어선다', CONFIG.VIEW_W / 2, CONFIG.VIEW_H / 2 + 4, '#c9a0a0', true);
     }
   },
 
@@ -348,7 +417,7 @@ const UI = {
      쿨다운은 칸이 아래에서 위로 밝아지며 차오른다. */
   drawSkillBar(ctx, player) {
     const list = player.currentSkills();   // 무기마다 다르다
-    const slotW = 26, slotH = 16, gap = 5;
+    const slotW = 30, slotH = 16, gap = 5;   // 스킬 이름이 한글 다섯 자까지 간다
     const total = list.length * slotW + (list.length - 1) * gap;
     let x = Math.round((CONFIG.VIEW_W - total) / 2);
     const y = CONFIG.VIEW_H - 21;
@@ -379,7 +448,7 @@ const UI = {
 
       if (locked) {
         this.drawText(ctx, spec.key, x + 2, y + 2, '#5f6b59');
-        this.drawText(ctx, 'LV' + spec.unlockLevel, x + 2, y + 9, '#5f6b59');
+        this.drawText(ctx, spec.unlockLevel + '레벨', x + 2, y + 9, '#5f6b59');
       } else {
         const color = ready ? spec.color : '#96a08d';
         this.drawText(ctx, spec.key, x + 2, y + 2, color);
@@ -411,7 +480,7 @@ const UI = {
     ctx.fillStyle = '#17110d';
     ctx.fillRect(x + Math.round(w * boss.spec.phase2At), y, 1, 6);
 
-    const label = boss.name + (boss.phase2 ? '  ENRAGED' : '');
+    const label = boss.name + (boss.phase2 ? '  격노' : '');
     this.drawText(ctx, label, CONFIG.VIEW_W / 2, y - 9, boss.phase2 ? '#ff6b6b' : '#f0d9b5', true);
   },
 
@@ -422,7 +491,7 @@ const UI = {
     const sx = Math.round(cave.x - cam.x), sy = Math.round(cave.y - cam.y);
     if (readyIn > 0) {
       const m = Math.floor(readyIn / 60), s = Math.ceil(readyIn % 60);
-      const label = m > 0 ? (m + 'M' + (s < 10 ? '0' : '') + s) : (s + 'S');
+      const label = m > 0 ? (m + '분 ' + s + '초') : (s + '초');
       this.drawText(ctx, label, sx, sy - 40, '#8f9aa8', true);
       return;
     }
@@ -445,7 +514,7 @@ const UI = {
     if (!cave || !spec) return;
     const sx = Math.round(cave.x - cam.x), sy = Math.round(cave.y - cam.y);
     const face = this.bossFace(spec);
-    const lv = 'LV ' + spec.level, tag = info.slain ? 'CLEARED' : '';
+    const lv = spec.level + '레벨', tag = info.slain ? '처치함' : '';
     const textW = Math.max(this.textWidth(spec.name), this.textWidth(lv) + (tag ? 5 + this.textWidth(tag) : 0));
     const BOX_W = 26, BOX_H = 20;
     const w = Math.ceil(4 + BOX_W + 5 + textW + 5), h = BOX_H + 6;
@@ -478,11 +547,11 @@ const UI = {
     const ly = Math.max(y + h + 3, sy - 40);
     if (info.readyIn > 0) {
       const m = Math.floor(info.readyIn / 60), s = Math.ceil(info.readyIn % 60);
-      this.drawText(ctx, 'BACK IN ' + (m > 0 ? (m + 'M' + (s < 10 ? '0' : '') + s) : (s + 'S')), sx, ly, '#c8d0d8', true);
+      this.drawText(ctx, (m > 0 ? (m + '분 ' + s + '초') : (s + '초')) + ' 뒤에 돌아온다', sx, ly, '#c8d0d8', true);
       return;
     }
     if (Math.floor(World.time * 3) % 2 === 0) return;   // 깜빡여서 눈에 띄게
-    this.drawText(ctx, 'F  ENTER', sx, ly, '#ff6b6b', true);
+    this.drawText(ctx, 'F  들어가기', sx, ly, '#ff6b6b', true);
   },
 
   /* 이름판에 넣을 보스 얼굴 — 실제 보스와 같은 생성기로 칸(26x20)에 맞는 크기로 그린다.
@@ -504,13 +573,13 @@ const UI = {
     const sx = Math.round(portal.x - cam.x), sy = Math.round(portal.y - cam.y);
     if (locked) {
       const boss = CONFIG.bosses[CONFIG.gate.requiredBoss];
-      this.drawText(ctx, 'SLAY ' + (boss ? boss.name : 'THE BOSS'), sx, sy - 44, '#ff6b6b', true);
-      this.drawText(ctx, 'SEALED', sx, sy - 52, '#8f9aa8', true);
+      this.drawText(ctx, (boss ? boss.name : '보스') + ' 처치 필요', sx, sy - 44, '#ff6b6b', true);
+      this.drawText(ctx, '봉인됨', sx, sy - 52, '#8f9aa8', true);
       return;
     }
-    this.drawText(ctx, 'LV ' + dest.levelRange[0] + '-' + dest.levelRange[1], sx, sy - 44, '#8f9aa8', true);
+    this.drawText(ctx, dest.levelRange[0] + '~' + dest.levelRange[1] + '레벨', sx, sy - 44, '#8f9aa8', true);
     if (Math.floor(World.time * 3) % 2 === 0) return;
-    this.drawText(ctx, 'F  TO ' + dest.name, sx, sy - 52, '#5ff0ff', true);
+    this.drawText(ctx, 'F  ' + dest.name + '(으)로', sx, sy - 52, '#5ff0ff', true);
   },
 
   // 화면을 까맣게 덮는다 (동굴을 드나들 때의 장면 전환)
@@ -545,7 +614,7 @@ const UI = {
   },
 
   drawSoundState(ctx, on) {
-    this.drawText(ctx, on ? 'SOUND ON' : 'SOUND OFF', CONFIG.VIEW_W / 2, CONFIG.VIEW_H - 26, on ? '#9be564' : '#8f9aa8', true);
+    this.drawText(ctx, on ? '소리 켬' : '소리 끔', CONFIG.VIEW_W / 2, CONFIG.VIEW_H - 26, on ? '#9be564' : '#8f9aa8', true);
   },
 
   /* 창이 떠 있을 때의 포인터 — 끝(왼쪽 위 꼭짓점)이 마우스 자리다.
@@ -628,14 +697,14 @@ const UI = {
     ctx.fillRect(0, 0, CONFIG.VIEW_W, CONFIG.VIEW_H);
     const cx = CONFIG.VIEW_W / 2, cy = CONFIG.VIEW_H / 2;
     // 제목 — 두 배 크기
-    this.drawText(ctx, 'FOREST ADVENTURE', cx, cy - 30, '#9be564', true, true, UI.TEXT_SCALE * 2);
-    this.drawText(ctx, 'A TINY PIXEL ACTION RPG', cx, cy - 12, '#7fa86a', true);
+    this.drawText(ctx, '숲의 모험', cx, cy - 30, '#9be564', true, true, UI.TEXT_SCALE * 2);
+    this.drawText(ctx, '작은 도트 액션 롤플레잉', cx, cy - 12, '#7fa86a', true);
     // 세상이 멈춰 있으므로 깜빡임은 실제 시계로 돌린다
     if ((Date.now() % 1000) < 650) {
-      this.drawText(ctx, hasSave ? 'PRESS ANY KEY TO CONTINUE' : 'PRESS ANY KEY TO START', cx, cy + 10, '#ffe066', true);
+      this.drawText(ctx, hasSave ? '아무 키나 누르면 이어서 합니다' : '아무 키나 누르면 시작합니다', cx, cy + 10, '#ffe066', true);
     }
-    this.drawText(ctx, 'WASD MOVE   SPACE ATTACK   SHIFT DASH', cx, cy + 32, '#8fa383', true);
-    this.drawText(ctx, 'F INTERACT   E POTION   I BAG   M MAP', cx, cy + 41, '#8fa383', true);
+    this.drawText(ctx, 'WASD 이동   스페이스 공격   시프트 대시', cx, cy + 32, '#8fa383', true);
+    this.drawText(ctx, 'F 상호작용   E 포션   I 가방   M 지도', cx, cy + 41, '#8fa383', true);
   },
 
   // 새 게임 확인 — 저장을 지우는 되돌릴 수 없는 동작이라 한 번 묻는다
@@ -650,16 +719,16 @@ const UI = {
     ctx.strokeStyle = '#6b4a26';
     ctx.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1);
 
-    this.drawText(ctx, 'START NEW GAME?', x + w / 2, y + 10, '#ffd93d', true);
-    this.drawText(ctx, 'SAVED PROGRESS IS LOST', x + w / 2, y + 22, '#c9a0a0', true);
-    this.drawText(ctx, 'Y  YES        N  NO', x + w / 2, y + 36, '#f0d9b5', true);
+    this.drawText(ctx, '새 게임을 시작할까요?', x + w / 2, y + 10, '#ffd93d', true);
+    this.drawText(ctx, '저장된 진행이 사라집니다', x + w / 2, y + 22, '#c9a0a0', true);
+    this.drawText(ctx, 'Y  예        N  아니요', x + w / 2, y + 36, '#f0d9b5', true);
   },
 
   // 쿨다운(초)을 단어로 — 0.28 단검 FAST, 0.40 검 NORMAL, 0.62 도끼 SLOW
   speedWord(cooldown) {
-    if (cooldown < 0.34) return 'FAST';
-    if (cooldown < 0.51) return 'NORMAL';
-    return 'SLOW';
+    if (cooldown < 0.34) return '빠름';
+    if (cooldown < 0.51) return '보통';
+    return '느림';
   },
 
 };

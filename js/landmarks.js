@@ -113,7 +113,7 @@ const Landmarks = {
     player.addGold(gold, chest.x, chest.y - 6);
     if (Math.random() < cfg.potionChance) {
       const got = player.addPotion(1);
-      if (got) FX.number(chest.x, chest.y - 22, '+POTION', '#ffd93d');
+      if (got) FX.number(chest.x, chest.y - 22, '+포션', '#ffd93d');
     }
     if (item) {
       if (!Inventory.addGear(player, item)) {
@@ -168,7 +168,7 @@ const Landmarks = {
   drawPrompt(ctx, cam, chest) {
     const sx = Math.round(chest.x - cam.x), sy = Math.round(chest.y - cam.y);
     if (Math.floor(World.time * 3) % 2 === 0) return;
-    UI.drawText(ctx, 'F  OPEN', sx, sy - 24, '#ffe066', true);
+    UI.drawText(ctx, 'F  열기', sx, sy - 24, '#ffe066', true);
   },
 
   /* ── 저장 ── 연 상자만 적어둔다 (자리와 내용물은 시드에서 다시 나온다) */

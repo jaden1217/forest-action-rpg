@@ -354,7 +354,7 @@ const Game = {
     Items.pickupRequested = false;
     // 무대가 셋이 되면서 "반대편"이 성립하지 않는다 — 어디로 갈지 고르는 창을 연다
     if (Portal.entries().every(e => e.here || !e.ok)) {
-      FX.number(p.x, p.y - 30, 'SEALED', '#ff6b6b');
+      FX.number(p.x, p.y - 30, '봉인됨', '#ff6b6b');
       Sound.play('error');
       return;
     }
@@ -870,7 +870,7 @@ const Game = {
         bannerUp: this.lairBanner > 0 || this.forestBanner > 0 || this.gateBanner > 0 || (typeof Events !== 'undefined' && Events.notice > 0),
       });
     }
-    if (this.exitPrompt) UI.drawCavePrompt(ui, World.arenaExit, cam, 0, 'LEAVE');
+    if (this.exitPrompt) UI.drawCavePrompt(ui, World.arenaExit, cam, 0, '나가기');
     if (this.shopPrompt && !this.showMap) Shop.drawPrompt(ui, cam);
     if (this.boardPrompt && !this.showMap) Quests.drawPrompt(ui, cam);
     if (this.forgePrompt && !this.showMap) Forge.drawPrompt(ui, cam);
@@ -897,7 +897,7 @@ const Game = {
       if (lair) UI.drawBanner(ui, lair.lairName, '#ff6b6b', this.lairBanner);
     }
     if (this.forestBanner > 0 && !windowUp && !this.title) UI.drawBanner(ui, World.spec.name, World.spec.color, this.forestBanner);
-    if (this.gateBanner > 0 && !windowUp) UI.drawBanner(ui, 'THE OBELISK AWAKENS', '#5ff0ff', this.gateBanner);
+    if (this.gateBanner > 0 && !windowUp) UI.drawBanner(ui, '비석이 깨어났다', '#5ff0ff', this.gateBanner);
     if (typeof Events !== 'undefined') {
       // 보스 방에서는 화면 위를 보스 체력바가 쓴다 — 날짜 시계는 비켜준다
       if (!windowUp && !this.title && !this.inArena) Events.drawHud(ui);

@@ -44,7 +44,7 @@ const Forge = {
     const s = Village.spot('forge'), x = s.x, y = s.y;
     const anvil = World.addProp(SPRITES.anvil, x, y, { solid: [9, 3, 5], footHeight: 3 });
     anvil.anvil = true;
-    anvil.sign = { text: 'FORGE', color: '#ff8a3c', dy: 24 };
+    anvil.sign = { text: '대장간', color: '#ff8a3c', dy: 24 };
     World.anvil = anvil;
     World.smith = null;
     this.npc = null;
@@ -85,7 +85,7 @@ const Forge = {
     if (!n) return;
     const sx = Math.round(n.x - cam.x), sy = Math.round(n.y - cam.y);
     if (Math.floor(World.time * 3) % 2 === 0) return;
-    UI.drawText(ctx, 'F  FORGE', sx + 8, sy - 24, '#ff8a3c', true);
+    UI.drawText(ctx, 'F  대장간', sx + 8, sy - 24, '#ff8a3c', true);
   },
 
   /* ── 값과 재료 ──────────────────────────────────────── */
@@ -162,13 +162,13 @@ const Forge = {
         ok: held >= e.cost && player.gold >= this.goldCost(player),
       });
     }
-    list.push({ id: null, name: 'REMOVE', color: '#8f9aa8', remove: true, ok: !!player.weaponElement });
+    list.push({ id: null, name: '속성 지우기', color: '#8f9aa8', remove: true, ok: !!player.weaponElement });
     // 강화 — 전설 무기도 레벨이 고정이라 똑같이 올릴 수 있다
     const up = this.upgradeCost(player);
     const upHeld = this.lootHeld(player, up.loot);
     const upMax = player.weaponLevel >= CONFIG.forge.upgrade.maxLevel;
     list.push({
-      upgrade: true, name: 'UPGRADE ' + player.weaponLabel(), color: '#ffe066',
+      upgrade: true, name: '강화  ' + player.weaponLabel(), color: '#ffe066',
       loot: CONFIG.loot.items[up.loot].name, need: up.need, held: upHeld,
       gold: up.gold, worn: false,
       maxed: upMax,
@@ -179,7 +179,7 @@ const Forge = {
       const c = this.reforgeCost(t.item);
       const held = this.lootHeld(player, c.loot);
       list.push({
-        reforge: true, target: t, name: 'REFORGE ' + Gear.name(t.item).slice(0, 24),
+        reforge: true, target: t, name: '재련  ' + Gear.name(t.item).slice(0, 24),
         fullName: Gear.name(t.item), color: Gear.color(t.item),
         loot: CONFIG.loot.items[c.loot].name, need: c.need, held: held,
         gold: c.gold, worn: false,
@@ -198,12 +198,12 @@ const Forge = {
         const held = this.lootHeld(player, lootId);
         if (held > 0) seen = true;
         if (held < r.loot[lootId]) have = false;
-        parts.push(CONFIG.loot.items[lootId].name.split(' ')[0] + ' ' + held + '/' + r.loot[lootId]);
+        parts.push(CONFIG.loot.items[lootId].name + ' ' + held + '/' + r.loot[lootId]);
       }
       if (!seen && !have) continue;   // 재료를 한 톨도 못 봤으면 숨긴다
       const gold = this.craftGold(player);
       list.push({
-        craft: true, recipe: r, name: 'FORGE ' + spec.name.replace('FROSTHEART ', ''),
+        craft: true, recipe: r, name: spec.name + ' 제작',
         fullName: spec.name, color: CONFIG.rarity.list[CONFIG.forge.craft.rarity].color,
         lootText: parts.join('  '), lootOk: have,
         gold: gold, worn: false,
@@ -221,30 +221,30 @@ const Forge = {
   apply(item, player) {
     if (item.craft) {
       const r = item.recipe, spec = Gear.spec(r.id);
-      if (!item.lootOk) { this.say('NEED MORE MATERIALS'); Sound.play('error'); return; }
-      if (player.gold < item.gold) { this.say('NOT ENOUGH GOLD'); Sound.play('error'); return; }
+      if (!item.lootOk) { this.say('재료가 모자란다'); Sound.play('error'); return; }
+      if (player.gold < item.gold) { this.say('골드가 모자란다'); Sound.play('error'); return; }
       // 가방에 자리가 있어야 받는다 (바닥에 떨구면 귀한 것을 잃을 수 있다)
       const made = Gear.roll(r.id, player.level, CONFIG.forge.craft.rarity);
-      if (!Inventory.addGear(player, made)) { this.say('BAG IS FULL'); Sound.play('error'); return; }
+      if (!Inventory.addGear(player, made)) { this.say('가방이 가득 찼다'); Sound.play('error'); return; }
       for (const lootId in r.loot) this.takeLoot(player, lootId, r.loot[lootId]);
       player.gold -= item.gold;
       Sound.play('levelup');
       FX.burst(player.x, player.y - 4, 30, ['#bfe8ff', '#ffffff'], { speed: 80, life: 0.8, gravity: 10 });
       FX.number(player.x, player.y - 30, spec.name, '#bfe8ff', true);
-      this.say('FORGED ' + spec.name);
+      this.say(spec.name + ' 제작');
       return;
     }
     if (item.remove) {
-      if (!player.weaponElement) { this.say('NOTHING TO REMOVE'); Sound.play('error'); return; }
+      if (!player.weaponElement) { this.say('지울 속성이 없다'); Sound.play('error'); return; }
       player.weaponElement = null;
       Sound.play('blip');
-      this.say('ELEMENT REMOVED');
+      this.say('속성을 지웠다');
       return;
     }
     if (item.upgrade) {
-      if (player.weaponLevel >= CONFIG.forge.upgrade.maxLevel) { this.say('MAX LEVEL'); Sound.play('error'); return; }
-      if (item.held < item.need) { this.say('NEED MORE ' + item.loot); Sound.play('error'); return; }
-      if (player.gold < item.gold) { this.say('NOT ENOUGH GOLD'); Sound.play('error'); return; }
+      if (player.weaponLevel >= CONFIG.forge.upgrade.maxLevel) { this.say('이미 최고 레벨이다'); Sound.play('error'); return; }
+      if (item.held < item.need) { this.say(item.loot + ' 모자람'); Sound.play('error'); return; }
+      if (player.gold < item.gold) { this.say('골드가 모자란다'); Sound.play('error'); return; }
       const up = this.upgradeCost(player);
       this.takeLoot(player, up.loot, up.need);
       player.gold -= up.gold;
@@ -253,15 +253,15 @@ const Forge = {
       Sound.play('levelup');
       FX.burst(player.x, player.y - 4, 20, ['#ffe066', '#ffffff'], { speed: 60, life: 0.6, gravity: 20 });
       FX.number(player.x, player.y - 30, player.weaponLabel() + '!', '#ffe066');
-      this.say('UPGRADED TO L' + player.weaponLevel);
+      this.say(player.weaponLevel + '레벨로 강화');
       return;
     }
     if (item.reforge) {
-      if (item.held < item.need) { this.say('NEED MORE ' + item.loot); Sound.play('error'); return; }
-      if (player.gold < item.gold) { this.say('NOT ENOUGH GOLD'); Sound.play('error'); return; }
+      if (item.held < item.need) { this.say(item.loot + ' 모자람'); Sound.play('error'); return; }
+      if (player.gold < item.gold) { this.say('골드가 모자란다'); Sound.play('error'); return; }
       const t = item.target;
       const src = t.bagIndex !== undefined ? player.bag[t.bagIndex] : player.gear[t.slot];
-      if (!src || src.kind !== 'gear') { this.say('GEAR IS GONE'); Sound.play('error'); return; }
+      if (!src || src.kind !== 'gear') { this.say('장비가 없다'); Sound.play('error'); return; }
       const c = this.reforgeCost(src);
       this.takeLoot(player, c.loot, c.need);
       player.gold -= c.gold;
@@ -274,12 +274,12 @@ const Forge = {
       Sound.play('levelup');
       FX.burst(player.x, player.y - 4, 18, [Gear.color(src), '#ffffff'], { speed: 55, life: 0.6, gravity: 20 });
       FX.number(player.x, player.y - 30, Gear.name(src), Gear.color(src));
-      this.say('REFORGED ' + Gear.spec(src.id).name);
+      this.say(Gear.spec(src.id).name + ' 재련');
       return;
     }
-    if (item.worn) { this.say('ALREADY FORGED'); Sound.play('error'); return; }
-    if (item.held < item.need) { this.say('NEED MORE ' + item.loot); Sound.play('error'); return; }
-    if (player.gold < item.gold) { this.say('NOT ENOUGH GOLD'); Sound.play('error'); return; }
+    if (item.worn) { this.say('이미 박혀 있다'); Sound.play('error'); return; }
+    if (item.held < item.need) { this.say(item.loot + ' 모자람'); Sound.play('error'); return; }
+    if (player.gold < item.gold) { this.say('골드가 모자란다'); Sound.play('error'); return; }
 
     const e = this.spec(item.id);
     this.takeLoot(player, e.loot, e.cost);
@@ -289,7 +289,7 @@ const Forge = {
     Sound.play('levelup');
     FX.burst(player.x, player.y - 4, 24, [e.color, '#ffffff'], { speed: 70, life: 0.7, gravity: 20 });
     FX.number(player.x, player.y - 30, e.name + ' ' + player.weaponSpec().name, e.color);
-    this.say('FORGED ' + e.name);
+    this.say(e.name + ' 속성을 박았다');
   },
 
   say(text) { this.message = text; this.messageTimer = 1.8; },
@@ -330,12 +330,12 @@ const Forge = {
     const x = Math.round((CONFIG.VIEW_W - w) / 2), y = Math.round((CONFIG.VIEW_H - h) / 2);
     UI.panel(ctx, x, y, w, h, '#ff8a3c');
     UI.divider(ctx, x + 6, y + 15, w - 12);
-    UI.drawText(ctx, 'FORGE', x + w / 2, y + 6, '#ff8a3c', true);
+    UI.drawText(ctx, '대장간', x + w / 2, y + 6, '#ff8a3c', true);
 
     // 지금 든 무기와 박혀 있는 속성
     const el = player.weaponElement ? this.spec(player.weaponElement) : null;
     UI.drawText(ctx, player.weaponLabel(), x + 8, y + 19, player.weaponColor());
-    const cur = el ? el.name : 'NO ELEMENT';
+    const cur = el ? el.name : '속성 없음';
     UI.drawText(ctx, cur, x + w - 10 - UI.textWidth(cur), y + 19, el ? el.color : '#5f6b59');
 
     /* 줄이 많아져서(속성 넷 + 해제 + 강화 + 재련 여섯 + 제작 셋) 창 하나에 다 안 들어간다.
@@ -356,31 +356,31 @@ const Forge = {
       }
       UI.drawText(ctx, it.name, x + 18, ry, it.worn ? '#9be564' : it.color);
       if (it.remove) {
-        UI.drawText(ctx, 'FREE', x + w - 12 - UI.textWidth('FREE'), ry, it.ok ? '#f0d9b5' : '#6f7a68');
+        UI.drawText(ctx, '무료', x + w - 12 - UI.textWidth('무료'), ry, it.ok ? '#f0d9b5' : '#6f7a68');
         continue;
       }
       if (it.maxed) {
-        UI.drawText(ctx, 'MAX', x + w - 12 - UI.textWidth('MAX'), ry, '#6f7a68');
+        UI.drawText(ctx, '최대', x + w - 12 - UI.textWidth('최대'), ry, '#6f7a68');
         continue;
       }
       // 제작은 재료가 둘이라 한 줄로 이어 붙인다
       if (it.craft) {
         UI.drawText(ctx, it.lootText, matRight - UI.textWidth(it.lootText), ry, it.lootOk ? '#7fa86a' : '#c05a5a');
-        const cp = it.gold + ' G';
+        const cp = it.gold + '골드';
         UI.drawText(ctx, cp, x + w - 12 - UI.textWidth(cp), ry, player.gold >= it.gold ? CONFIG.gold.color : '#c05a5a');
         continue;
       }
       // 재료와 값 — 모자라면 붉게
       const mat = it.loot + ' ' + it.held + '/' + it.need;
       UI.drawText(ctx, mat, matRight - UI.textWidth(mat), ry, it.held >= it.need ? '#7fa86a' : '#c05a5a');
-      const price = it.worn ? 'ON' : it.gold + ' G';
+      const price = it.worn ? '적용 중' : it.gold + '골드';
       UI.drawText(ctx, price, x + w - 12 - UI.textWidth(price), ry,
         it.worn ? '#9be564' : (player.gold >= it.gold ? CONFIG.gold.color : '#c05a5a'));
     }
 
     const footY = y + h - 19;
     if (this.message) UI.drawText(ctx, this.message, x + w / 2, footY, '#9be564', true);
-    else UI.drawText(ctx, 'W S SELECT   SPACE FORGE', x + w / 2, footY, '#7fa86a', true);
-    UI.drawText(ctx, 'PAUSED - F TO CLOSE', x + w / 2, footY + 8, '#5f6b59', true);
+    else UI.drawText(ctx, 'W S 고르기   스페이스 실행', x + w / 2, footY, '#7fa86a', true);
+    UI.drawText(ctx, '일시정지 · F 닫기', x + w / 2, footY + 8, '#5f6b59', true);
   },
 };

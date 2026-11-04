@@ -201,7 +201,7 @@ const Village = {
       const c = World.addProp(SPRITES.chest[0], s3.x, s3.y, { solid: [6, 3, 4], footHeight: 3 });
       c.stashChest = true;
       c.landmark = 'stash';
-      c.sign = { text: 'STASH', color: '#9fe8ff', dy: 22 };
+      c.sign = { text: '창고', color: '#9fe8ff', dy: 22 };
       c.draw = (ctx, cam) => this.drawStash(ctx, cam, c);
       this.stashChest = c;
       World.stashChest = c;
@@ -212,7 +212,7 @@ const Village = {
       const s4 = this.spot('alchemy');
       const bench = World.addProp(SPRITES.stall || SPRITES.chest[0], s4.x, s4.y, { solid: [10, 3, 5], footHeight: 3 });
       bench.alchemyBench = true;
-      bench.sign = { text: 'ALCHEMY', color: '#c79ce8', dy: 36 };   // 탁자 차양 위로
+      bench.sign = { text: '연금술', color: '#c79ce8', dy: 36 };   // 탁자 차양 위로
       this.bench = bench;
       if (this.alchemistHome()) {
         this.spawnAlchemist(s4.x - 14, s4.y - 2);
@@ -364,7 +364,7 @@ const Village = {
     if (!n) return;
     const sx = Math.round(n.x - cam.x), sy = Math.round(n.y - cam.y);
     if (Math.floor(World.time * 3) % 2 === 0) return;
-    UI.drawText(ctx, 'F  ALCHEMY', sx + 6, sy - 24, '#7dff8a', true);
+    UI.drawText(ctx, 'F  연금술', sx + 6, sy - 24, '#7dff8a', true);
   },
 
   drawStashPrompt(ctx, cam) {
@@ -372,7 +372,7 @@ const Village = {
     if (!c) return;
     const sx = Math.round(c.x - cam.x), sy = Math.round(c.y - cam.y);
     if (Math.floor(World.time * 3) % 2 === 0) return;
-    UI.drawText(ctx, 'F  STASH', sx, sy - 24, '#e8dcc0', true);
+    UI.drawText(ctx, 'F  창고', sx, sy - 24, '#e8dcc0', true);
   },
 
   // 빈 대장간·빈 탁자 안내 (아직 이사 전)
@@ -399,7 +399,7 @@ const Village = {
       } catch (err) { /* 무시 */ }
       if (!silent && !this.announced.smith) {
         this.announced.smith = true;
-        FX.number(Game.player.x, Game.player.y - 30, 'BLACKSMITH MOVED IN', '#ff8a3c');
+        FX.number(Game.player.x, Game.player.y - 30, '대장장이가 이사 왔다', '#ff8a3c');
         Sound.play('banner');
       } else if (silent) {
         this.announced.smith = this.announced.smith || this.smithHome();
@@ -411,7 +411,7 @@ const Village = {
       this.spawnAlchemist(a.x - 14, a.y - 2);
       if (!silent && !this.announced.alchemist) {
         this.announced.alchemist = true;
-        FX.number(Game.player.x, Game.player.y - 30, 'ALCHEMIST MOVED IN', '#7dff8a');
+        FX.number(Game.player.x, Game.player.y - 30, '연금술사가 이사 왔다', '#7dff8a');
         Sound.play('banner');
       } else if (silent) {
         this.announced.alchemist = true;
@@ -420,12 +420,12 @@ const Village = {
     if (!silent) {
       if (this.smithHome() && !this.announced.smith) {
         this.announced.smith = true;
-        FX.number(Game.player.x, Game.player.y - 30, 'BLACKSMITH MOVED IN', '#ff8a3c');
+        FX.number(Game.player.x, Game.player.y - 30, '대장장이가 이사 왔다', '#ff8a3c');
         Sound.play('banner');
       }
       if (this.alchemistHome() && !this.announced.alchemist) {
         this.announced.alchemist = true;
-        FX.number(Game.player.x, Game.player.y - 30, 'ALCHEMIST MOVED IN', '#7dff8a');
+        FX.number(Game.player.x, Game.player.y - 30, '연금술사가 이사 왔다', '#7dff8a');
         Sound.play('banner');
       }
     }
@@ -494,7 +494,7 @@ const Village = {
       let ok = lootOk && player.gold >= r.gold;
       let reason = '';
       if (id === 'potion' || id === 'potionBig') {
-        if (player.potions >= player.maxPotions) { ok = false; reason = 'POUCH FULL'; }
+        if (player.potions >= player.maxPotions) { ok = false; reason = '주머니 가득'; }
       }
       out.push({ id: id, spec: r, held: held, lootOk: lootOk, ok: ok, reason: reason });
     }
@@ -503,27 +503,27 @@ const Village = {
 
   brew(entry, player) {
     const r = entry.spec;
-    if (!entry.lootOk) { this.sayAlchemy('NEED MORE LOOT'); Sound.play('error'); return; }
-    if (player.gold < r.gold) { this.sayAlchemy('NOT ENOUGH GOLD'); Sound.play('error'); return; }
+    if (!entry.lootOk) { this.sayAlchemy('전리품이 모자란다'); Sound.play('error'); return; }
+    if (player.gold < r.gold) { this.sayAlchemy('골드가 모자란다'); Sound.play('error'); return; }
     if ((entry.id === 'potion' || entry.id === 'potionBig') && player.potions >= player.maxPotions) {
-      this.sayAlchemy('POUCH IS FULL'); Sound.play('error'); return;
+      this.sayAlchemy('포션 주머니가 가득 찼다'); Sound.play('error'); return;
     }
     for (const h of entry.held) this.takeLoot(player, h.id, h.need);
     player.gold -= r.gold;
 
     if (entry.id === 'potion' || entry.id === 'potionBig') {
       const got = player.addPotion(r.gain);
-      if (got <= 0) { this.sayAlchemy('POUCH IS FULL'); Sound.play('error'); return; }
-      this.sayAlchemy('BREWED ' + got + ' POTION');
+      if (got <= 0) { this.sayAlchemy('포션 주머니가 가득 찼다'); Sound.play('error'); return; }
+      this.sayAlchemy('포션 ' + got + '병을 빚었다');
     } else if (entry.id === 'antidote') {
       Status.clear(player);
       player.wardTimer = CONFIG.alchemy.wardTime;
-      FX.number(player.x, player.y - 26, 'CURED', '#7dff8a');
-      this.sayAlchemy('CURED + WARD 15S');
+      FX.number(player.x, player.y - 26, '해독', '#7dff8a');
+      this.sayAlchemy('해독 · 15초 동안 면역');
     } else if (entry.id === 'tonic') {
       player.tonicTimer = CONFIG.alchemy.tonicTime;
-      FX.number(player.x, player.y - 26, 'TONIC 60S', '#5ff0ff');
-      this.sayAlchemy('REGEN WONT STOP 60S');
+      FX.number(player.x, player.y - 26, '강장제 60초', '#5ff0ff');
+      this.sayAlchemy('60초 동안 회복이 멈추지 않는다');
     }
     Sound.play('potion');
     FX.burst(player.x, player.y - 4, 14, [r.color, '#ffffff'], { speed: 45, life: 0.5, gravity: 30 });
@@ -559,7 +559,7 @@ const Village = {
     const x = Math.round((CONFIG.VIEW_W - w) / 2), y = Math.round((CONFIG.VIEW_H - h) / 2);
     UI.panel(ctx, x, y, w, h, '#7dff8a');
     UI.divider(ctx, x + 6, y + 15, w - 12);
-    UI.drawText(ctx, 'ALCHEMY', x + w / 2, y + 6, '#7dff8a', true);
+    UI.drawText(ctx, '연금술', x + w / 2, y + 6, '#7dff8a', true);
     ctx.drawImage(SPRITES.coin, x + w - 14 - UI.textWidth(String(player.gold)) - 10, y + 6);
     UI.drawText(ctx, String(player.gold), x + w - 14 - UI.textWidth(String(player.gold)), y + 7, '#ffe066');
 
@@ -579,15 +579,15 @@ const Village = {
         return nm + ' ' + hl.held + '/' + hl.need;
       }).join('  ');
       UI.drawText(ctx, mat.slice(0, 44), x + 18, ry + 8, it.lootOk ? '#7fa86a' : '#c05a5a');
-      const price = it.reason || (it.spec.gold + ' G');
+      const price = it.reason || (it.spec.gold + '골드');
       UI.drawText(ctx, price, x + w - 12 - UI.textWidth(price), ry,
         it.reason ? '#6f7a68' : (player.gold >= it.spec.gold ? '#ffe066' : '#c05a5a'));
     }
 
     const footY = y + h - 19;
     if (this.alchemyMessage) UI.drawText(ctx, this.alchemyMessage, x + w / 2, footY, '#9be564', true);
-    else UI.drawText(ctx, 'W S SELECT   SPACE BREW', x + w / 2, footY, '#7fa86a', true);
-    UI.drawText(ctx, 'PAUSED - F TO CLOSE', x + w / 2, footY + 8, '#5f6b59', true);
+    else UI.drawText(ctx, 'W S 고르기   스페이스 빚기', x + w / 2, footY, '#7fa86a', true);
+    UI.drawText(ctx, '일시정지 · F 닫기', x + w / 2, footY + 8, '#5f6b59', true);
   },
 
   /* ── 창고 ────────────────────────────────────────────────
@@ -608,9 +608,9 @@ const Village = {
     if (!s) return '?';
     if (s.kind === 'gear') return Gear.name(s);
     if (s.kind === 'weapon') {
-      return (s.legend ? CONFIG.weapons.legends[s.legend].name : CONFIG.weapons[s.weapon].name) + ' L' + s.level;
+      return (s.legend ? CONFIG.weapons.legends[s.legend].name : CONFIG.weapons[s.weapon].name) + ' ' + s.level + '레벨';
     }
-    if (s.kind === 'loot') return (CONFIG.loot.items[s.id] || {}).name + ' X' + s.amount;
+    if (s.kind === 'loot') return (CONFIG.loot.items[s.id] || {}).name + ' ' + s.amount + '개';
     return '?';
   },
 
@@ -822,7 +822,7 @@ const Village = {
       const i = from.index + 1, s = player.bag[i], t = this.stash[to.index];
       if (!s) return;
       const clean = this.sanitizeItem(s);
-      if (!clean) return fail('CANT STORE THAT');
+      if (!clean) return fail('맡길 수 없다');
       if (t && t.kind === 'loot' && clean.kind === 'loot' && t.id === clean.id) {
         t.amount += clean.amount;
         player.bag[i] = null;
@@ -841,7 +841,7 @@ const Village = {
         return;
       }
       Sound.play('blip');
-      this.sayStash('STORED ' + this.stashName(clean));
+      this.sayStash(this.stashName(clean) + ' 맡김');
       this.stashZone = 'box'; this.stashCursor = to.index;
       this.stashScroll();
       return;
@@ -853,8 +853,8 @@ const Village = {
     let name = this.stashName(t);
     if (t.kind === 'loot' && (!b || (b.kind === 'loot' && b.id === t.id))) {
       const take = Math.min(Inventory.stackMax(t.id) - (b ? b.amount : 0), t.amount);
-      if (take <= 0) return fail('STACK IS FULL');
-      name = (CONFIG.loot.items[t.id] || {}).name + ' X' + take;   // 한 칸에 들어간 만큼만 가져온다
+      if (take <= 0) return fail('그 칸은 가득 찼다');
+      name = (CONFIG.loot.items[t.id] || {}).name + ' ' + take + '개';   // 한 칸에 들어간 만큼만 가져온다
       if (b) b.amount += take;
       else player.bag[j] = { kind: 'loot', id: t.id, amount: take };
       t.amount -= take;
@@ -863,14 +863,14 @@ const Village = {
       player.bag[j] = this.sanitizeItem(t);
       this.stashClear(from.index);
     } else {
-      if (!fits(t)) return fail('TOO MANY TO SWAP');
+      if (!fits(t)) return fail('너무 많아 맞바꿀 수 없다');
       const clean = this.sanitizeItem(b);
-      if (!clean) return fail('CANT STORE THAT');
+      if (!clean) return fail('맡길 수 없다');
       this.stash[from.index] = clean;
       player.bag[j] = this.sanitizeItem(t);
     }
     Sound.play('pickup');
-    this.sayStash('TOOK ' + name);
+    this.sayStash(name + ' 찾음');
     this.stashZone = 'bag'; this.stashCursor = to.index;
   },
 
@@ -878,39 +878,39 @@ const Village = {
   transferStash(player) {
     if (this.stashZone === 'bag') {
       const i = this.stashCursor + 1, s = player.bag[i];
-      if (!s) { this.sayStash('EMPTY SLOT'); return; }
+      if (!s) { this.sayStash('빈 칸이다'); return; }
       const clean = this.sanitizeItem(s);
-      if (!clean) { this.sayStash('CANT STORE THAT'); Sound.play('error'); return; }
+      if (!clean) { this.sayStash('맡길 수 없다'); Sound.play('error'); return; }
       // 전리품은 창고에서 합친다. 아니면 가장 앞의 빈칸에
       const same = clean.kind === 'loot' && this.stash.find(o => o && o.kind === 'loot' && o.id === clean.id);
       if (same) same.amount += clean.amount;
       else {
         const q = this.stashFree();
-        if (q < 0) { this.sayStash('STASH IS FULL'); Sound.play('error'); return; }
+        if (q < 0) { this.sayStash('창고가 가득 찼다'); Sound.play('error'); return; }
         this.stash[q] = clean;
       }
       player.bag[i] = null;
       Sound.play('blip');
-      this.sayStash('STORED ' + this.stashName(clean));
+      this.sayStash(this.stashName(clean) + ' 맡김');
       return;
     }
     const si = this.stashCursor, s = this.stash[si];
-    if (!s) { this.sayStash('NOTHING STORED'); return; }
+    if (!s) { this.sayStash('맡긴 것이 없다'); return; }
     if (s.kind === 'loot') {
       const left = Inventory.addLoot(player, s.id, s.amount);
-      if (left >= s.amount) { this.sayStash('BAG IS FULL'); Sound.play('error'); return; }
+      if (left >= s.amount) { this.sayStash('가방이 가득 찼다'); Sound.play('error'); return; }
       const got = s.amount - left;
       if (left <= 0) this.stashClear(si);
       else s.amount = left;
       Sound.play('pickup');
-      this.sayStash('TOOK ' + (CONFIG.loot.items[s.id] || {}).name + ' X' + got);
+      this.sayStash((CONFIG.loot.items[s.id] || {}).name + ' ' + got + '개 찾음');
     } else {
       const free = Inventory.firstEmpty(player);
-      if (free < 0) { this.sayStash('BAG IS FULL'); Sound.play('error'); return; }
+      if (free < 0) { this.sayStash('가방이 가득 찼다'); Sound.play('error'); return; }
       player.bag[free] = this.sanitizeItem(s);
       this.stashClear(si);
       Sound.play('pickup');
-      this.sayStash('TOOK ' + this.stashName(s));
+      this.sayStash(this.stashName(s) + ' 찾음');
     }
     this.stashCursor = Util.clamp(this.stashCursor, 0, this.stashBoxN() - 1);
     this.stashScroll();
@@ -918,30 +918,30 @@ const Village = {
 
   /* 고른 물건 두 줄 설명 — 이름(등급 색)과 쓸모 한 줄. 자세한 것은 인벤토리에서 본다 */
   stashDetail(player, s) {
-    if (!s) return [[this.stashZone === 'bag' ? 'EMPTY SLOT' : 'NOTHING STORED', '#5f6b59']];
+    if (!s) return [[this.stashZone === 'bag' ? '빈 칸' : '맡긴 것이 없다', '#5f6b59']];
     if (s.kind === 'gear') {
       const r = Gear.rarity(s);
-      return [[Gear.name(s) + ' L' + s.level, r.color],
+      return [[Gear.name(s) + ' ' + s.level + '레벨', r.color],
         [r.name + '  ' + Gear.statLine(Gear.statsOf(s)).slice(0, 3).join(' '), '#c8d0d8']];
     }
     if (s.kind === 'weapon') {
       const w = CONFIG.weapons[s.weapon], el = s.element && CONFIG.forge.elements[s.element];
       return [[this.stashName(s), s.legend ? 'rainbow' : this.stashColor(s)],
-        ['DMG ' + player.damageWith(s.weapon, s.level) + '  ' + (w.blurb || '') + (el ? '  ' + el.name : ''), el ? el.color : '#c8d0d8']];
+        ['공격력 ' + player.damageWith(s.weapon, s.level) + '  ' + (w.blurb || '') + (el ? '  ' + el.name : ''), el ? el.color : '#c8d0d8']];
     }
     const ls = CONFIG.loot.items[s.id] || {};
-    return [[ls.name + ' X' + s.amount, ls.color || '#ffffff'],
-      ['WORTH ' + (ls.value || 0) * s.amount + ' G' + (ls.trophy ? '  BOSS TROPHY' : ''), '#f0d9b5']];
+    return [[ls.name + ' ' + s.amount + '개', ls.color || '#ffffff'],
+      ['값 ' + (ls.value || 0) * s.amount + '골드' + (ls.trophy ? '  보스 전리품' : ''), '#f0d9b5']];
   },
 
   drawStashWindow(ctx, player) {
     const L = this.stashLayout();
     UI.panel(ctx, L.x, L.y, L.w, L.h, '#e8dcc0');
     UI.divider(ctx, L.x + 6, L.y + 14, L.w - 12);
-    UI.drawText(ctx, 'STASH', L.x + L.w / 2, L.y + 5, '#e8dcc0', true);
+    UI.drawText(ctx, '창고', L.x + L.w / 2, L.y + 5, '#e8dcc0', true);
     const bagN = this.stashBagN(player), used = Inventory.count(player);
-    UI.drawText(ctx, 'BAG ' + used + '/' + bagN, L.bagX, L.y + 5, used >= bagN ? '#ff6b6b' : '#7fa86a');
-    const boxText = 'BOX ' + this.stashCount() + '/' + CONFIG.stash.maxItems;
+    UI.drawText(ctx, '가방 ' + used + '/' + bagN, L.bagX, L.y + 5, used >= bagN ? '#ff6b6b' : '#7fa86a');
+    const boxText = '창고 ' + this.stashCount() + '/' + CONFIG.stash.maxItems;
     UI.drawText(ctx, boxText, L.boxX + L.boxW - UI.textWidth(boxText), L.y + 5, '#7fa86a');
 
     // 가방 — 포션 주머니(0번)를 뺀 칸 전부
@@ -980,8 +980,8 @@ const Village = {
 
     const footY = L.y + L.h - 17;
     if (this.stashMessage) UI.drawText(ctx, this.stashMessage, L.x + L.w / 2, footY, '#9be564', true);
-    else UI.drawText(ctx, 'WASD PICK  SPACE ' + (this.stashZone === 'bag' ? 'STORE' : 'TAKE') + '  DRAG MOVE', L.x + L.w / 2, footY, '#7fa86a', true);
-    UI.drawText(ctx, 'PAUSED - F TO CLOSE', L.x + L.w / 2, footY + 8, '#5f6b59', true);
+    else UI.drawText(ctx, 'WASD 고르기  스페이스 ' + (this.stashZone === 'bag' ? '맡기기' : '찾기') + '  끌어서 옮기기', L.x + L.w / 2, footY, '#7fa86a', true);
+    UI.drawText(ctx, '일시정지 · F 닫기', L.x + L.w / 2, footY + 8, '#5f6b59', true);
     // 끌고 있는 물건은 창 그림 맨 위에
     const d = Inventory.drag;
     if (d && d.active) Inventory.drawDrag(ctx, player, this.stashCellItem(player, d.from));

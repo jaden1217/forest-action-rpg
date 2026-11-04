@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>숲의 모험 — Forest Action RPG</title>
+<title>숲의 모험</title>
 <style>
 * { box-sizing: border-box; }
 
@@ -154,7 +154,7 @@ html, body {
 }
 
 </style>
-<!-- built 2026-11-04 07:48 by tools/build.js -->
+<!-- built 2026-11-04 08:12 by tools/build.js -->
 </head>
 <body>
   <div id="stage">
@@ -165,14 +165,14 @@ html, body {
   </div>
   <div id="controls">
     <span><b>WASD</b> 이동</span>
-    <span><b>Space</b> / <b>클릭</b> 공격 (마우스 방향)</span>
-    <span><b>Shift</b> 대시 (2회 충전)</span>
-    <span><b>Q</b> 무기 스킬 1 <span style="opacity:.6">Lv10</span></span>
-    <span><b>R</b> 무기 스킬 2 <span style="opacity:.6">Lv20</span></span>
-    <span><b>Z</b> 무기 스킬 3 <span style="opacity:.6">Lv30</span></span>
-    <span><b>X</b> 무기 스킬 4 <span style="opacity:.6">Lv40</span></span>
+    <span><b>스페이스</b> / <b>클릭</b> 공격 (마우스 방향)</span>
+    <span><b>시프트</b> 대시 (2회 충전)</span>
+    <span><b>Q</b> 무기 스킬 1 <span style="opacity:.6">10레벨</span></span>
+    <span><b>R</b> 무기 스킬 2 <span style="opacity:.6">20레벨</span></span>
+    <span><b>Z</b> 무기 스킬 3 <span style="opacity:.6">30레벨</span></span>
+    <span><b>X</b> 무기 스킬 4 <span style="opacity:.6">40레벨</span></span>
     <span><b>E</b> 포션</span>
-    <span><b>I</b> 인벤토리 <span style="opacity:.6">Space 사용 · X 버리기</span></span>
+    <span><b>I</b> 인벤토리 <span style="opacity:.6">스페이스 사용 · X 버리기</span></span>
     <span><b>F</b> 무기 줍기 / 동굴 / 상점 / 의뢰 / 대장간 / 연금 / 창고 / 보물 / 비석</span>
     <span><b>T</b> 마을로 귀환</span>
     <span><b>M</b> 지도</span>
@@ -432,7 +432,7 @@ const CONFIG = {
       sword: [
         {
           // 십자베기 — 누르기만 하면 넓게 두 번 벤다: 한쪽에서 베고, 반대쪽에서 되받아 더 세게. 벨 때마다 앞으로 파고든다
-          id: 'cross', name: 'CROSS', key: 'Q', unlockLevel: 10,
+          id: 'cross', name: '십자베기', key: 'Q', unlockLevel: 10,
           cooldown: 6.0,
           arc: 1.5,            // 평타(0.95)보다 훨씬 넓게
           reachBonus: 6,
@@ -446,7 +446,7 @@ const CONFIG = {
           color: '#ffb35c',
         },
         {
-          id: 'spin', name: 'SPIN', key: 'R', unlockLevel: 20,
+          id: 'spin', name: '회전베기', key: 'R', unlockLevel: 20,
           cooldown: 10.5,
           damageMult: 0.63,    // 한 번 맞는 위력은 낮다 — 대신 오래 돌며 여러 번 맞힌다
           arc: Math.PI,        // 360도 — 둘러싸였을 때 빠져나오는 기술
@@ -463,7 +463,7 @@ const CONFIG = {
         },
         {
           // 검기 — 크게 한 번 휘둘러 초승달 검기를 날린다. 멀리(180px) 날아가며 닿는 적을 전부 벤다 (x11)
-          id: 'wave', name: 'WAVE', key: 'Z', unlockLevel: 30,
+          id: 'wave', name: '검기', key: 'Z', unlockLevel: 30,
           cooldown: 13,
           damageMult: 11,
           duration: 0.38,
@@ -475,7 +475,7 @@ const CONFIG = {
         {
           /* 검무 — 1초 동안 좌우로 몰아 베고(열 번, 마우스를 따라간다) 마지막에 크게 마무리 (0.9 x 10 + 7 = 16).
              베는 동안 천천히 걸을 수 있다 */
-          id: 'storm', name: 'STORM', key: 'X', unlockLevel: 40,
+          id: 'storm', name: '검무', key: 'X', unlockLevel: 40,
           cooldown: 18,
           damageMult: 0.9,
           arc: 1.2,
@@ -496,7 +496,7 @@ const CONFIG = {
         {
           /* 연속 찌르기 — 다섯 번 찌른다. 평타처럼 판정이 가는 띠이고, 찌를 때마다 **마우스 쪽으로 다시 겨눈다**
              (훑으며 찌를 수 있다). 찌르는 동안 걸을 수 있고, 다섯 번째는 반드시 급소 (1 x 4 + 1.8 = 5.8) */
-          id: 'flurry', name: 'FLURRY', key: 'Q', unlockLevel: 10,
+          id: 'flurry', name: '연속찌르기', key: 'Q', unlockLevel: 10,
           cooldown: 6.0,
           damageMult: 1.0,
           lineWidth: 6,
@@ -513,7 +513,7 @@ const CONFIG = {
         },
         {
           // 그림자 밟기 — 겨냥한 쪽으로 순간 이동하듯 파고들며 지나친 적을 전부 치명타로 벤다. 지나가는 동안 무적
-          id: 'shadow', name: 'SHADOW', key: 'R', unlockLevel: 20,
+          id: 'shadow', name: '그림자밟기', key: 'R', unlockLevel: 20,
           cooldown: 9.0,
           damageMult: 3.6,
           forceCrit: true,     // 반드시 치명타 (x1.8) — 실질 6.5배, 매복 찌르기까지 약 7.5
@@ -531,7 +531,7 @@ const CONFIG = {
         {
           /* 비수 — 부채꼴로 다섯 자루를 던진다. 비수는 급소만 노린다 (전부 치명타 2.2 x 1.8 = 4).
              처음 닿은 적에서 멈추고, 한 적은 한 번에 세 자루까지만 맞는다 (최대 12) */
-          id: 'knives', name: 'KNIVES', key: 'Z', unlockLevel: 30,
+          id: 'knives', name: '비수', key: 'Z', unlockLevel: 30,
           cooldown: 12,
           damageMult: 2.2,
           forceCrit: true,
@@ -545,7 +545,7 @@ const CONFIG = {
         {
           /* 사신 — 둘레 120 안의 적에게 차례로 순간 이동하며 일곱 번 벤다. 전부 급소, 그동안 무적.
              한 적은 세 번까지 (보스 하나면 2.8 x 1.8 x 3 + 마지막 일격 x1.4 = 약 17), 끝나면 매복 */
-          id: 'reaper', name: 'REAPER', key: 'X', unlockLevel: 40,
+          id: 'reaper', name: '사신', key: 'X', unlockLevel: 40,
           cooldown: 18,
           damageMult: 2.8,
           forceCrit: true,
@@ -564,7 +564,7 @@ const CONFIG = {
       axe: [
         {
           // 땅 찍기 — 도끼를 들어올렸다 내리찍어 주위 전체를 때리고 멀리 밀어낸다. 예고(들어올림)가 길다
-          id: 'quake', name: 'QUAKE', key: 'Q', unlockLevel: 10,
+          id: 'quake', name: '땅찍기', key: 'Q', unlockLevel: 10,
           cooldown: 8.0,
           damageMult: 2.4,
           arc: Math.PI,
@@ -582,7 +582,7 @@ const CONFIG = {
              손이 빨라지고(쿨다운 x1.5, 휘두르기 자체도 x1.4 빠르게) 위력 x1.2,
              휘두르면서 걸을 수 있고(15% → 55%), 맞아도 밀리지 않는다.
              6초 내내 휘두르면 평소보다 약 10 만큼 더 넣는다 (30레벨 스킬보다 약하게 맞췄다) */
-          id: 'rage', name: 'RAGE', key: 'R', unlockLevel: 20,
+          id: 'rage', name: '광폭화', key: 'R', unlockLevel: 20,
           cooldown: 20.0,
           duration: 0.3,       // 발동 동작
           buff: { time: 6, attackSpeed: 1.5, damageMult: 1.2, swingSpeed: 1.4, moveScale: 0.55, steady: true },
@@ -592,7 +592,7 @@ const CONFIG = {
         {
           /* 대지 가르기 — 들어올렸다 내리찍으면 겨눈 쪽으로 땅이 150px 갈라지며 솟는다.
              찍은 자리 둘레(반경 30)는 x5, 갈라진 금 위의 적은 x10 을 맞고 1.6초 기절 (찍은 자리 앞이면 둘 다 — 15) */
-          id: 'rift', name: 'RIFT', key: 'Z', unlockLevel: 30,
+          id: 'rift', name: '대지가르기', key: 'Z', unlockLevel: 30,
           cooldown: 14,
           damageMult: 10,
           windup: 0.3,
@@ -609,7 +609,7 @@ const CONFIG = {
         {
           /* 거인의 일격 — 마우스 쪽(최대 120px)으로 뛰어올라 내리찍는다. 공중에선 무적,
              착지하면 반경 64 안 전부 x20, 2초 기절, 크게 날린다 */
-          id: 'titan', name: 'TITAN', key: 'X', unlockLevel: 40,
+          id: 'titan', name: '거인의일격', key: 'X', unlockLevel: 40,
           cooldown: 22,
           damageMult: 20,
           leap: 120,
@@ -639,16 +639,16 @@ const CONFIG = {
        cleave 도끼 — 뒤로 들어올렸다가(windup) 반원 가까이 크게 휩쓴다. 맞은 적은 바깥으로 튕겨 나가고,
                      휘두르는 동안은 거의 못 걷는다
        moveScale 휘두르는 동안 걸음 배수 · combo 이어 치기 칸 수 */
-    dagger: { name: 'DAGGER', style: 'thrust', damageMult: 0.55, cooldown: 0.26, duration: 0.18, hitWindow: [0.03, 0.12],
+    dagger: { name: '단검', style: 'thrust', damageMult: 0.55, cooldown: 0.26, duration: 0.18, hitWindow: [0.03, 0.12],
               reach: 22, arc: 0.86, lineWidth: 5, knockMult: 0.60, moveScale: 0.8, combo: 3,
-              blurb: 'THRUST  3RD STAB CRITS' },
-    sword:  { name: 'SWORD', style: 'slash', damageMult: 1.00, cooldown: 0.40, duration: 0.26, hitWindow: [0.04, 0.20],
-              reach: 21, arc: 0.95, knockMult: 1.00, moveScale: 0.4, combo: 3, blurb: 'SLASH  3RD HIT FINISHER',
+              blurb: '찌르기 · 셋째는 급소' },
+    sword:  { name: '검', style: 'slash', damageMult: 1.00, cooldown: 0.40, duration: 0.26, hitWindow: [0.04, 0.20],
+              reach: 21, arc: 0.95, knockMult: 1.00, moveScale: 0.4, combo: 3, blurb: '베기 · 셋째는 마무리',
               // 마무리 — 1.3배 위력에 1.3배 쿨다운이라 초당 데미지는 그대로, 대신 넓고 멀리 밀어낸다
               finisher: { damageMult: 1.3, cooldownMult: 1.3, arc: 1.3, reachBonus: 4, knockMult: 1.8, lunge: 70 } },
-    axe:    { name: 'AXE', style: 'cleave', damageMult: 1.55, cooldown: 0.62, duration: 0.40, windup: 0.12, hitWindow: [0.15, 0.32],
+    axe:    { name: '도끼', style: 'cleave', damageMult: 1.55, cooldown: 0.62, duration: 0.40, windup: 0.12, hitWindow: [0.15, 0.32],
               reach: 24, arc: 1.45, knockMult: 1.70, moveScale: 0.15, combo: 2,
-              blurb: 'CLEAVE  WIDE KNOCKBACK' },
+              blurb: '휩쓸기 · 넓게 밀어낸다' },
     comboWindow: 0.45,   // 공격이 끝나고 이 안에 다시 휘두르면 이어 치기가 이어진다 (넘기면 첫 타부터)
 
     /* 무기 레벨 — 레벨당 +2.5% 로 아주 완만하다 (L1 x1.00 -> L23 x1.55 -> L36 x1.875 -> L60 x2.475).
@@ -675,10 +675,10 @@ const CONFIG = {
     legendOrder: ['dagger', 'sword', 'axe'],
     legendLevelBonus: 10,
     legends: {
-      slime:    { name: 'SLIME MONARCH', unique: 'momentum' },
-      wolf:     { name: 'ALPHA HOWL',    unique: 'swiftFoot' },
-      mushroom: { name: 'ELDER BLIGHT',  unique: 'executioner' },
-      sandlord: { name: 'SANDLORD FANG', unique: 'phantom' },
+      slime:    { name: '점액 군주', unique: 'momentum' },
+      wolf:     { name: '우두머리의 포효',    unique: 'swiftFoot' },
+      mushroom: { name: '태고의 마름병',  unique: 'executioner' },
+      sandlord: { name: '군주의 송곳니', unique: 'phantom' },
     },
     /* 전설 무기의 이름표와 바닥 오라에 쓰는 무지개.
        hsl 로 매끈하게 돌리지 않고 일곱 색을 딱딱 끊어 쓴다 — 도트 그림에는 이쪽이 어울린다 */
@@ -748,19 +748,19 @@ const CONFIG = {
     prefixes: {
       // weight = 뽑히는 비율. speed/hp 같은 값은 그 몬스터 능력치에 곱한다
       swift: {
-        name: 'SWIFT', color: '#7ec8ff', weight: 30,
+        name: '날쌘', color: '#7ec8ff', weight: 30,
         speed: 1.6, interval: 0.6, hp: 0.8,     // 빠르고 자주 쏘는 대신 물렁하다
       },
       tough: {
-        name: 'TOUGH', color: '#c8d0d8', weight: 30,
+        name: '단단한', color: '#c8d0d8', weight: 30,
         hp: 1.5, knockback: 0.12, scale: 1.12,  // 거의 밀리지 않는다
       },
       burning: {
-        name: 'BURNING', color: '#ff8a3c', weight: 22,
+        name: '불타는', color: '#ff8a3c', weight: 22,
         atk: 1.1, burn: true, novaRadius: 42,   // 닿으면 화상, 죽을 때 불꽃이 퍼진다
       },
       splitting: {
-        name: 'SPLITTING', color: '#9be564', weight: 18,
+        name: '분열하는', color: '#9be564', weight: 18,
         hp: 0.85, split: 2, splitLevelBelow: 2, // 죽으면 평범한 개체 둘로 갈라진다
       },
     },
@@ -777,7 +777,7 @@ const CONFIG = {
   maps: {
     forest: {
       id: 'forest', theme: 'forest',
-      name: 'PRIMEVAL FOREST',     // 태초의 숲 (도트 폰트가 영문 대문자뿐이라 영문으로 띄운다)
+      name: '태초의 숲',     // 태초의 숲 (도트 폰트가 영문 대문자뿐이라 영문으로 띄운다)
       color: '#9be564',
       wobble: 0.10,                // 위험도 고리를 울퉁불퉁하게 흔드는 정도
 
@@ -828,7 +828,7 @@ const CONFIG = {
        바닥은 모래, 물기가 많은 곳만 오아시스(물 + 풀), 개방도가 낮은 곳은 갈라진 땅. */
     desert: {
       id: 'desert', theme: 'desert',
-      name: 'SCORCHED SANDS',      // 작열하는 사막
+      name: '작열하는 사막',      // 작열하는 사막
       color: '#ffb35c',
       wobble: 0.10,
 
@@ -871,7 +871,7 @@ const CONFIG = {
        바닥은 눈, 물기 많은 곳은 얼어붙은 못, 개방도 낮은 곳은 맨 얼음(미끄럽지는 않다). */
     tundra: {
       id: 'tundra', theme: 'snow',
-      name: 'FROZEN HIGHLANDS',    // 얼어붙은 고원
+      name: '얼어붙은 고원',    // 얼어붙은 고원
       color: '#bfe8ff',
       wobble: 0.10,
 
@@ -940,10 +940,10 @@ const CONFIG = {
        전설 고유 효과·세트는 바뀌지 않으므로 "아깝게 굴러간 것"을 고치는 용도다. */
     reforge: { goldBase: 40, goldPerLevel: 10, loot: 'gel', lootBase: 3 },
     elements: {
-      flame: { name: 'FLAME', status: 'burn',   color: '#ff8a3c', chance: 1.0, loot: 'cap',     cost: 8 },
-      frost: { name: 'FROST', status: 'freeze', color: '#9fe8ff', chance: 0.4, loot: 'gel',     cost: 10 },
-      shock: { name: 'SHOCK', status: 'shock',  color: '#ffe066', chance: 0.6, loot: 'fang',    cost: 8 },
-      venom: { name: 'VENOM', status: 'poison', color: '#7dff8a', chance: 1.0, loot: 'stinger', cost: 6 },
+      flame: { name: '불꽃', status: 'burn',   color: '#ff8a3c', chance: 1.0, loot: 'cap',     cost: 8 },
+      frost: { name: '서리', status: 'freeze', color: '#9fe8ff', chance: 0.4, loot: 'gel',     cost: 10 },
+      shock: { name: '뇌전', status: 'shock',  color: '#ffe066', chance: 0.6, loot: 'fang',    cost: 8 },
+      venom: { name: '맹독', status: 'poison', color: '#7dff8a', chance: 1.0, loot: 'stinger', cost: 6 },
     },
     /* 약점과 강함 — 적혀 있지 않은 것은 1.0.
        숲은 대체로 불, 사막은 대체로 서리. 늑대와 모래벌레만 뇌전이라 외우기만 해서는 안 된다 */
@@ -974,22 +974,22 @@ const CONFIG = {
   status: {
     list: {
       burn: {
-        name: 'BURNING', short: 'BRN', color: '#ff8a3c',
+        name: '화상', short: '화상', color: '#ff8a3c',
         time: 4, tick: 0.5, ratio: 0.16, rise: true, puff: 0.5,
         puffColors: ['#ff8a3c', '#ffd27a', '#c93f3f'],
       },
       poison: {
-        name: 'POISONED', short: 'PSN', color: '#7dff8a',
+        name: '중독', short: '중독', color: '#7dff8a',
         time: 6, tick: 0.5, ratio: 0.08, blockRegen: true, rise: true, puff: 0.3,
         puffColors: ['#7dff8a', '#3fa347'],
       },
       freeze: {
-        name: 'FROZEN', short: 'FRZ', color: '#9fe8ff',
+        name: '빙결', short: '빙결', color: '#9fe8ff',
         time: 2.5, slow: 0.5, puff: 0.3,
         puffColors: ['#9fe8ff', '#ffffff'],
       },
       shock: {
-        name: 'SHOCKED', short: 'SHK', color: '#ffe066',
+        name: '감전', short: '감전', color: '#ffe066',
         time: 3, amp: 1.3, rise: true, puff: 0.35,
         puffColors: ['#ffe066', '#ffffff'],
       },
@@ -1064,9 +1064,9 @@ const CONFIG = {
     goldMult: { kill: 1.0, collect: 0.9, explore: 1.25 },
     rarityWeights: [0, 55, 32, 13],   // COMMON 은 보상으로 안 나온다
     monsterNames: {
-      slime: 'SLIMES', wolf: 'WOLVES', mushroom: 'MUSHROOMS',
-      scorpion: 'SCORPIONS', cactus: 'CACTI', sandworm: 'SANDWORMS',
-      wisp: 'WISPS', yeti: 'YETIS', golem: 'GOLEMS',   // 여기 없으면 불러올 때 그 의뢰가 버려진다
+      slime: '슬라임', wolf: '늑대', mushroom: '버섯',
+      scorpion: '전갈', cactus: '선인장', sandworm: '모래벌레',
+      wisp: '서리 망령', yeti: '설인', golem: '얼음 골렘',   // 여기 없으면 불러올 때 그 의뢰가 버려진다
     },
   },
 
@@ -1250,7 +1250,7 @@ const CONFIG = {
   bosses: {
     // 가까운 동굴 — 거대 슬라임: 느리지만 덩치와 분열로 밀어붙인다
     slime: {
-      type: 'slime', name: 'GIANT SLIME', lairName: 'SLIME LAIR',
+      type: 'slime', name: '거대 슬라임', lairName: '슬라임 굴',
       level: 12,
       hpMult: 18,             // 같은 레벨 슬라임의 18배
       atkMult: 2.2,
@@ -1290,7 +1290,7 @@ const CONFIG = {
 
     // 중간 동굴 — 우두머리 늑대: 빠르다. 돌진을 피하고 벽에 부딪힌 빈틈을 노려야 한다
     wolf: {
-      type: 'wolf', name: 'ALPHA WOLF', lairName: 'WOLF DEN',
+      type: 'wolf', name: '우두머리 늑대', lairName: '늑대 굴',
       level: 20,
       hpMult: 13,
       atkMult: 1.2,             // 늑대는 원래 공격이 세고 빨라서 배수는 낮게
@@ -1332,7 +1332,7 @@ const CONFIG = {
 
     // 가장자리 동굴 — 늙은 버섯: 거의 움직이지 않는 대신 방 전체를 포자로 덮는다
     mushroom: {
-      type: 'mushroom', name: 'ELDER SHROOM', lairName: 'SPORE NEST',
+      type: 'mushroom', name: '늙은 버섯', lairName: '포자 둥지',
       level: 30,                // 몬스터 표(23)보다 위 — enemyStatsAt 이 같은 곡선으로 늘려 잡는다
       hpMult: 9,              // 버섯은 같은 레벨 체력이 가장 높아서 배수는 낮게 (약 4,000)
       atkMult: 1.15,
@@ -1376,7 +1376,7 @@ const CONFIG = {
        모래벌레의 수법("땅속으로 와서 발밑에서 솟구친다")을 보스 규모로 키운다.
        땅속에 있는 동안은 때릴 수 없으므로, 이 보스는 **때릴 틈을 기다리는** 싸움이다. */
     sandlord: {
-      type: 'sandworm', name: 'SAND LORD', lairName: 'THE SINKHOLE',
+      type: 'sandworm', name: '모래의 군주', lairName: '모래 구덩이',
       level: 46,
       /* 46레벨 모래벌레의 표는 이미 숫자가 크다. 앞선 보스 셋은 모두
          "한 대에 플레이어 체력의 20% 안팎, 50~70대쯤 때려야 잡힌다"에 맞춰져 있어서
@@ -1470,10 +1470,10 @@ const CONFIG = {
     interactRange: 26,      // 상인에게서 이 거리 안이면 말을 걸 수 있다
     potionPrice: 20,
     upgrades: [
-      { id: 'hp',    name: 'MAX HP +10',    stat: 'maxHp',      gain: 10, basePrice: 40, priceMult: 1.4, maxRank: 10 },
-      { id: 'atk',   name: 'ATTACK +1',     stat: 'damage',     gain: 1,  basePrice: 60, priceMult: 1.4, maxRank: 10 },
-      { id: 'bag',   name: 'POTIONS +1',    stat: 'maxPotions', gain: 1,  basePrice: 50, priceMult: 1.5, maxRank: 5 },
-      { id: 'slots', name: 'BAG +5 SLOTS',  stat: 'bagSlots',   gain: 5,  basePrice: 80, priceMult: 1.6, maxRank: 3 },
+      { id: 'hp',    name: '최대 체력 +10',    stat: 'maxHp',      gain: 10, basePrice: 40, priceMult: 1.4, maxRank: 10 },
+      { id: 'atk',   name: '공격력 +1',     stat: 'damage',     gain: 1,  basePrice: 60, priceMult: 1.4, maxRank: 10 },
+      { id: 'bag',   name: '포션 소지 +1',    stat: 'maxPotions', gain: 1,  basePrice: 50, priceMult: 1.5, maxRank: 5 },
+      { id: 'slots', name: '가방 +5칸',  stat: 'bagSlots',   gain: 5,  basePrice: 80, priceMult: 1.6, maxRank: 3 },
     ],
   },
 
@@ -1491,42 +1491,42 @@ const CONFIG = {
      비율이면 어느 구간에서나 같은 일을 한다. */
   gear: {
     slots: ['head', 'body', 'trinket'],
-    slotNames: { head: 'HEAD', body: 'BODY', trinket: 'TRINKET' },
+    slotNames: { head: '머리', body: '몸', trinket: '장신구' },
     dropChance: 0.12,       // 몬스터 종류·레벨과 무관하게 모두 같은 확률
     armorSoftness: 70,      // armor 70 이면 딱 절반을 막는다
     armorCap: 0.70,         // 아무리 껴입어도 70% 까지만
 
     items: {
       // 머리 — 가벼운 가죽이냐, 무겁고 단단한 쇠냐
-      leatherCap: { slot: 'head', name: 'LEATHER CAP', sprite: 'cap', unique: 'executioner',
+      leatherCap: { slot: 'head', name: '가죽 모자', sprite: 'cap', unique: 'executioner',
         stats: { armor: [4, 0.14], maxHp: [4, 0.6] } },
-      ironHelm: { slot: 'head', name: 'IRON HELM', sprite: 'helm', unique: 'thorns',
+      ironHelm: { slot: 'head', name: '쇠 투구', sprite: 'helm', unique: 'thorns',
         stats: { armor: [8, 0.26], speed: [-2, 0] } },
 
       // 몸 — 방어력의 중심. 사슬 갑옷은 느려지는 대신 가장 단단하다
-      leatherArmor: { slot: 'body', name: 'LEATHER VEST', sprite: 'vest', unique: 'swiftFoot',
+      leatherArmor: { slot: 'body', name: '가죽 조끼', sprite: 'vest', unique: 'swiftFoot',
         stats: { armor: [7, 0.2], maxHp: [6, 0.9] } },
-      chainMail: { slot: 'body', name: 'CHAIN MAIL', sprite: 'mail', unique: 'aegis',
+      chainMail: { slot: 'body', name: '사슬 갑옷', sprite: 'mail', unique: 'aegis',
         stats: { armor: [13, 0.38], speed: [-6, 0] } },
-      travelCloak: { slot: 'body', name: 'TRAVEL CLOAK', sprite: 'cloak', unique: 'phantom',
+      travelCloak: { slot: 'body', name: '여행 망토', sprite: 'cloak', unique: 'phantom',
         stats: { armor: [4, 0.12], speed: [7, 0] } },
 
       // 장신구 — 방어력 대신 성격을 준다
-      swiftRing: { slot: 'trinket', name: 'SWIFT RING', sprite: 'ring', unique: 'momentum',
+      swiftRing: { slot: 'trinket', name: '바람 반지', sprite: 'ring', unique: 'momentum',
         stats: { speed: [9, 0] } },
-      powerAmulet: { slot: 'trinket', name: 'POWER AMULET', sprite: 'amulet', unique: 'overload',
+      powerAmulet: { slot: 'trinket', name: '힘의 목걸이', sprite: 'amulet', unique: 'overload',
         stats: { power: [1, 0.3] } },
-      vitalCharm: { slot: 'trinket', name: 'VITAL CHARM', sprite: 'charm', unique: 'secondWind',
+      vitalCharm: { slot: 'trinket', name: '생명 부적', sprite: 'charm', unique: 'secondWind',
         stats: { maxHp: [14, 1.8] } },
 
       /* ── 서리심 — 설원 자원으로만 **만드는** 최상위 한 벌 (로드맵 12주차).
          떨어지지 않는다 (craftOnly). 대장간에서 설원 전리품으로 빚어야 한다.
          바탕 수치가 기존 최고치보다 한 단 위고, 세 점을 다 갖추면 서리 보호막이 생긴다. */
-      frostHelm: { slot: 'head', name: 'FROSTHEART CROWN', sprite: 'helm', craftOnly: true, unique: 'thorns',
+      frostHelm: { slot: 'head', name: '서리심 왕관', sprite: 'helm', craftOnly: true, unique: 'thorns',
         stats: { armor: [12, 0.34], maxHp: [8, 1.0] } },
-      frostPlate: { slot: 'body', name: 'FROSTHEART PLATE', sprite: 'mail', craftOnly: true, unique: 'aegis',
+      frostPlate: { slot: 'body', name: '서리심 판금', sprite: 'mail', craftOnly: true, unique: 'aegis',
         stats: { armor: [18, 0.46], maxHp: [12, 1.4], speed: [-3, 0] } },
-      frostSigil: { slot: 'trinket', name: 'FROSTHEART SIGIL', sprite: 'amulet', craftOnly: true, unique: 'overload',
+      frostSigil: { slot: 'trinket', name: '서리심 인장', sprite: 'amulet', craftOnly: true, unique: 'overload',
         stats: { power: [2, 0.4], maxHp: [10, 1.2] } },
     },
   },
@@ -1539,21 +1539,21 @@ const CONFIG = {
      세트가 있으면 **조금 약한 걸 일부러 입는 선택**이 생긴다. */
   sets: {
     ranger: {
-      name: 'RANGER', items: ['leatherCap', 'leatherArmor', 'swiftRing'],
+      name: '사냥꾼', items: ['leatherCap', 'leatherArmor', 'swiftRing'],
       bonus: { 2: { speed: 8, attackSpeed: 8 }, 3: { crit: 8 } },
     },
     guardian: {
-      name: 'GUARDIAN', items: ['ironHelm', 'chainMail', 'vitalCharm'],
+      name: '파수꾼', items: ['ironHelm', 'chainMail', 'vitalCharm'],
       bonus: { 2: { armor: 12 }, 3: { maxHp: 40, knockRes: 25 } },
     },
     wanderer: {
-      name: 'WANDERER', items: ['travelCloak', 'powerAmulet'],
+      name: '방랑자', items: ['travelCloak', 'powerAmulet'],
       bonus: { 2: { cooldown: 10, gold: 25 } },
     },
     /* 서리심 — 설원에서 빚는 한 벌. 세 점이 최대이고, 다 갖추면 덤이 가장 크다.
        "그 지역 자원으로만 만드는 최상위 장비 한 벌"이라 세 점을 다 모으는 것이 목표가 된다 */
     frostheart: {
-      name: 'FROSTHEART', items: ['frostHelm', 'frostPlate', 'frostSigil'],
+      name: '서리심', items: ['frostHelm', 'frostPlate', 'frostSigil'],
       bonus: { 2: { armor: 20, frosty: 20 }, 3: { maxHp: 90, critMult: 40, knockRes: 40 } },
     },
   },
@@ -1566,14 +1566,14 @@ const CONFIG = {
      여기서는 '포션을 마시면 무적', '치명타가 쿨다운을 깎는다' 같은 것만 둔다.
      보스의 전설 무기(SLIME MONARCH 등)도 같은 목록에서 하나씩 가져간다 (weapons.legends). */
   uniques: {
-    executioner: { name: 'EXECUTIONER', text: 'LOW HP FOES TAKE +50%',      ratio: 0.25, mult: 1.5 },
-    thorns:      { name: 'THORNS',      text: 'STRIKE BACK WHEN HURT',      ratio: 0.6, radius: 34 },
-    swiftFoot:   { name: 'SWIFT FOOT',  text: '+1 DASH CHARGE' },
-    aegis:       { name: 'AEGIS',       text: 'POTION GIVES 3S SHIELD',     time: 3 },
-    phantom:     { name: 'PHANTOM',     text: 'DASH REFILLS TWICE AS FAST', mult: 2 },
-    momentum:    { name: 'MOMENTUM',    text: 'CRIT CUTS SKILL COOLDOWN',   cut: 0.7 },
-    overload:    { name: 'OVERLOAD',    text: 'SKILL DAMAGE +25%',          mult: 1.25 },
-    secondWind:  { name: 'SECOND WIND', text: 'AUTO POTION AT LOW HP',      ratio: 0.3, cooldown: 30 },
+    executioner: { name: '처형자', text: '빈사의 적에게 피해 +50%',      ratio: 0.25, mult: 1.5 },
+    thorns:      { name: '가시',      text: '맞으면 주위에 되돌려준다',      ratio: 0.6, radius: 34 },
+    swiftFoot:   { name: '빠른 발',  text: '대시 충전 +1' },
+    aegis:       { name: '수호',       text: '포션을 마시면 3초 무적',     time: 3 },
+    phantom:     { name: '환영',     text: '대시가 두 배로 빨리 찬다', mult: 2 },
+    momentum:    { name: '기세',    text: '치명타가 스킬 대기시간을 줄인다',   cut: 0.7 },
+    overload:    { name: '과부하',    text: '스킬 피해 +25%',          mult: 1.25 },
+    secondWind:  { name: '재기', text: '위급하면 포션을 알아서 마신다',      ratio: 0.3, cooldown: 30 },
   },
 
   /* ── 등급과 랜덤 옵션 (로드맵 2주차) ─────────────────────
@@ -1588,10 +1588,10 @@ const CONFIG = {
   rarity: {
     // [이름, 색, 옵션 수, 뽑기 가중치]
     list: [
-      { name: 'COMMON', color: '#c8d0d8', affixes: 1, weight: 60 },
-      { name: 'FINE',   color: '#8fe0a8', affixes: 2, weight: 27 },
-      { name: 'RARE',   color: '#7ec8ff', affixes: 3, weight: 10 },
-      { name: 'LEGEND', color: '#ffb35c', affixes: 4, weight: 3 },
+      { name: '일반', color: '#c8d0d8', affixes: 1, weight: 60 },
+      { name: '고급',   color: '#8fe0a8', affixes: 2, weight: 27 },
+      { name: '희귀',   color: '#7ec8ff', affixes: 3, weight: 10 },
+      { name: '전설', color: '#ffb35c', affixes: 4, weight: 3 },
     ],
   },
 
@@ -1601,23 +1601,23 @@ const CONFIG = {
        range — 1레벨에서 뽑는 범위, perLevel — 레벨마다 더해지는 양
        pct   — 퍼센트로 읽는 값 */
     list: {
-      attackSpeed: { word: 'QUICK',    label: 'ASPD',  range: [3, 7],  perLevel: 0.12, pct: true },
-      crit:        { word: 'KEEN',     label: 'CRIT',  range: [2, 5],  perLevel: 0.08, pct: true },
-      critMult:    { word: 'CRUEL',    label: 'CDMG',  range: [6, 14], perLevel: 0.25, pct: true },
-      speed:       { word: 'SWIFT',    label: 'SPD',   range: [3, 7],  perLevel: 0.08, pct: true },
-      lifesteal:   { word: 'VAMPIRIC', label: 'LEECH', range: [1, 3],  perLevel: 0.05, pct: true },
-      potion:      { word: 'HEALERS',  label: 'POTION',range: [5, 12], perLevel: 0.3,  pct: true },
-      cooldown:    { word: 'ARCANE',   label: 'CDR',   range: [3, 8],  perLevel: 0.12, pct: true },
-      knockRes:    { word: 'STEADY',   label: 'BRACE', range: [6, 14], perLevel: 0.3,  pct: true },
-      gold:        { word: 'GILDED',   label: 'GOLD',  range: [8, 18], perLevel: 0.4,  pct: true },
-      armor:       { word: 'STURDY',   label: 'ARM',   range: [2, 5],  perLevel: 0.12 },
-      maxHp:       { word: 'HEARTY',   label: 'HP',    range: [5, 12], perLevel: 0.8 },
-      power:       { word: 'BRUTAL',   label: 'ATK',   range: [1, 2],  perLevel: 0.12 },
+      attackSpeed: { word: '재빠른',    label: '공속',  range: [3, 7],  perLevel: 0.12, pct: true },
+      crit:        { word: '예리한',     label: '치명',  range: [2, 5],  perLevel: 0.08, pct: true },
+      critMult:    { word: '잔혹한',    label: '치명피해',  range: [6, 14], perLevel: 0.25, pct: true },
+      speed:       { word: '날렵한',    label: '이속',   range: [3, 7],  perLevel: 0.08, pct: true },
+      lifesteal:   { word: '흡혈의', label: '흡혈', range: [1, 3],  perLevel: 0.05, pct: true },
+      potion:      { word: '치유사의',  label: '포션',range: [5, 12], perLevel: 0.3,  pct: true },
+      cooldown:    { word: '비전의',   label: '대기시간',   range: [3, 8],  perLevel: 0.12, pct: true },
+      knockRes:    { word: '굳건한',   label: '넉백저항', range: [6, 14], perLevel: 0.3,  pct: true },
+      gold:        { word: '황금의',   label: '골드',  range: [8, 18], perLevel: 0.4,  pct: true },
+      armor:       { word: '튼튼한',   label: '방어',   range: [2, 5],  perLevel: 0.12 },
+      maxHp:       { word: '강인한',   label: '체력',    range: [5, 12], perLevel: 0.8 },
+      power:       { word: '난폭한',   label: '공격',   range: [1, 2],  perLevel: 0.12 },
       // 때릴 때 확률로 상태이상을 건다 (7주차) — 이 넷이 붙어야 플레이어도 불을 붙일 수 있다
-      fiery:       { word: 'FIERY',    label: 'BURN',  range: [6, 12], perLevel: 0.15, pct: true, status: 'burn' },
-      frosty:      { word: 'FROSTY',   label: 'FREEZE',range: [6, 12], perLevel: 0.15, pct: true, status: 'freeze' },
-      shocking:    { word: 'SHOCKING', label: 'SHOCK', range: [6, 12], perLevel: 0.15, pct: true, status: 'shock' },
-      venomous:    { word: 'VENOMOUS', label: 'VENOM', range: [6, 12], perLevel: 0.15, pct: true, status: 'poison' },
+      fiery:       { word: '불타는',    label: '화상',  range: [6, 12], perLevel: 0.15, pct: true, status: 'burn' },
+      frosty:      { word: '얼어붙은',   label: '빙결',range: [6, 12], perLevel: 0.15, pct: true, status: 'freeze' },
+      shocking:    { word: '전격의', label: '감전', range: [6, 12], perLevel: 0.15, pct: true, status: 'shock' },
+      venomous:    { word: '맹독의', label: '중독', range: [6, 12], perLevel: 0.15, pct: true, status: 'poison' },
     },
     // 여러 점을 겹쳐 입었을 때의 총합 상한 (없는 것은 안 묶는다)
     caps: {
@@ -1647,19 +1647,19 @@ const CONFIG = {
     byType: { slime: 'gel', wolf: 'fang', mushroom: 'cap', scorpion: 'stinger', cactus: 'cactusFruit', sandworm: 'wormScale',
               wisp: 'wispEmber', yeti: 'yetiPelt', golem: 'frostCore' },
     items: {
-      gel:        { name: 'SLIME GEL',   value: 4,   color: '#8fe098' },
-      fang:       { name: 'WOLF FANG',   value: 6,   color: '#e9f1f7' },
-      cap:        { name: 'SPORE CAP',   value: 5,   color: '#e08a4f' },
-      stinger:    { name: 'STINGER',     value: 12,  color: '#ffd27a' },   // 사막
-      cactusFruit:{ name: 'CACTUS FRUIT', value: 10, color: '#e56b7a' },
-      wormScale:  { name: 'WORM SCALE',  value: 15,  color: '#c9bb9c' },
-      wispEmber:  { name: 'WISP EMBER',  value: 26,  color: '#4fb8e0' },   // 설원
-      yetiPelt:   { name: 'YETI PELT',   value: 32,  color: '#f0e2cc' },
-      frostCore:  { name: 'FROST CORE',  value: 40,  color: '#e8fbff' },
-      slimeCore:  { name: 'SLIME CORE',  value: 150, color: '#7ec8ff', trophy: true },
-      alphaFang:  { name: 'ALPHA FANG',  value: 250, color: '#ff6b6b', trophy: true },
-      elderSpore: { name: 'ELDER SPORE', value: 400, color: '#c79ce8', trophy: true },
-      lordScale:  { name: 'LORD SCALE',  value: 700, color: '#ffb35c', trophy: true },   // 모래의 군주
+      gel:        { name: '슬라임 젤',   value: 4,   color: '#8fe098' },
+      fang:       { name: '늑대 이빨',   value: 6,   color: '#e9f1f7' },
+      cap:        { name: '포자 갓',   value: 5,   color: '#e08a4f' },
+      stinger:    { name: '독침',     value: 12,  color: '#ffd27a' },   // 사막
+      cactusFruit:{ name: '선인장 열매', value: 10, color: '#e56b7a' },
+      wormScale:  { name: '벌레 비늘',  value: 15,  color: '#c9bb9c' },
+      wispEmber:  { name: '망령 불씨',  value: 26,  color: '#4fb8e0' },   // 설원
+      yetiPelt:   { name: '설인 가죽',   value: 32,  color: '#f0e2cc' },
+      frostCore:  { name: '서리 핵',  value: 40,  color: '#e8fbff' },
+      slimeCore:  { name: '슬라임 핵',  value: 150, color: '#7ec8ff', trophy: true },
+      alphaFang:  { name: '우두머리 송곳니',  value: 250, color: '#ff6b6b', trophy: true },
+      elderSpore: { name: '늙은 포자', value: 400, color: '#c79ce8', trophy: true },
+      lordScale:  { name: '군주 비늘',  value: 700, color: '#ffb35c', trophy: true },   // 모래의 군주
     },
     magnetRadius: 30,       // 이 거리 안이면 끌려온다 (포션과 같다)
     lifetime: 60,           // 바닥에 남아있는 시간 (초)
@@ -1771,13 +1771,13 @@ const CONFIG = {
     interactRange: 26,
     recipes: {
       // 가벼운 전리품 몇 개로 포션 한 병 — 상점(20G)보다 싸다
-      potion: { name: 'BREW POTION', color: '#e5484d', gold: 4, loot: { gel: 3 }, gain: 1 },
+      potion: { name: '포션 빚기', color: '#e5484d', gold: 4, loot: { gel: 3 }, gain: 1 },
       // 묵직한 전리품으로 포션 두 병
-      potionBig: { name: 'BREW 2 POTIONS', color: '#ffd93d', gold: 8, loot: { fang: 3, cap: 3 }, gain: 2 },
+      potionBig: { name: '포션 2병 빚기', color: '#ffd93d', gold: 8, loot: { fang: 3, cap: 3 }, gain: 2 },
       // 걸린 상태이상을 전부 지우고 잠깐 해독 상태가 된다 (그 동안 새로 안 걸린다)
-      antidote: { name: 'ANTIDOTE', color: '#7dff8a', gold: 10, loot: { cap: 2, stinger: 1 }, wardTime: 15 },
+      antidote: { name: '해독제', color: '#7dff8a', gold: 10, loot: { cap: 2, stinger: 1 }, wardTime: 15 },
       // 중독·화상에 걸려도 자연 회복이 멈추지 않는 약 (다음에 걸릴 때부터 적용, 60초)
-      tonic: { name: 'TONIC', color: '#5ff0ff', gold: 14, loot: { cactusFruit: 2, wormScale: 1 }, tonicTime: 60 },
+      tonic: { name: '강장제', color: '#5ff0ff', gold: 14, loot: { cactusFruit: 2, wormScale: 1 }, tonicTime: 60 },
     },
     wardTime: 15,     // 해독제 해독 지속
     tonicTime: 60,    // 강장제 지속
@@ -6861,7 +6861,7 @@ const World = {
     const p = this.addProp(SPRITES.obelisk[0], x, y, { solid: [7, 3, 5], footHeight: 3 });
     p.portal = true;
     p.landmark = 'portal';   // 미니맵에 하늘색으로 찍힌다
-    p.sign = { text: 'PORTAL', color: '#5ff0ff', dy: 26 };
+    p.sign = { text: '비석', color: '#5ff0ff', dy: 26 };
     p.draw = (ctx, cam) => {
       const sx = Math.round(p.x - cam.x), sy = Math.round(p.y - cam.y);
       fillEllipse(ctx, sx + 1, sy + 1, 7, 2.9, 'rgba(10,12,20,0.3)');
@@ -7152,7 +7152,7 @@ const Minimap = {
 
     // 지역 이름 대신 이 자리의 몬스터 기준 레벨을 붙여둔다 — 어디까지 왔는지 한눈에 보인다
     const lv = World.levelAt(player.x, player.y);
-    const label = 'LV ' + lv + ' AREA';
+    const label = lv + '레벨 지역';
     UI.drawText(ctx, label, x + bw - UI.textWidth(label), y - 7, difficultyColor(lv, player.level), false);
   },
 
@@ -7179,8 +7179,8 @@ const Minimap = {
 
     // 얼마나 밝혔는지 — 지도가 '내가 만든 기록'이 되는 숫자
     const pct = Math.round(Fog.percent(World.mapId) * 100);
-    UI.drawText(ctx, 'MAP  ' + pct + '%', CONFIG.VIEW_W / 2, y - 11, '#9be564', true);
-    UI.drawText(ctx, 'M TO CLOSE', CONFIG.VIEW_W / 2, y + h + 5, '#7fa86a', true);
+    UI.drawText(ctx, '지도  ' + pct + '%', CONFIG.VIEW_W / 2, y - 11, '#9be564', true);
+    UI.drawText(ctx, 'M 닫기', CONFIG.VIEW_W / 2, y + h + 5, '#7fa86a', true);
   },
 
   /* ── 움직이는 것들 ─────────────────────────────────────── */
@@ -7741,7 +7741,7 @@ class Player {
 
     if (this.level < spec.unlockLevel) {
       if (this.lockedHint <= 0) {
-        FX.number(this.x, this.y - 22, 'LV' + spec.unlockLevel, '#8f9aa8');
+        FX.number(this.x, this.y - 22, spec.unlockLevel + '레벨', '#8f9aa8');
         this.lockedHint = 0.8;
       }
       this.skillQueued = null;
@@ -7929,7 +7929,7 @@ class Player {
   weaponLabel() {
     // 전설 무기는 보스에게서 따 온 이름으로
     const L = this.weaponLegend && CONFIG.weapons.legends[this.weaponLegend];
-    return (L ? L.name : this.weaponSpec().name) + ' L' + this.weaponLevel;
+    return (L ? L.name : this.weaponSpec().name) + ' ' + this.weaponLevel + '레벨';
   }
 
   update(dt, enemies) {
@@ -8168,7 +8168,7 @@ class Player {
       if (Math.random() < el.chance) Status.apply(s, el.status, dmg, this);
       FX.burst(s.x, s.y - 4, aff >= 1.5 ? 6 : 3, [el.color, '#ffffff'], { speed: 34, life: 0.3, gravity: 10, size: 1 });
       // 약점이면 한 번씩 알려준다 — "얘한테는 불" 이 눈에 보이게
-      if (aff >= 1.5 && Math.random() < 0.34) FX.number(s.x, s.y - 22 - s.radius, 'WEAK', el.color);
+      if (aff >= 1.5 && Math.random() < 0.34) FX.number(s.x, s.y - 22 - s.radius, '약점!', el.color);
     }
 
     dmg = Math.max(1, dmg);
@@ -8280,9 +8280,9 @@ class Player {
       this.recalcStats();
       this.hp = this.maxHp;
       this.xpNeed = CONFIG.levelUp.xpNeed(this.level);
-      FX.number(this.x, this.y - 22, 'LEVEL UP', '#ffe066', true);
+      FX.number(this.x, this.y - 22, '레벨 업!', '#ffe066', true);
       const opened = this.currentSkills().find(s => s.unlockLevel === this.level);
-      if (opened) FX.number(this.x, this.y - 34, 'NEW SKILL ' + opened.key + ' ' + opened.name, opened.color, true);
+      if (opened) FX.number(this.x, this.y - 34, '새 스킬 ' + opened.key + ' ' + opened.name, opened.color, true);
       FX.ring(this.x, this.y + 4, 10, '#ffe066');
       Sound.play('levelup');
       FX.burst(this.x, this.y, 26, ['#ffe066', '#ffffff', '#9be564'], { speed: 60, life: 0.8, gravity: 40 });
@@ -8294,7 +8294,7 @@ class Player {
     amount = Math.max(1, Math.round(amount * (1 + this.stat('gold') / 100)));   // GILDED 옵션만큼 더 번다
     this.gold += amount;
     if (x === undefined) { x = this.x; y = this.y; }
-    FX.number(x, y - 14, '+' + amount + ' G', CONFIG.gold.color);
+    FX.number(x, y - 14, '+' + amount + ' 골드', CONFIG.gold.color);
     FX.burst(x, y - 2, 6, [CONFIG.gold.color, '#ffffff'], { speed: 38, life: 0.4, gravity: 90, size: 1 });
     Sound.play('gold');
   }
@@ -8339,7 +8339,7 @@ class Player {
     this.secondWindTimer = u.cooldown;
     this.potionCooldown = 0;
     this.usePotion();
-    FX.number(this.x, this.y - 30, 'SECOND WIND', '#ffb35c');
+    FX.number(this.x, this.y - 30, '재기', '#ffb35c');
   }
 
   // 포션 한 개가 채우는 양 — 최대 체력의 30%, 최소 30
@@ -8353,12 +8353,12 @@ class Player {
     if (this.dead || this.potionCooldown > 0) return;
     const cfg = CONFIG.items;
     if (this.potions <= 0) {
-      FX.number(this.x, this.y - 20, 'EMPTY', '#8f9aa8');
+      FX.number(this.x, this.y - 20, '포션이 없다', '#8f9aa8');
       this.potionCooldown = cfg.potionCooldown;
       return;
     }
     if (this.hp >= this.maxHp) {
-      FX.number(this.x, this.y - 20, 'FULL HP', '#8f9aa8');
+      FX.number(this.x, this.y - 20, '체력이 가득하다', '#8f9aa8');
       this.potionCooldown = cfg.potionCooldown;
       return;
     }
@@ -8372,7 +8372,7 @@ class Player {
     if (this.has('aegis')) {
       this.invuln = Math.max(this.invuln, this.uniq('aegis').time);
       FX.ring(this.x, this.y + 2, 16, '#7ec8ff');
-      FX.number(this.x, this.y - 30, 'AEGIS', '#7ec8ff');
+      FX.number(this.x, this.y - 30, '수호', '#7ec8ff');
     }
     FX.number(this.x, this.y - 20, '+' + healed, '#7dff8a');
     FX.burst(this.x, this.y, 14, ['#7dff8a', '#ffffff', '#e5484d'], { speed: 45, life: 0.5, gravity: 30 });
@@ -8935,7 +8935,7 @@ SkillKit.reaper = {
   },
   canStart(p, spec, enemies) {
     if (this.targets(p, spec, enemies).length) return true;
-    FX.number(p.x, p.y - 22, 'NO TARGET', '#8f9aa8');   // 벨 적이 없으면 나가지 않는다 (쿨다운도 그대로)
+    FX.number(p.x, p.y - 22, '대상 없음', '#8f9aa8');   // 벨 적이 없으면 나가지 않는다 (쿨다운도 그대로)
     return false;
   },
   start(p, spec, enemies) {
@@ -9488,7 +9488,7 @@ class Enemy {
     FX.burst(this.x, this.y, 16 + this.level * 3, [pal.M, pal.n, pal.m], { speed: 70, life: 0.55 });
     FX.ring(this.x, this.y + 2, this.radius + 2, pal.n);
     Sound.play('kill');
-    FX.number(this.x, this.y - 18, '+' + this.stats.xp + 'XP', '#9be564');
+    FX.number(this.x, this.y - 18, '+' + this.stats.xp + ' 경험치', '#9be564');
     player.gainXp(this.stats.xp);
     if (this.elite) Elite.onDie(this, player);     // 불꽃이 퍼지거나, 둘로 갈라진다
   }
@@ -9538,8 +9538,9 @@ class Enemy {
     Status.drawMarks(ctx, this, sx, topY - (this.elite ? 7 : 0));
     if (this.elite) Elite.drawName(ctx, this, sx, topY - 12);
     // 밤에 태어난 놈은 달을 달고 다닌다 — 날이 밝아도 세다는 표시
-    if (this.nightBorn) UI.drawText(ctx, '@', sx - 10, topY - 5, '#9fc8ff', false);
-    UI.drawText(ctx, 'L' + this.level, sx - 4, topY - 5, this.labelColor, false);
+    const lvText = this.level + '레벨';
+    if (this.nightBorn) UI.drawText(ctx, '@', sx - UI.textWidth(lvText) / 2 - 6, topY - 5, '#9fc8ff', false);
+    UI.drawText(ctx, lvText, sx, topY - 5, this.labelColor, true);
 
     if (this.showHp > 0) {
       const w = Math.max(12, Math.round(14 * this.scale));
@@ -10183,7 +10184,7 @@ class Sandworm extends Enemy {
       const cv = Creatures.wormMound(Math.round(16 * this.scale * grow));
       const top = Creatures.blit(ctx, cv, sx + jitter, sy);
       if (this.state === 'rise') this.drawWarning(ctx, sx, top, 1 - this.timer / cfg.windup);
-      UI.drawText(ctx, 'L' + this.level, sx - 4, top - 5, this.labelColor, false);
+      UI.drawText(ctx, this.level + '레벨', sx, top - 5, this.labelColor, true);
       return;
     }
     // 밖에 나온 몸통 — 막 솟았을 땐 위로 늘어났다가 자리를 잡는다
@@ -10731,7 +10732,7 @@ class Boss extends Enemy {
     FX.addShake(7);
     FX.flash('#ff3b3b', 0.3, 0.4);
     Sound.play('roar');
-    FX.number(this.x, this.y - 30, 'ENRAGED', '#ff6b6b', true);
+    FX.number(this.x, this.y - 30, '격노!', '#ff6b6b', true);
     const pal = this.palette;
     FX.burst(this.x, this.y, 30, [pal.M, pal.n, '#ffffff'], { speed: 90, life: 0.7 });
   }
@@ -10791,7 +10792,7 @@ class Boss extends Enemy {
     FX.ring(this.x, this.y + 6, 24, '#ffffff');
     FX.flash('#ffffff', 0.5, 0.35);
     FX.freeze(0.18);
-    FX.number(this.x, this.y - 34, 'DEFEATED', '#ffd93d', true);
+    FX.number(this.x, this.y - 34, '처치!', '#ffd93d', true);
     Sound.play('bossDead');
   }
 
@@ -11812,7 +11813,7 @@ const Gear = {
   },
 
   // 레벨까지 붙인 긴 이름 (바닥 이름표에는 짧은 쪽을 쓴다)
-  fullName(item) { return this.name(item) + ' L' + item.level; },
+  fullName(item) { return this.name(item) + ' ' + item.level + '레벨'; },
 
   color(item) { return this.rarity(item).color; },
 
@@ -11823,7 +11824,7 @@ const Gear = {
   statLine(stats) {
     const order = ['armor', 'maxHp', 'power', 'speed', 'attackSpeed', 'crit', 'critMult',
                    'lifesteal', 'potion', 'cooldown', 'knockRes', 'gold'];
-    const base = { armor: 'ARM', maxHp: 'HP', power: 'ATK', speed: 'SPD' };
+    const base = { armor: '방어', maxHp: '체력', power: '공격', speed: '이속' };
     const out = [];
     for (const k of order) {
       if (!stats[k]) continue;
@@ -12047,9 +12048,9 @@ const Inventory = {
   /* ── 쓰기 / 버리기 ─────────────────────────────────────── */
 
   itemName(player, s) {
-    if (s.kind === 'potion') return 'POTION';
+    if (s.kind === 'potion') return '포션';
     if (s.kind === 'weapon') {
-      return (s.legend ? CONFIG.weapons.legends[s.legend].name : CONFIG.weapons[s.weapon].name) + ' L' + s.level;
+      return (s.legend ? CONFIG.weapons.legends[s.legend].name : CONFIG.weapons[s.weapon].name) + ' ' + s.level + '레벨';
     }
     if (s.kind === 'gear') return Gear.name(s);
     return this.spec(s.id).name;
@@ -12064,14 +12065,14 @@ const Inventory = {
     const at = this.at(player, index);
     // 장비 칸에서 Space = 벗어서 가방으로
     if (at.zone === 'gear') {
-      if (!at.item) { this.say('NOTHING TO TAKE OFF'); return; }
+      if (!at.item) { this.say('벗을 것이 없다'); return; }
       const free = this.firstEmpty(player);
-      if (free < 0) { this.say('BAG IS FULL'); Sound.play('error'); return; }
+      if (free < 0) { this.say('가방이 가득 찼다'); Sound.play('error'); return; }
       player.bag[free] = at.item;
       player.gear[at.slot] = null;
       player.recalcStats();
       Sound.play('blip');
-      this.say('TOOK OFF ' + Gear.spec(at.item.id).name);
+      this.say(Gear.spec(at.item.id).name + ' 벗음');
       return;
     }
     const s = at.item;
@@ -12084,15 +12085,15 @@ const Inventory = {
       player.bag[index] = old || null;
       player.recalcStats();
       Sound.play('pickup');
-      this.say('WEARING ' + Gear.spec(s.id).name);
+      this.say(Gear.spec(s.id).name + ' 입음');
       return;
     }
     if (s.kind === 'potion') {
-      if (player.potions <= 0) { this.say('NO POTIONS'); Sound.play('error'); return; }
-      if (player.hp >= player.maxHp) { this.say('HP IS FULL'); Sound.play('error'); return; }
+      if (player.potions <= 0) { this.say('포션이 없다'); Sound.play('error'); return; }
+      if (player.hp >= player.maxHp) { this.say('체력이 가득하다'); Sound.play('error'); return; }
       player.potionCooldown = 0;
       player.usePotion();
-      this.say('DRANK A POTION');
+      this.say('포션을 마셨다');
       return;
     }
     if (s.kind === 'weapon') {
@@ -12101,17 +12102,17 @@ const Inventory = {
       const r = player.equipWeapon(s.weapon, this.weaponLevel(player, s), s.legend, s.element);
       if (!r) return;
       player.bag[index] = old;
-      this.say('EQUIPPED ' + this.itemName(player, s));
+      this.say(this.itemName(player, s) + ' 장착');
       return;
     }
-    this.say('SELL IT AT THE SHOP');
+    this.say('상점에 팔 수 있다');
   },
 
   drop(player, index) {
     const at = this.at(player, index);
     const s = at.item;
     if (!s) return;
-    if (s.kind === 'potion') { this.say('DRINK IT WITH E'); return; }
+    if (s.kind === 'potion') { this.say('E 키로 마신다'); return; }
     if (s.kind === 'weapon') {
       Items.spawnWeapon(player.x, player.y, s.weapon, this.weaponLevel(player, s), { legend: s.legend, element: s.element, pickupDelay: 0.6 });
     } else if (s.kind === 'gear') {
@@ -12123,7 +12124,7 @@ const Inventory = {
     if (at.zone === 'gear') { player.gear[at.slot] = null; player.recalcStats(); }
     else player.bag[index] = null;
     Sound.play('blip');
-    this.say('DROPPED ' + this.itemName(player, s));
+    this.say(this.itemName(player, s) + ' 버림');
   },
 
   say(text) {
@@ -12194,7 +12195,7 @@ const Inventory = {
      0번(포션 주머니)은 늘 그 자리다. 안 되면 까닭을 돌려준다 (창고 창도 쓴다) */
   moveBag(player, i, j) {
     if (i === j) return null;
-    if (i === 0 || j === 0) return 'POTIONS STAY PUT';
+    if (i === 0 || j === 0) return '포션 칸은 옮길 수 없다';
     const s = player.bag[i], t = player.bag[j];
     if (!s) return null;
     const room = (t && s.kind === 'loot' && t.kind === 'loot' && s.id === t.id) ? this.stackMax(t.id) - t.amount : 0;
@@ -12222,7 +12223,7 @@ const Inventory = {
     if (!to) {
       const L = this.layout(player);
       if (m.x >= L.x && m.x < L.x + L.w && m.y >= L.y && m.y < L.y + L.h) return;   // 창 안 빈 곳 — 내려놓기 취소
-      if (from.zone === 'weapon') return fail('KEEP A WEAPON IN HAND');
+      if (from.zone === 'weapon') return fail('무기는 늘 들고 있어야 한다');
       this.drop(player, this.cellIndex(player, from));
       return;
     }
@@ -12238,34 +12239,34 @@ const Inventory = {
         return;
       }
       if (to.zone === 'gear') {
-        if (s.kind !== 'gear') return fail('NOT WEARABLE');
-        if (Gear.slotOf(s) !== to.slot) return fail('GOES ON ' + CONFIG.gear.slotNames[Gear.slotOf(s)]);
+        if (s.kind !== 'gear') return fail('입는 물건이 아니다');
+        if (Gear.slotOf(s) !== to.slot) return fail(CONFIG.gear.slotNames[Gear.slotOf(s)] + ' 칸에 입는다');
         this.use(player, from.index);
         this.cursor = this.cellIndex(player, to);
         return;
       }
-      if (s.kind !== 'weapon') return fail('NOT A WEAPON');
+      if (s.kind !== 'weapon') return fail('무기가 아니다');
       this.use(player, from.index);
       return;
     }
 
     if (from.zone === 'gear') {
-      if (to.zone !== 'bag') return fail(to.zone === 'gear' ? 'GOES ON ' + CONFIG.gear.slotNames[from.slot] : 'NOT A WEAPON');
-      if (to.index === 0) return fail('POTIONS STAY PUT');
-      if (t && !(t.kind === 'gear' && Gear.slotOf(t) === from.slot)) return fail('SLOT IS TAKEN');
+      if (to.zone !== 'bag') return fail(to.zone === 'gear' ? CONFIG.gear.slotNames[from.slot] + ' 칸에 입는다' : '무기가 아니다');
+      if (to.index === 0) return fail('포션 칸은 옮길 수 없다');
+      if (t && !(t.kind === 'gear' && Gear.slotOf(t) === from.slot)) return fail('그 칸은 차 있다');
       this.cursor = to.index;
       if (t) { this.use(player, to.index); return; }   // 같은 칸 장비 위 — 맞바꿔 입는다
       player.bag[to.index] = s;
       player.gear[from.slot] = null;
       player.recalcStats();
       Sound.play('blip');
-      this.say('TOOK OFF ' + Gear.spec(s.id).name);
+      this.say(Gear.spec(s.id).name + ' 벗음');
       return;
     }
 
     // 든 무기 — 가방의 다른 무기 위에 놓으면 맞바꿔 든다
     if (to.zone === 'bag' && t && t.kind === 'weapon') { this.cursor = to.index; this.use(player, to.index); return; }
-    fail('KEEP A WEAPON IN HAND');
+    fail('무기는 늘 들고 있어야 한다');
   },
 
   /* ── 입력 (시간이 멈춘 동안 Game.handleMenuInput 에서 매 프레임 호출) ── */
@@ -12341,8 +12342,8 @@ const Inventory = {
     UI.panel(ctx, L.x, L.y, L.w, L.h, '#9be564');
     UI.divider(ctx, L.x + 6, L.y + 14, L.w - 12);
 
-    UI.drawText(ctx, 'INVENTORY', L.x + 8, L.y + 5, '#9be564');
-    const bagText = 'BAG ' + this.count(player) + '/' + (player.bag.length - 1);
+    UI.drawText(ctx, '인벤토리', L.x + 8, L.y + 5, '#9be564');
+    const bagText = '가방 ' + this.count(player) + '/' + (player.bag.length - 1);
     UI.drawText(ctx, bagText, L.gridX + L.cols * (L.slot + L.gap) - 2 - UI.textWidth(bagText), L.y + 6, '#7fa86a');
     const g = String(player.gold);
     ctx.drawImage(SPRITES.coin, L.x + L.w - 10 - UI.textWidth(g) - 10, L.y + 5);
@@ -12359,8 +12360,8 @@ const Inventory = {
     // ── 안내
     const footY = L.y + L.h - 17;
     if (this.message) UI.drawText(ctx, this.message, L.x + L.w / 2, footY, '#9be564', true);
-    else UI.drawText(ctx, 'WASD PICK  SPACE USE  X DROP  DRAG MOVE', L.x + L.w / 2, footY, '#7fa86a', true);
-    UI.drawText(ctx, 'PAUSED - I TO CLOSE', L.x + L.w / 2, footY + 8, '#5f6b59', true);
+    else UI.drawText(ctx, 'WASD 고르기  스페이스 쓰기  X 버리기  끌어서 옮기기', L.x + L.w / 2, footY, '#7fa86a', true);
+    UI.drawText(ctx, '일시정지 · I 닫기', L.x + L.w / 2, footY + 8, '#5f6b59', true);
     // 끌고 있는 물건은 창 그림 맨 위에
     if (this.drag && this.drag.active) this.drawDrag(ctx, player, this.cellItem(player, this.drag.from));
   },
@@ -12410,7 +12411,7 @@ const Inventory = {
      줄 간격이 8px 로 빡빡한 이유: 옵션이 네 개까지 붙을 수 있어서 설명이 일곱 줄까지 간다. */
   drawDetails(ctx, player, L) {
     const x = L.panelX, top = L.gridY, wide = L.x + L.w - 8 - x;
-    UI.drawText(ctx, 'EQUIPPED', x, top, '#7fa86a');
+    UI.drawText(ctx, '장착', x, top, '#7fa86a');
 
     const slots = CONFIG.gear.slots;
     for (let i = 0; i <= slots.length; i++) {
@@ -12438,29 +12439,29 @@ const Inventory = {
     if (player.weaponLegend) UI.drawRainbowText(ctx, player.weaponLabel(), x, top + 26);
     else UI.drawText(ctx, player.weaponLabel(), x, top + 26, player.weaponColor());
     const eq = player.weaponElement && CONFIG.forge.elements[player.weaponElement];
-    UI.drawText(ctx, 'DMG ' + dmg + '  DPS ' + Math.round(dmg / spec.cooldown), x, top + 34, '#f0d9b5');
+    UI.drawText(ctx, '공격력 ' + dmg + '  초당 ' + Math.round(dmg / spec.cooldown), x, top + 34, '#f0d9b5');
     if (eq) UI.drawText(ctx, eq.name, x + 92, top + 26, eq.color);
 
     /* 입은 것이 더해주는 것 — 앞줄은 늘 있는 네 가지, 뒷줄은 굴려 붙은 옵션들.
        아무것도 안 입었어도 0 으로 띄운다 (비어 있다는 걸 알려주려고) */
     const g = player.gearStats;
-    UI.drawText(ctx, 'ARM ' + (g.armor || 0) + ' (-' + Math.round(player.damageReduction() * 100) + '%)  HP +' + (g.maxHp || 0), x, top + 42, '#7ec8ff');
+    UI.drawText(ctx, '방어 ' + (g.armor || 0) + ' (-' + Math.round(player.damageReduction() * 100) + '%)  체력 +' + (g.maxHp || 0), x, top + 42, '#7ec8ff');
     const extras = {};
     for (const k in g) if (k !== 'armor' && k !== 'maxHp' && g[k]) extras[k] = g[k];
     const extraLine = Gear.statLine(extras).slice(0, 4).join(' ');
-    UI.drawText(ctx, extraLine || 'NO BONUSES YET', x, top + 50, extraLine ? '#7ec8ff' : '#5f6b59');
+    UI.drawText(ctx, extraLine || '더해지는 능력치 없음', x, top + 50, extraLine ? '#7ec8ff' : '#5f6b59');
 
     /* 세트와 고유 효과 — 지금 켜져 있는 것만 한 줄씩. 없으면 그 줄을 쓰지 않는다 */
     let sy = top + 58;
     const onSets = [];
     for (const key in player.setCounts) {
       const n = player.setCounts[key];
-      if (n >= 2) onSets.push(CONFIG.sets[key].name + ' ' + n);
+      if (n >= 2) onSets.push(CONFIG.sets[key].name + ' ' + n + '점');
     }
-    if (onSets.length) { UI.drawText(ctx, 'SET ' + onSets.join('  '), x, sy, '#9be564'); sy += 7; }
+    if (onSets.length) { UI.drawText(ctx, '세트 ' + onSets.join('  '), x, sy, '#9be564'); sy += 7; }
     const onUniq = Object.keys(player.uniques);
     if (onUniq.length) {
-      UI.drawText(ctx, onUniq.map(id => CONFIG.uniques[id].name).join(' . ').slice(0, 40), x, sy, '#ffb35c');
+      UI.drawText(ctx, onUniq.map(id => CONFIG.uniques[id].name).join(' · ').slice(0, 40), x, sy, '#ffb35c');
       sy += 7;
     }
 
@@ -12473,22 +12474,22 @@ const Inventory = {
     const line = (text, color) => { UI.drawText(ctx, text, x, y, color); y += 7; };
 
     if (!s) {
-      line(at.zone === 'gear' ? CONFIG.gear.slotNames[at.slot] + ' — EMPTY' : 'EMPTY SLOT', '#5f6b59');
+      line(at.zone === 'gear' ? CONFIG.gear.slotNames[at.slot] + ' 칸 비어 있음' : '빈 칸', '#5f6b59');
       return;
     }
 
     if (s.kind === 'potion') {
-      line('POTION X' + player.potions + '/' + player.maxPotions, '#ffd93d');
-      line('HEALS ' + player.potionHeal() + ' HP', '#f0d9b5');
+      line('포션 ' + player.potions + '/' + player.maxPotions + '개', '#ffd93d');
+      line('체력 ' + player.potionHeal() + ' 회복', '#f0d9b5');
       y += 5;
-      line('SPACE DRINK (OR E)', '#9be564');
+      line('스페이스 마시기 (E 키도 된다)', '#9be564');
       return;
     }
 
     if (s.kind === 'gear') {
       const slot = Gear.slotOf(s), r = Gear.rarity(s);
       line(Gear.name(s), r.color);
-      line(r.name + ' . ' + CONFIG.gear.slotNames[slot] + ' . L' + s.level, '#7fa86a');
+      line(r.name + ' · ' + CONFIG.gear.slotNames[slot] + ' · ' + s.level + '레벨', '#7fa86a');
       line(Gear.statLine(Gear.baseStats(s)).join('  '), '#f0d9b5');
       // 굴려 붙은 옵션 — 두 개씩 끊어 적는다
       const ax = Gear.statLine(Gear.affixStats(s));
@@ -12499,7 +12500,7 @@ const Inventory = {
       if (set) {
         const worn = player.setCounts[setKey] || 0;
         const have = at.zone === 'gear' ? worn : worn + (player.gear[Gear.slotOf(s)] && Gear.setIdOf(player.gear[Gear.slotOf(s)].id) === setKey ? 0 : 1);
-        line('SET ' + set.name + ' ' + Math.min(have, set.items.length) + '/' + set.items.length, have >= 2 ? '#9be564' : '#7fa86a');
+        line('세트 ' + set.name + ' ' + Math.min(have, set.items.length) + '/' + set.items.length, have >= 2 ? '#9be564' : '#7fa86a');
       }
       // 전설 고유 효과 — 수치가 아니라 규칙을 바꾸는 한 줄
       const uq = Gear.uniqueOf(s);
@@ -12507,12 +12508,12 @@ const Inventory = {
 
       if (at.zone === 'gear') {
         y += 4;
-        line('SPACE TAKE OFF  X DROP', '#9be564');
+        line('스페이스 벗기  X 버리기', '#9be564');
         return;
       }
       // 입으면 얼마나 달라지는지 — 그 자리에 입고 있는 것과 견준다
       const worn = player.gear[slot];
-      if (!worn) line('NOTHING WORN YET', '#9be564');
+      if (!worn) line('아직 입은 것 없음', '#9be564');
       else {
         const mine = Gear.statsOf(s), old = Gear.statsOf(worn), diff = {};
         for (const k in mine) if ((mine[k] || 0) - (old[k] || 0)) diff[k] = (mine[k] || 0) - (old[k] || 0);
@@ -12526,13 +12527,17 @@ const Inventory = {
         /* 한 줄에 다 못 적으므로 **크게 달라지는 것부터** 세 개만 적고 나머지는 '..' 로 줄인다.
            (안 보이는 것까지 포함해서 색을 정하므로, 초록인데 적힌 건 작아 보일 수 있다) */
         const keys = Object.keys(diff).sort((p, q) => Math.abs(diff[q] * weight(q)) - Math.abs(diff[p] * weight(p)));
-        const top = {};
-        for (const k of keys.slice(0, 3)) top[k] = diff[k];
-        const text = Gear.statLine(top);
-        line(keys.length ? 'VS ' + text.join(' ') + (keys.length > 3 ? ' ..' : '') : 'SAME AS WORN',
-          better > 0 ? '#9be564' : (better < 0 ? '#c05a5a' : '#7fa86a'));
+        // 옵션 이름이 길면 세 개도 창 밖으로 나간다 — 폭에 맞을 때까지 하나씩 줄인다
+        let vsLine = '입은 것과 같다';
+        for (let n = Math.min(3, keys.length); n > 0; n--) {
+          const shown = {};
+          for (const k of keys.slice(0, n)) shown[k] = diff[k];
+          vsLine = '비교 ' + Gear.statLine(shown).join(' ') + (keys.length > n ? ' ..' : '');
+          if (UI.textWidth(vsLine) <= wide) break;
+        }
+        line(vsLine, better > 0 ? '#9be564' : (better < 0 ? '#c05a5a' : '#7fa86a'));
       }
-      line('SPACE WEAR  X DROP', '#9be564');
+      line('스페이스 입기  X 버리기', '#9be564');
       return;
     }
 
@@ -12544,24 +12549,24 @@ const Inventory = {
       // 끼면 위력이 얼마나 달라지는지 — 지금 든 무기와 바로 비교
       const wd = player.damageWith(s.weapon, lv);
       const d = wd - dmg;
-      line('DMG ' + wd + ' RNG ' + w.reach, '#f0d9b5');
+      line('공격력 ' + wd + '  사거리 ' + w.reach, '#f0d9b5');
       if (w.blurb) line(w.blurb, '#c8d0d8');   // 평타가 어떻게 생겼는지 (찌르기·베기·휩쓸기)
-      line((d >= 0 ? '+' : '') + d + ' VS EQUIPPED', d > 0 ? '#9be564' : (d < 0 ? '#c05a5a' : '#7fa86a'));
-      line('SPD ' + UI.speedWord(w.cooldown) + ' DPS ' + Math.round(wd / w.cooldown), '#7fa86a');
+      line((d >= 0 ? '+' : '') + d + ' (든 무기 대비)', d > 0 ? '#9be564' : (d < 0 ? '#c05a5a' : '#7fa86a'));
+      line('속도 ' + UI.speedWord(w.cooldown) + '  초당 ' + Math.round(wd / w.cooldown), '#7fa86a');
       const be = s.element && CONFIG.forge.elements[s.element];
       if (be) line('* ' + be.name, be.color);
       y += 5;
-      line('SPACE EQUIP  X DROP', '#9be564');
+      line('스페이스 장착  X 버리기', '#9be564');
       return;
     }
 
     const ls = this.spec(s.id);
     line(ls.name, ls.color);
-    line('X' + s.amount + '  WORTH ' + (ls.value * s.amount) + ' G', '#f0d9b5');
-    line(ls.trophy ? 'BOSS TROPHY' : 'MONSTER LOOT', '#7fa86a');
+    line(s.amount + '개  값 ' + (ls.value * s.amount) + '골드', '#f0d9b5');
+    line(ls.trophy ? '보스 전리품' : '몬스터 전리품', '#7fa86a');
     y += 5;
-    line('SELL AT THE SHOP', '#ffe066');
-    line('X DROP', '#9be564');
+    line('상점에 팔 수 있다', '#ffe066');
+    line('X 버리기', '#9be564');
   },
 };
 
@@ -12845,7 +12850,7 @@ const Items = {
         if (got > 0) {
           const ls = CONFIG.loot.items[d.id];
           FX.burst(d.x, d.y - 4, 8, [ls.color, '#ffffff'], { speed: 40, life: 0.35, gravity: 60 });
-          FX.number(d.x, d.y - 14, '+' + ls.name + (got > 1 ? ' X' + got : ''), ls.color);
+          FX.number(d.x, d.y - 14, '+' + ls.name + (got > 1 ? ' ' + got + '개' : ''), ls.color);
           Sound.play('pickup');
           d.amount = left;
           if (d.amount <= 0) this.drops.splice(i, 1);
@@ -12866,12 +12871,12 @@ const Items = {
       const taken = player.addPotion(d.amount);
       if (taken > 0) {
         FX.burst(d.x, d.y - 4, 10, ['#e5484d', '#ffffff', '#ffd93d'], { speed: 45, life: 0.4, gravity: 60 });
-        FX.number(d.x, d.y - 14, taken > 1 ? '+POTION X' + taken : '+POTION', '#ffd93d');
+        FX.number(d.x, d.y - 14, taken > 1 ? '+포션 ' + taken + '개' : '+포션', '#ffd93d');
         d.amount -= taken;
         // 한 칸만 남아 절반만 담았으면 나머지는 바닥에 그대로 둔다
         if (d.amount <= 0) this.drops.splice(i, 1);
       } else if (this.fullHintCooldown <= 0 && d.hintTimer <= 0) {
-        FX.number(player.x, player.y - 20, 'FULL', '#8f9aa8');
+        FX.number(player.x, player.y - 20, '가득 찼다', '#8f9aa8');
         d.hintTimer = 1.2;
         this.fullHintCooldown = 0.4;
       }
@@ -12890,7 +12895,7 @@ const Items = {
     if (player.dead) return;
     if (Inventory.addWeapon(player, d.weapon, d.level, d.legend, d.element)) {
       const color = d.legend ? CONFIG.weapons.legendColor : (CONFIG.weapons.levelColor[levelTier(d.level)] || '#ffffff');
-      const name = (d.legend ? CONFIG.weapons.legends[d.legend].name : CONFIG.weapons[d.weapon].name) + ' L' + d.level;
+      const name = (d.legend ? CONFIG.weapons.legends[d.legend].name : CONFIG.weapons[d.weapon].name) + ' ' + d.level + '레벨';
       FX.burst(d.x, d.y - 4, 8, [color, '#ffffff'], { speed: 40, life: 0.35, gravity: 60 });
       FX.number(d.x, d.y - 14, '+' + name, color);
       Sound.play('pickup');
@@ -12899,7 +12904,7 @@ const Items = {
     }
     const oldId = player.weapon, oldLevel = player.weaponLevel, oldLegend = player.weaponLegend;
     if (oldId === d.weapon && oldLevel === d.level && oldLegend === d.legend) {
-      FX.number(player.x, player.y - 20, 'BAG FULL', '#8f9aa8');
+      FX.number(player.x, player.y - 20, '가방이 가득 찼다', '#8f9aa8');
       return;
     }
     const oldEl = player.weaponElement;
@@ -12943,10 +12948,10 @@ const Items = {
       if (d.legend) this.drawAura(ctx, sx, sy, d.age);
       if (sp) ctx.drawImage(sp, sx - Math.floor(sp.width / 2), sy - 8 + bob);
       // 어떤 무기가 몇 레벨인지 바닥에서도 바로 보인다
-      if (d.legend) UI.drawRainbowText(ctx, CONFIG.weapons.legends[d.legend].name + ' L' + d.level, sx, sy + 8, true);
-      else UI.drawText(ctx, spec.name + ' L' + d.level, sx, sy + 8, color, true);
+      if (d.legend) UI.drawRainbowText(ctx, CONFIG.weapons.legends[d.legend].name + ' ' + d.level + '레벨', sx, sy + 8, true);
+      else UI.drawText(ctx, spec.name + ' ' + d.level + '레벨', sx, sy + 8, color, true);
       // 발밑에 서 있으면 집는 방법을 알려준다 (가방이 차 있으면 맞바꾸기)
-      if (d.playerNear) UI.drawText(ctx, Inventory.firstEmpty(Game.player) >= 0 ? 'F TAKE' : 'F SWAP', sx, sy - 19, '#ffffff', true);
+      if (d.playerNear) UI.drawText(ctx, Inventory.firstEmpty(Game.player) >= 0 ? 'F 줍기' : 'F 바꾸기', sx, sy - 19, '#ffffff', true);
       else if (Math.floor(d.age * 3) % 2 === 0) {
         ctx.fillStyle = '#ffffff';
         ctx.fillRect(sx + 4, sy - 10 + bob, 1, 1);
@@ -12976,7 +12981,7 @@ const Items = {
       ctx.drawImage(sp, sx - Math.floor(sp.width / 2), sy - 6 + bob);
       if (Math.floor(d.age * 3) % 2 === 0) { ctx.fillStyle = '#ffffff'; ctx.fillRect(sx + 3, sy - 8 + bob, 1, 1); }
       if (ls.trophy) UI.drawText(ctx, ls.name, sx, sy + 8, ls.color, true);   // 보스 전리품은 이름이 보인다
-      else if (d.amount > 1) UI.drawText(ctx, 'X' + d.amount, sx, sy + 7, ls.color, true);
+      else if (d.amount > 1) UI.drawText(ctx, d.amount + '개', sx, sy + 7, ls.color, true);
       return;
     }
 
@@ -12989,7 +12994,7 @@ const Items = {
       ctx.fillRect(sx + 3, sy - 8 + bob, 1, 1);
     }
     if (d.amount > 1) {
-      UI.drawText(ctx, 'X' + d.amount, sx, sy + 7, '#ffd93d', true);
+      UI.drawText(ctx, d.amount + '개', sx, sy + 7, '#ffd93d', true);
     }
   },
 };
@@ -13035,7 +13040,7 @@ const Shop = {
     const npc = World.addProp(SPRITES.merchant[0], x, y + 6, { footHeight: 2 });
     npc.merchant = true;
     npc.landmark = 'shop';        // 미니맵에 따로 찍힌다
-    npc.sign = { text: 'SHOP', color: '#ffe066', dy: 42 };   // 가판대 차양 위로 (마을 안에서만 뜬다)
+    npc.sign = { text: '상점', color: '#ffe066', dy: 42 };   // 가판대 차양 위로 (마을 안에서만 뜬다)
     npc.draw = (ctx, cam) => this.drawNpc(ctx, cam, npc);
     this.npc = npc;
     World.merchant = npc;
@@ -13055,29 +13060,29 @@ const Shop = {
     if (!this.npc) return;
     const sx = Math.round(this.npc.x - cam.x), sy = Math.round(this.npc.y - cam.y);
     if (Math.floor(World.time * 3) % 2 === 0) return;
-    UI.drawText(ctx, 'F  SHOP', sx, sy - 24, '#ffe066', true);
+    UI.drawText(ctx, 'F  상점', sx, sy - 24, '#ffe066', true);
   },
 
   /* ── 목록 ──────────────────────────────────────────────
      첫 줄은 포션, 나머지는 강화. 매번 새로 만들어 값과 랭크가 항상 최신이다. */
   entries(player) {
     const list = [{
-      id: 'potion', name: 'POTION', price: CONFIG.shop.potionPrice,
-      detail: 'X' + player.potions + '/' + player.maxPotions,
+      id: 'potion', name: '포션', price: CONFIG.shop.potionPrice,
+      detail: player.potions + '/' + player.maxPotions + '개',
       soldOut: player.potions >= player.maxPotions,
     }];
     // 전리품 팔기 — 가방 속 전리품 전부를 한 번에
     const lv = Inventory.lootValue(player);
     list.push({
-      id: 'loot', name: 'SELL LOOT', sell: true, price: lv.value,
-      detail: lv.items + ' ITEMS', soldOut: lv.items === 0,
+      id: 'loot', name: '전리품 팔기', sell: true, price: lv.value,
+      detail: lv.items + '개', soldOut: lv.items === 0,
     });
     for (const u of CONFIG.shop.upgrades) {
       const rank = player.upgrades[u.id] || 0;
       list.push({
         id: u.id, name: u.name, spec: u, rank: rank,
         price: this.priceOf(u, rank),
-        detail: 'RANK ' + rank + '/' + u.maxRank,
+        detail: rank + '/' + u.maxRank + '단계',
         soldOut: rank >= u.maxRank,
       });
     }
@@ -13112,23 +13117,23 @@ const Shop = {
 
   buy(item, player) {
     if (item.soldOut) {
-      this.say(item.id === 'potion' ? 'POUCH IS FULL' : (item.sell ? 'NO LOOT TO SELL' : 'MAX RANK'));
+      this.say(item.id === 'potion' ? '포션 주머니가 가득 찼다' : (item.sell ? '팔 전리품이 없다' : '이미 최고 단계다'));
       Sound.play('error');
       return;
     }
     if (item.sell) {
       const v = Inventory.sellLoot(player);
       Sound.play('gold');
-      this.say('SOLD ' + v.items + ' FOR ' + v.value + ' G');
+      this.say(v.items + '개를 ' + v.value + '골드에 팔았다');
       return;
     }
-    if (player.gold < item.price) { this.say('NOT ENOUGH GOLD'); Sound.play('error'); return; }
+    if (player.gold < item.price) { this.say('골드가 모자란다'); Sound.play('error'); return; }
     player.gold -= item.price;
     Sound.play('buy');
 
     if (item.id === 'potion') {
       player.addPotion(1);
-      this.say('BOUGHT POTION');
+      this.say('포션을 샀다');
       return;
     }
     const u = item.spec;
@@ -13136,7 +13141,7 @@ const Shop = {
     player.recalcStats();   // 랭크가 오르면 파생 능력치를 다시 구한다 (가방 칸도 여기서 늘어난다)
     // 체력 강화는 늘어난 만큼 바로 채워준다 — 사자마자 체감이 있어야 한다
     if (u.stat === 'maxHp') player.hp = Math.min(player.maxHp, player.hp + u.gain);
-    this.say(u.name + '  RANK ' + player.upgrades[u.id]);
+    this.say(u.name + '  ' + player.upgrades[u.id] + '단계');
   },
 
   say(text) {
@@ -13163,7 +13168,7 @@ const Shop = {
     UI.panel(ctx, x, y, w, h, '#ffe066');
     UI.divider(ctx, x + 6, y + 15, w - 12);
 
-    UI.drawText(ctx, 'SHOP', x + w / 2, y + 6, '#ffe066', true);
+    UI.drawText(ctx, '상점', x + w / 2, y + 6, '#ffe066', true);
     ctx.drawImage(SPRITES.coin, x + w - 14 - UI.textWidth(String(player.gold)) - 10, y + 6);
     UI.drawText(ctx, String(player.gold), x + w - 14 - UI.textWidth(String(player.gold)), y + 7, '#ffe066');
 
@@ -13180,7 +13185,7 @@ const Shop = {
       const canBuy = !it.soldOut && player.gold >= it.price;
       UI.drawText(ctx, it.name, x + 20, ry, it.soldOut ? '#6f7a68' : '#f0d9b5');
       UI.drawText(ctx, it.detail, x + 92, ry, '#7fa86a');
-      const priceText = it.sell ? (it.soldOut ? '-' : '+' + it.price + ' G') : (it.soldOut ? 'MAX' : it.price + ' G');
+      const priceText = it.sell ? (it.soldOut ? '-' : '+' + it.price + '골드') : (it.soldOut ? '최대' : it.price + '골드');
       UI.drawText(ctx, priceText, x + w - 12 - UI.textWidth(priceText), ry,
         it.soldOut ? '#6f7a68' : (it.sell ? '#9be564' : (canBuy ? '#ffe066' : '#c05a5a')));
     }
@@ -13190,9 +13195,9 @@ const Shop = {
     if (this.message) {
       UI.drawText(ctx, this.message, x + w / 2, footY, '#9be564', true);
     } else {
-      UI.drawText(ctx, 'W S SELECT   SPACE BUY', x + w / 2, footY, '#7fa86a', true);
+      UI.drawText(ctx, 'W S 고르기   스페이스 사기', x + w / 2, footY, '#7fa86a', true);
     }
-    UI.drawText(ctx, 'PAUSED - F TO CLOSE', x + w / 2, footY + 9, '#7fa86a', true);
+    UI.drawText(ctx, '일시정지 · F 닫기', x + w / 2, footY + 9, '#7fa86a', true);
   },
 };
 
@@ -13245,7 +13250,7 @@ const Quests = {
     const p = World.addProp(SPRITES.questBoard, x, y, { solid: [10, 4, 6], footHeight: 3 });
     p.board = true;
     p.landmark = 'board';   // 미니맵에 따로 찍힌다
-    p.sign = { text: 'QUESTS', color: '#e8dcc0', dy: 30 };
+    p.sign = { text: '의뢰', color: '#e8dcc0', dy: 30 };
     this.board = p;
     World.board = p;
   },
@@ -13256,9 +13261,9 @@ const Quests = {
     const sx = Math.round(b.x - cam.x), sy = Math.round(b.y - cam.y);
     // 다 한 의뢰가 있으면 깜빡이지 않고 초록으로 또렷하게 알려준다
     const ready = this.list.some(q => this.isDone(q, Game.player));
-    if (ready) { UI.drawText(ctx, 'F  CLAIM', sx, sy - 34, '#9be564', true); return; }
+    if (ready) { UI.drawText(ctx, 'F  보상 받기', sx, sy - 34, '#9be564', true); return; }
     if (Math.floor(World.time * 3) % 2 === 0) return;
-    UI.drawText(ctx, 'F  QUESTS', sx, sy - 34, '#e8dcc0', true);
+    UI.drawText(ctx, 'F  의뢰', sx, sy - 34, '#e8dcc0', true);
   },
 
   /* ── 의뢰 만들기 ───────────────────────────────────────
@@ -13360,7 +13365,7 @@ const Quests = {
 
   finishExplore(q) {
     q.progress = 1;
-    FX.number(Game.player.x, Game.player.y - 26, 'QUEST DONE', '#9be564');
+    FX.number(Game.player.x, Game.player.y - 26, '의뢰 완료', '#9be564');
     Sound.play('banner');
   },
 
@@ -13369,7 +13374,7 @@ const Quests = {
   claim(index, player) {
     const q = this.list[index];
     if (!q) return;
-    if (!this.isDone(q, player)) { this.say('NOT DONE YET'); Sound.play('error'); return; }
+    if (!this.isDone(q, player)) { this.say('아직 끝나지 않았다'); Sound.play('error'); return; }
 
     if (q.type === 'collect') {
       let left = q.need;
@@ -13387,9 +13392,9 @@ const Quests = {
       if (!Inventory.addGear(player, q.reward)) {
         // 가방이 꽉 찼으면 발밑에 둔다 — 보상을 그냥 날리지는 않는다
         Items.spawnGear(player.x, player.y, q.reward.id, q.reward.level, { item: q.reward, dropped: true });
-        this.say('BAG FULL - DROPPED');
+        this.say('가방이 가득 차 발밑에 두었다');
       } else {
-        this.say('GOT ' + Gear.name(q.reward));
+        this.say(Gear.name(q.reward) + ' 획득');
       }
     }
     Sound.play('levelup');
@@ -13431,9 +13436,9 @@ const Quests = {
 
   title(q) {
     const cfg = CONFIG.quests;
-    if (q.type === 'kill') return 'SLAY ' + (cfg.monsterNames[q.target] || q.target.toUpperCase());
-    if (q.type === 'collect') return 'BRING ' + CONFIG.loot.items[q.target].name;
-    return 'REACH ' + this.placeName(q.target);
+    if (q.type === 'kill') return (cfg.monsterNames[q.target] || q.target) + ' 처치';
+    if (q.type === 'collect') return CONFIG.loot.items[q.target].name + ' 가져오기';
+    return this.placeName(q.target) + ' 찾아가기';
   },
 
   placeName(t) {
@@ -13468,7 +13473,7 @@ const Quests = {
     const x = Math.round((CONFIG.VIEW_W - w) / 2), y = Math.round((CONFIG.VIEW_H - h) / 2);
     UI.panel(ctx, x, y, w, h, '#e8dcc0');
     UI.divider(ctx, x + 6, y + 15, w - 12);
-    UI.drawText(ctx, 'QUEST BOARD', x + w / 2, y + 6, '#e8dcc0', true);
+    UI.drawText(ctx, '의뢰 게시판', x + w / 2, y + 6, '#e8dcc0', true);
 
     const rowY = y + 22, rowH = 26;
     for (let i = 0; i < this.list.length; i++) {
@@ -13485,14 +13490,14 @@ const Quests = {
       // 진행도 — 숫자와 막대를 함께 (탐험은 막대 대신 한마디)
       const p = this.progressOf(q, player);
       if (q.type === 'explore') {
-        UI.drawText(ctx, done ? 'FOUND' : 'NOT YET', x + 18, ry + 9, done ? '#9be564' : '#7fa86a');
+        UI.drawText(ctx, done ? '찾았다' : '아직 못 갔다', x + 18, ry + 9, done ? '#9be564' : '#7fa86a');
       } else {
         UI.bar(ctx, x + 18, ry + 10, 60, 3, p / q.need, done ? '#9be564' : '#7ec8ff', '#2a3222');
         UI.drawText(ctx, p + '/' + q.need, x + 82, ry + 8, done ? '#9be564' : '#7fa86a');
       }
 
       // 보상 — 골드와 장비 한 점 (등급 색으로)
-      const g = q.gold + ' G';
+      const g = q.gold + '골드';
       UI.drawText(ctx, g, x + w - 12 - UI.textWidth(g), ry, CONFIG.gold.color);
       if (q.reward) {
         const r = Gear.rarity(q.reward).name + ' ' + CONFIG.gear.items[q.reward.id].name;
@@ -13502,8 +13507,8 @@ const Quests = {
 
     const footY = y + h - 19;
     if (this.message) UI.drawText(ctx, this.message, x + w / 2, footY, '#9be564', true);
-    else UI.drawText(ctx, 'W S SELECT   SPACE CLAIM', x + w / 2, footY, '#7fa86a', true);
-    UI.drawText(ctx, 'PAUSED - F TO CLOSE', x + w / 2, footY + 8, '#5f6b59', true);
+    else UI.drawText(ctx, 'W S 고르기   스페이스 받기', x + w / 2, footY, '#7fa86a', true);
+    UI.drawText(ctx, '일시정지 · F 닫기', x + w / 2, footY + 8, '#5f6b59', true);
   },
 
   /* ── 저장 ──────────────────────────────────────────────── */
@@ -13650,7 +13655,7 @@ const Landmarks = {
     player.addGold(gold, chest.x, chest.y - 6);
     if (Math.random() < cfg.potionChance) {
       const got = player.addPotion(1);
-      if (got) FX.number(chest.x, chest.y - 22, '+POTION', '#ffd93d');
+      if (got) FX.number(chest.x, chest.y - 22, '+포션', '#ffd93d');
     }
     if (item) {
       if (!Inventory.addGear(player, item)) {
@@ -13705,7 +13710,7 @@ const Landmarks = {
   drawPrompt(ctx, cam, chest) {
     const sx = Math.round(chest.x - cam.x), sy = Math.round(chest.y - cam.y);
     if (Math.floor(World.time * 3) % 2 === 0) return;
-    UI.drawText(ctx, 'F  OPEN', sx, sy - 24, '#ffe066', true);
+    UI.drawText(ctx, 'F  열기', sx, sy - 24, '#ffe066', true);
   },
 
   /* ── 저장 ── 연 상자만 적어둔다 (자리와 내용물은 시드에서 다시 나온다) */
@@ -14061,7 +14066,7 @@ const Forge = {
     const s = Village.spot('forge'), x = s.x, y = s.y;
     const anvil = World.addProp(SPRITES.anvil, x, y, { solid: [9, 3, 5], footHeight: 3 });
     anvil.anvil = true;
-    anvil.sign = { text: 'FORGE', color: '#ff8a3c', dy: 24 };
+    anvil.sign = { text: '대장간', color: '#ff8a3c', dy: 24 };
     World.anvil = anvil;
     World.smith = null;
     this.npc = null;
@@ -14102,7 +14107,7 @@ const Forge = {
     if (!n) return;
     const sx = Math.round(n.x - cam.x), sy = Math.round(n.y - cam.y);
     if (Math.floor(World.time * 3) % 2 === 0) return;
-    UI.drawText(ctx, 'F  FORGE', sx + 8, sy - 24, '#ff8a3c', true);
+    UI.drawText(ctx, 'F  대장간', sx + 8, sy - 24, '#ff8a3c', true);
   },
 
   /* ── 값과 재료 ──────────────────────────────────────── */
@@ -14179,13 +14184,13 @@ const Forge = {
         ok: held >= e.cost && player.gold >= this.goldCost(player),
       });
     }
-    list.push({ id: null, name: 'REMOVE', color: '#8f9aa8', remove: true, ok: !!player.weaponElement });
+    list.push({ id: null, name: '속성 지우기', color: '#8f9aa8', remove: true, ok: !!player.weaponElement });
     // 강화 — 전설 무기도 레벨이 고정이라 똑같이 올릴 수 있다
     const up = this.upgradeCost(player);
     const upHeld = this.lootHeld(player, up.loot);
     const upMax = player.weaponLevel >= CONFIG.forge.upgrade.maxLevel;
     list.push({
-      upgrade: true, name: 'UPGRADE ' + player.weaponLabel(), color: '#ffe066',
+      upgrade: true, name: '강화  ' + player.weaponLabel(), color: '#ffe066',
       loot: CONFIG.loot.items[up.loot].name, need: up.need, held: upHeld,
       gold: up.gold, worn: false,
       maxed: upMax,
@@ -14196,7 +14201,7 @@ const Forge = {
       const c = this.reforgeCost(t.item);
       const held = this.lootHeld(player, c.loot);
       list.push({
-        reforge: true, target: t, name: 'REFORGE ' + Gear.name(t.item).slice(0, 24),
+        reforge: true, target: t, name: '재련  ' + Gear.name(t.item).slice(0, 24),
         fullName: Gear.name(t.item), color: Gear.color(t.item),
         loot: CONFIG.loot.items[c.loot].name, need: c.need, held: held,
         gold: c.gold, worn: false,
@@ -14215,12 +14220,12 @@ const Forge = {
         const held = this.lootHeld(player, lootId);
         if (held > 0) seen = true;
         if (held < r.loot[lootId]) have = false;
-        parts.push(CONFIG.loot.items[lootId].name.split(' ')[0] + ' ' + held + '/' + r.loot[lootId]);
+        parts.push(CONFIG.loot.items[lootId].name + ' ' + held + '/' + r.loot[lootId]);
       }
       if (!seen && !have) continue;   // 재료를 한 톨도 못 봤으면 숨긴다
       const gold = this.craftGold(player);
       list.push({
-        craft: true, recipe: r, name: 'FORGE ' + spec.name.replace('FROSTHEART ', ''),
+        craft: true, recipe: r, name: spec.name + ' 제작',
         fullName: spec.name, color: CONFIG.rarity.list[CONFIG.forge.craft.rarity].color,
         lootText: parts.join('  '), lootOk: have,
         gold: gold, worn: false,
@@ -14238,30 +14243,30 @@ const Forge = {
   apply(item, player) {
     if (item.craft) {
       const r = item.recipe, spec = Gear.spec(r.id);
-      if (!item.lootOk) { this.say('NEED MORE MATERIALS'); Sound.play('error'); return; }
-      if (player.gold < item.gold) { this.say('NOT ENOUGH GOLD'); Sound.play('error'); return; }
+      if (!item.lootOk) { this.say('재료가 모자란다'); Sound.play('error'); return; }
+      if (player.gold < item.gold) { this.say('골드가 모자란다'); Sound.play('error'); return; }
       // 가방에 자리가 있어야 받는다 (바닥에 떨구면 귀한 것을 잃을 수 있다)
       const made = Gear.roll(r.id, player.level, CONFIG.forge.craft.rarity);
-      if (!Inventory.addGear(player, made)) { this.say('BAG IS FULL'); Sound.play('error'); return; }
+      if (!Inventory.addGear(player, made)) { this.say('가방이 가득 찼다'); Sound.play('error'); return; }
       for (const lootId in r.loot) this.takeLoot(player, lootId, r.loot[lootId]);
       player.gold -= item.gold;
       Sound.play('levelup');
       FX.burst(player.x, player.y - 4, 30, ['#bfe8ff', '#ffffff'], { speed: 80, life: 0.8, gravity: 10 });
       FX.number(player.x, player.y - 30, spec.name, '#bfe8ff', true);
-      this.say('FORGED ' + spec.name);
+      this.say(spec.name + ' 제작');
       return;
     }
     if (item.remove) {
-      if (!player.weaponElement) { this.say('NOTHING TO REMOVE'); Sound.play('error'); return; }
+      if (!player.weaponElement) { this.say('지울 속성이 없다'); Sound.play('error'); return; }
       player.weaponElement = null;
       Sound.play('blip');
-      this.say('ELEMENT REMOVED');
+      this.say('속성을 지웠다');
       return;
     }
     if (item.upgrade) {
-      if (player.weaponLevel >= CONFIG.forge.upgrade.maxLevel) { this.say('MAX LEVEL'); Sound.play('error'); return; }
-      if (item.held < item.need) { this.say('NEED MORE ' + item.loot); Sound.play('error'); return; }
-      if (player.gold < item.gold) { this.say('NOT ENOUGH GOLD'); Sound.play('error'); return; }
+      if (player.weaponLevel >= CONFIG.forge.upgrade.maxLevel) { this.say('이미 최고 레벨이다'); Sound.play('error'); return; }
+      if (item.held < item.need) { this.say(item.loot + ' 모자람'); Sound.play('error'); return; }
+      if (player.gold < item.gold) { this.say('골드가 모자란다'); Sound.play('error'); return; }
       const up = this.upgradeCost(player);
       this.takeLoot(player, up.loot, up.need);
       player.gold -= up.gold;
@@ -14270,15 +14275,15 @@ const Forge = {
       Sound.play('levelup');
       FX.burst(player.x, player.y - 4, 20, ['#ffe066', '#ffffff'], { speed: 60, life: 0.6, gravity: 20 });
       FX.number(player.x, player.y - 30, player.weaponLabel() + '!', '#ffe066');
-      this.say('UPGRADED TO L' + player.weaponLevel);
+      this.say(player.weaponLevel + '레벨로 강화');
       return;
     }
     if (item.reforge) {
-      if (item.held < item.need) { this.say('NEED MORE ' + item.loot); Sound.play('error'); return; }
-      if (player.gold < item.gold) { this.say('NOT ENOUGH GOLD'); Sound.play('error'); return; }
+      if (item.held < item.need) { this.say(item.loot + ' 모자람'); Sound.play('error'); return; }
+      if (player.gold < item.gold) { this.say('골드가 모자란다'); Sound.play('error'); return; }
       const t = item.target;
       const src = t.bagIndex !== undefined ? player.bag[t.bagIndex] : player.gear[t.slot];
-      if (!src || src.kind !== 'gear') { this.say('GEAR IS GONE'); Sound.play('error'); return; }
+      if (!src || src.kind !== 'gear') { this.say('장비가 없다'); Sound.play('error'); return; }
       const c = this.reforgeCost(src);
       this.takeLoot(player, c.loot, c.need);
       player.gold -= c.gold;
@@ -14291,12 +14296,12 @@ const Forge = {
       Sound.play('levelup');
       FX.burst(player.x, player.y - 4, 18, [Gear.color(src), '#ffffff'], { speed: 55, life: 0.6, gravity: 20 });
       FX.number(player.x, player.y - 30, Gear.name(src), Gear.color(src));
-      this.say('REFORGED ' + Gear.spec(src.id).name);
+      this.say(Gear.spec(src.id).name + ' 재련');
       return;
     }
-    if (item.worn) { this.say('ALREADY FORGED'); Sound.play('error'); return; }
-    if (item.held < item.need) { this.say('NEED MORE ' + item.loot); Sound.play('error'); return; }
-    if (player.gold < item.gold) { this.say('NOT ENOUGH GOLD'); Sound.play('error'); return; }
+    if (item.worn) { this.say('이미 박혀 있다'); Sound.play('error'); return; }
+    if (item.held < item.need) { this.say(item.loot + ' 모자람'); Sound.play('error'); return; }
+    if (player.gold < item.gold) { this.say('골드가 모자란다'); Sound.play('error'); return; }
 
     const e = this.spec(item.id);
     this.takeLoot(player, e.loot, e.cost);
@@ -14306,7 +14311,7 @@ const Forge = {
     Sound.play('levelup');
     FX.burst(player.x, player.y - 4, 24, [e.color, '#ffffff'], { speed: 70, life: 0.7, gravity: 20 });
     FX.number(player.x, player.y - 30, e.name + ' ' + player.weaponSpec().name, e.color);
-    this.say('FORGED ' + e.name);
+    this.say(e.name + ' 속성을 박았다');
   },
 
   say(text) { this.message = text; this.messageTimer = 1.8; },
@@ -14347,12 +14352,12 @@ const Forge = {
     const x = Math.round((CONFIG.VIEW_W - w) / 2), y = Math.round((CONFIG.VIEW_H - h) / 2);
     UI.panel(ctx, x, y, w, h, '#ff8a3c');
     UI.divider(ctx, x + 6, y + 15, w - 12);
-    UI.drawText(ctx, 'FORGE', x + w / 2, y + 6, '#ff8a3c', true);
+    UI.drawText(ctx, '대장간', x + w / 2, y + 6, '#ff8a3c', true);
 
     // 지금 든 무기와 박혀 있는 속성
     const el = player.weaponElement ? this.spec(player.weaponElement) : null;
     UI.drawText(ctx, player.weaponLabel(), x + 8, y + 19, player.weaponColor());
-    const cur = el ? el.name : 'NO ELEMENT';
+    const cur = el ? el.name : '속성 없음';
     UI.drawText(ctx, cur, x + w - 10 - UI.textWidth(cur), y + 19, el ? el.color : '#5f6b59');
 
     /* 줄이 많아져서(속성 넷 + 해제 + 강화 + 재련 여섯 + 제작 셋) 창 하나에 다 안 들어간다.
@@ -14373,32 +14378,32 @@ const Forge = {
       }
       UI.drawText(ctx, it.name, x + 18, ry, it.worn ? '#9be564' : it.color);
       if (it.remove) {
-        UI.drawText(ctx, 'FREE', x + w - 12 - UI.textWidth('FREE'), ry, it.ok ? '#f0d9b5' : '#6f7a68');
+        UI.drawText(ctx, '무료', x + w - 12 - UI.textWidth('무료'), ry, it.ok ? '#f0d9b5' : '#6f7a68');
         continue;
       }
       if (it.maxed) {
-        UI.drawText(ctx, 'MAX', x + w - 12 - UI.textWidth('MAX'), ry, '#6f7a68');
+        UI.drawText(ctx, '최대', x + w - 12 - UI.textWidth('최대'), ry, '#6f7a68');
         continue;
       }
       // 제작은 재료가 둘이라 한 줄로 이어 붙인다
       if (it.craft) {
         UI.drawText(ctx, it.lootText, matRight - UI.textWidth(it.lootText), ry, it.lootOk ? '#7fa86a' : '#c05a5a');
-        const cp = it.gold + ' G';
+        const cp = it.gold + '골드';
         UI.drawText(ctx, cp, x + w - 12 - UI.textWidth(cp), ry, player.gold >= it.gold ? CONFIG.gold.color : '#c05a5a');
         continue;
       }
       // 재료와 값 — 모자라면 붉게
       const mat = it.loot + ' ' + it.held + '/' + it.need;
       UI.drawText(ctx, mat, matRight - UI.textWidth(mat), ry, it.held >= it.need ? '#7fa86a' : '#c05a5a');
-      const price = it.worn ? 'ON' : it.gold + ' G';
+      const price = it.worn ? '적용 중' : it.gold + '골드';
       UI.drawText(ctx, price, x + w - 12 - UI.textWidth(price), ry,
         it.worn ? '#9be564' : (player.gold >= it.gold ? CONFIG.gold.color : '#c05a5a'));
     }
 
     const footY = y + h - 19;
     if (this.message) UI.drawText(ctx, this.message, x + w / 2, footY, '#9be564', true);
-    else UI.drawText(ctx, 'W S SELECT   SPACE FORGE', x + w / 2, footY, '#7fa86a', true);
-    UI.drawText(ctx, 'PAUSED - F TO CLOSE', x + w / 2, footY + 8, '#5f6b59', true);
+    else UI.drawText(ctx, 'W S 고르기   스페이스 실행', x + w / 2, footY, '#7fa86a', true);
+    UI.drawText(ctx, '일시정지 · F 닫기', x + w / 2, footY + 8, '#5f6b59', true);
   },
 };
 
@@ -14493,7 +14498,7 @@ const Elite = {
     const p = this.spec(enemy);
     if (!p) return;
     FX.ring(enemy.x, enemy.y + 2, enemy.radius + 6, p.color);
-    FX.number(enemy.x, enemy.y - 32, p.name + ' SLAIN', p.color, true);
+    FX.number(enemy.x, enemy.y - 32, p.name + ' 정예 처치', p.color, true);
     FX.addShake(3);
     if (p.burn) this.nova(enemy, p, player);
     if (p.split) this.split(enemy, p);
@@ -14808,7 +14813,7 @@ const Village = {
       const c = World.addProp(SPRITES.chest[0], s3.x, s3.y, { solid: [6, 3, 4], footHeight: 3 });
       c.stashChest = true;
       c.landmark = 'stash';
-      c.sign = { text: 'STASH', color: '#9fe8ff', dy: 22 };
+      c.sign = { text: '창고', color: '#9fe8ff', dy: 22 };
       c.draw = (ctx, cam) => this.drawStash(ctx, cam, c);
       this.stashChest = c;
       World.stashChest = c;
@@ -14819,7 +14824,7 @@ const Village = {
       const s4 = this.spot('alchemy');
       const bench = World.addProp(SPRITES.stall || SPRITES.chest[0], s4.x, s4.y, { solid: [10, 3, 5], footHeight: 3 });
       bench.alchemyBench = true;
-      bench.sign = { text: 'ALCHEMY', color: '#c79ce8', dy: 36 };   // 탁자 차양 위로
+      bench.sign = { text: '연금술', color: '#c79ce8', dy: 36 };   // 탁자 차양 위로
       this.bench = bench;
       if (this.alchemistHome()) {
         this.spawnAlchemist(s4.x - 14, s4.y - 2);
@@ -14971,7 +14976,7 @@ const Village = {
     if (!n) return;
     const sx = Math.round(n.x - cam.x), sy = Math.round(n.y - cam.y);
     if (Math.floor(World.time * 3) % 2 === 0) return;
-    UI.drawText(ctx, 'F  ALCHEMY', sx + 6, sy - 24, '#7dff8a', true);
+    UI.drawText(ctx, 'F  연금술', sx + 6, sy - 24, '#7dff8a', true);
   },
 
   drawStashPrompt(ctx, cam) {
@@ -14979,7 +14984,7 @@ const Village = {
     if (!c) return;
     const sx = Math.round(c.x - cam.x), sy = Math.round(c.y - cam.y);
     if (Math.floor(World.time * 3) % 2 === 0) return;
-    UI.drawText(ctx, 'F  STASH', sx, sy - 24, '#e8dcc0', true);
+    UI.drawText(ctx, 'F  창고', sx, sy - 24, '#e8dcc0', true);
   },
 
   // 빈 대장간·빈 탁자 안내 (아직 이사 전)
@@ -15006,7 +15011,7 @@ const Village = {
       } catch (err) { /* 무시 */ }
       if (!silent && !this.announced.smith) {
         this.announced.smith = true;
-        FX.number(Game.player.x, Game.player.y - 30, 'BLACKSMITH MOVED IN', '#ff8a3c');
+        FX.number(Game.player.x, Game.player.y - 30, '대장장이가 이사 왔다', '#ff8a3c');
         Sound.play('banner');
       } else if (silent) {
         this.announced.smith = this.announced.smith || this.smithHome();
@@ -15018,7 +15023,7 @@ const Village = {
       this.spawnAlchemist(a.x - 14, a.y - 2);
       if (!silent && !this.announced.alchemist) {
         this.announced.alchemist = true;
-        FX.number(Game.player.x, Game.player.y - 30, 'ALCHEMIST MOVED IN', '#7dff8a');
+        FX.number(Game.player.x, Game.player.y - 30, '연금술사가 이사 왔다', '#7dff8a');
         Sound.play('banner');
       } else if (silent) {
         this.announced.alchemist = true;
@@ -15027,12 +15032,12 @@ const Village = {
     if (!silent) {
       if (this.smithHome() && !this.announced.smith) {
         this.announced.smith = true;
-        FX.number(Game.player.x, Game.player.y - 30, 'BLACKSMITH MOVED IN', '#ff8a3c');
+        FX.number(Game.player.x, Game.player.y - 30, '대장장이가 이사 왔다', '#ff8a3c');
         Sound.play('banner');
       }
       if (this.alchemistHome() && !this.announced.alchemist) {
         this.announced.alchemist = true;
-        FX.number(Game.player.x, Game.player.y - 30, 'ALCHEMIST MOVED IN', '#7dff8a');
+        FX.number(Game.player.x, Game.player.y - 30, '연금술사가 이사 왔다', '#7dff8a');
         Sound.play('banner');
       }
     }
@@ -15101,7 +15106,7 @@ const Village = {
       let ok = lootOk && player.gold >= r.gold;
       let reason = '';
       if (id === 'potion' || id === 'potionBig') {
-        if (player.potions >= player.maxPotions) { ok = false; reason = 'POUCH FULL'; }
+        if (player.potions >= player.maxPotions) { ok = false; reason = '주머니 가득'; }
       }
       out.push({ id: id, spec: r, held: held, lootOk: lootOk, ok: ok, reason: reason });
     }
@@ -15110,27 +15115,27 @@ const Village = {
 
   brew(entry, player) {
     const r = entry.spec;
-    if (!entry.lootOk) { this.sayAlchemy('NEED MORE LOOT'); Sound.play('error'); return; }
-    if (player.gold < r.gold) { this.sayAlchemy('NOT ENOUGH GOLD'); Sound.play('error'); return; }
+    if (!entry.lootOk) { this.sayAlchemy('전리품이 모자란다'); Sound.play('error'); return; }
+    if (player.gold < r.gold) { this.sayAlchemy('골드가 모자란다'); Sound.play('error'); return; }
     if ((entry.id === 'potion' || entry.id === 'potionBig') && player.potions >= player.maxPotions) {
-      this.sayAlchemy('POUCH IS FULL'); Sound.play('error'); return;
+      this.sayAlchemy('포션 주머니가 가득 찼다'); Sound.play('error'); return;
     }
     for (const h of entry.held) this.takeLoot(player, h.id, h.need);
     player.gold -= r.gold;
 
     if (entry.id === 'potion' || entry.id === 'potionBig') {
       const got = player.addPotion(r.gain);
-      if (got <= 0) { this.sayAlchemy('POUCH IS FULL'); Sound.play('error'); return; }
-      this.sayAlchemy('BREWED ' + got + ' POTION');
+      if (got <= 0) { this.sayAlchemy('포션 주머니가 가득 찼다'); Sound.play('error'); return; }
+      this.sayAlchemy('포션 ' + got + '병을 빚었다');
     } else if (entry.id === 'antidote') {
       Status.clear(player);
       player.wardTimer = CONFIG.alchemy.wardTime;
-      FX.number(player.x, player.y - 26, 'CURED', '#7dff8a');
-      this.sayAlchemy('CURED + WARD 15S');
+      FX.number(player.x, player.y - 26, '해독', '#7dff8a');
+      this.sayAlchemy('해독 · 15초 동안 면역');
     } else if (entry.id === 'tonic') {
       player.tonicTimer = CONFIG.alchemy.tonicTime;
-      FX.number(player.x, player.y - 26, 'TONIC 60S', '#5ff0ff');
-      this.sayAlchemy('REGEN WONT STOP 60S');
+      FX.number(player.x, player.y - 26, '강장제 60초', '#5ff0ff');
+      this.sayAlchemy('60초 동안 회복이 멈추지 않는다');
     }
     Sound.play('potion');
     FX.burst(player.x, player.y - 4, 14, [r.color, '#ffffff'], { speed: 45, life: 0.5, gravity: 30 });
@@ -15166,7 +15171,7 @@ const Village = {
     const x = Math.round((CONFIG.VIEW_W - w) / 2), y = Math.round((CONFIG.VIEW_H - h) / 2);
     UI.panel(ctx, x, y, w, h, '#7dff8a');
     UI.divider(ctx, x + 6, y + 15, w - 12);
-    UI.drawText(ctx, 'ALCHEMY', x + w / 2, y + 6, '#7dff8a', true);
+    UI.drawText(ctx, '연금술', x + w / 2, y + 6, '#7dff8a', true);
     ctx.drawImage(SPRITES.coin, x + w - 14 - UI.textWidth(String(player.gold)) - 10, y + 6);
     UI.drawText(ctx, String(player.gold), x + w - 14 - UI.textWidth(String(player.gold)), y + 7, '#ffe066');
 
@@ -15186,15 +15191,15 @@ const Village = {
         return nm + ' ' + hl.held + '/' + hl.need;
       }).join('  ');
       UI.drawText(ctx, mat.slice(0, 44), x + 18, ry + 8, it.lootOk ? '#7fa86a' : '#c05a5a');
-      const price = it.reason || (it.spec.gold + ' G');
+      const price = it.reason || (it.spec.gold + '골드');
       UI.drawText(ctx, price, x + w - 12 - UI.textWidth(price), ry,
         it.reason ? '#6f7a68' : (player.gold >= it.spec.gold ? '#ffe066' : '#c05a5a'));
     }
 
     const footY = y + h - 19;
     if (this.alchemyMessage) UI.drawText(ctx, this.alchemyMessage, x + w / 2, footY, '#9be564', true);
-    else UI.drawText(ctx, 'W S SELECT   SPACE BREW', x + w / 2, footY, '#7fa86a', true);
-    UI.drawText(ctx, 'PAUSED - F TO CLOSE', x + w / 2, footY + 8, '#5f6b59', true);
+    else UI.drawText(ctx, 'W S 고르기   스페이스 빚기', x + w / 2, footY, '#7fa86a', true);
+    UI.drawText(ctx, '일시정지 · F 닫기', x + w / 2, footY + 8, '#5f6b59', true);
   },
 
   /* ── 창고 ────────────────────────────────────────────────
@@ -15215,9 +15220,9 @@ const Village = {
     if (!s) return '?';
     if (s.kind === 'gear') return Gear.name(s);
     if (s.kind === 'weapon') {
-      return (s.legend ? CONFIG.weapons.legends[s.legend].name : CONFIG.weapons[s.weapon].name) + ' L' + s.level;
+      return (s.legend ? CONFIG.weapons.legends[s.legend].name : CONFIG.weapons[s.weapon].name) + ' ' + s.level + '레벨';
     }
-    if (s.kind === 'loot') return (CONFIG.loot.items[s.id] || {}).name + ' X' + s.amount;
+    if (s.kind === 'loot') return (CONFIG.loot.items[s.id] || {}).name + ' ' + s.amount + '개';
     return '?';
   },
 
@@ -15429,7 +15434,7 @@ const Village = {
       const i = from.index + 1, s = player.bag[i], t = this.stash[to.index];
       if (!s) return;
       const clean = this.sanitizeItem(s);
-      if (!clean) return fail('CANT STORE THAT');
+      if (!clean) return fail('맡길 수 없다');
       if (t && t.kind === 'loot' && clean.kind === 'loot' && t.id === clean.id) {
         t.amount += clean.amount;
         player.bag[i] = null;
@@ -15448,7 +15453,7 @@ const Village = {
         return;
       }
       Sound.play('blip');
-      this.sayStash('STORED ' + this.stashName(clean));
+      this.sayStash(this.stashName(clean) + ' 맡김');
       this.stashZone = 'box'; this.stashCursor = to.index;
       this.stashScroll();
       return;
@@ -15460,8 +15465,8 @@ const Village = {
     let name = this.stashName(t);
     if (t.kind === 'loot' && (!b || (b.kind === 'loot' && b.id === t.id))) {
       const take = Math.min(Inventory.stackMax(t.id) - (b ? b.amount : 0), t.amount);
-      if (take <= 0) return fail('STACK IS FULL');
-      name = (CONFIG.loot.items[t.id] || {}).name + ' X' + take;   // 한 칸에 들어간 만큼만 가져온다
+      if (take <= 0) return fail('그 칸은 가득 찼다');
+      name = (CONFIG.loot.items[t.id] || {}).name + ' ' + take + '개';   // 한 칸에 들어간 만큼만 가져온다
       if (b) b.amount += take;
       else player.bag[j] = { kind: 'loot', id: t.id, amount: take };
       t.amount -= take;
@@ -15470,14 +15475,14 @@ const Village = {
       player.bag[j] = this.sanitizeItem(t);
       this.stashClear(from.index);
     } else {
-      if (!fits(t)) return fail('TOO MANY TO SWAP');
+      if (!fits(t)) return fail('너무 많아 맞바꿀 수 없다');
       const clean = this.sanitizeItem(b);
-      if (!clean) return fail('CANT STORE THAT');
+      if (!clean) return fail('맡길 수 없다');
       this.stash[from.index] = clean;
       player.bag[j] = this.sanitizeItem(t);
     }
     Sound.play('pickup');
-    this.sayStash('TOOK ' + name);
+    this.sayStash(name + ' 찾음');
     this.stashZone = 'bag'; this.stashCursor = to.index;
   },
 
@@ -15485,39 +15490,39 @@ const Village = {
   transferStash(player) {
     if (this.stashZone === 'bag') {
       const i = this.stashCursor + 1, s = player.bag[i];
-      if (!s) { this.sayStash('EMPTY SLOT'); return; }
+      if (!s) { this.sayStash('빈 칸이다'); return; }
       const clean = this.sanitizeItem(s);
-      if (!clean) { this.sayStash('CANT STORE THAT'); Sound.play('error'); return; }
+      if (!clean) { this.sayStash('맡길 수 없다'); Sound.play('error'); return; }
       // 전리품은 창고에서 합친다. 아니면 가장 앞의 빈칸에
       const same = clean.kind === 'loot' && this.stash.find(o => o && o.kind === 'loot' && o.id === clean.id);
       if (same) same.amount += clean.amount;
       else {
         const q = this.stashFree();
-        if (q < 0) { this.sayStash('STASH IS FULL'); Sound.play('error'); return; }
+        if (q < 0) { this.sayStash('창고가 가득 찼다'); Sound.play('error'); return; }
         this.stash[q] = clean;
       }
       player.bag[i] = null;
       Sound.play('blip');
-      this.sayStash('STORED ' + this.stashName(clean));
+      this.sayStash(this.stashName(clean) + ' 맡김');
       return;
     }
     const si = this.stashCursor, s = this.stash[si];
-    if (!s) { this.sayStash('NOTHING STORED'); return; }
+    if (!s) { this.sayStash('맡긴 것이 없다'); return; }
     if (s.kind === 'loot') {
       const left = Inventory.addLoot(player, s.id, s.amount);
-      if (left >= s.amount) { this.sayStash('BAG IS FULL'); Sound.play('error'); return; }
+      if (left >= s.amount) { this.sayStash('가방이 가득 찼다'); Sound.play('error'); return; }
       const got = s.amount - left;
       if (left <= 0) this.stashClear(si);
       else s.amount = left;
       Sound.play('pickup');
-      this.sayStash('TOOK ' + (CONFIG.loot.items[s.id] || {}).name + ' X' + got);
+      this.sayStash((CONFIG.loot.items[s.id] || {}).name + ' ' + got + '개 찾음');
     } else {
       const free = Inventory.firstEmpty(player);
-      if (free < 0) { this.sayStash('BAG IS FULL'); Sound.play('error'); return; }
+      if (free < 0) { this.sayStash('가방이 가득 찼다'); Sound.play('error'); return; }
       player.bag[free] = this.sanitizeItem(s);
       this.stashClear(si);
       Sound.play('pickup');
-      this.sayStash('TOOK ' + this.stashName(s));
+      this.sayStash(this.stashName(s) + ' 찾음');
     }
     this.stashCursor = Util.clamp(this.stashCursor, 0, this.stashBoxN() - 1);
     this.stashScroll();
@@ -15525,30 +15530,30 @@ const Village = {
 
   /* 고른 물건 두 줄 설명 — 이름(등급 색)과 쓸모 한 줄. 자세한 것은 인벤토리에서 본다 */
   stashDetail(player, s) {
-    if (!s) return [[this.stashZone === 'bag' ? 'EMPTY SLOT' : 'NOTHING STORED', '#5f6b59']];
+    if (!s) return [[this.stashZone === 'bag' ? '빈 칸' : '맡긴 것이 없다', '#5f6b59']];
     if (s.kind === 'gear') {
       const r = Gear.rarity(s);
-      return [[Gear.name(s) + ' L' + s.level, r.color],
+      return [[Gear.name(s) + ' ' + s.level + '레벨', r.color],
         [r.name + '  ' + Gear.statLine(Gear.statsOf(s)).slice(0, 3).join(' '), '#c8d0d8']];
     }
     if (s.kind === 'weapon') {
       const w = CONFIG.weapons[s.weapon], el = s.element && CONFIG.forge.elements[s.element];
       return [[this.stashName(s), s.legend ? 'rainbow' : this.stashColor(s)],
-        ['DMG ' + player.damageWith(s.weapon, s.level) + '  ' + (w.blurb || '') + (el ? '  ' + el.name : ''), el ? el.color : '#c8d0d8']];
+        ['공격력 ' + player.damageWith(s.weapon, s.level) + '  ' + (w.blurb || '') + (el ? '  ' + el.name : ''), el ? el.color : '#c8d0d8']];
     }
     const ls = CONFIG.loot.items[s.id] || {};
-    return [[ls.name + ' X' + s.amount, ls.color || '#ffffff'],
-      ['WORTH ' + (ls.value || 0) * s.amount + ' G' + (ls.trophy ? '  BOSS TROPHY' : ''), '#f0d9b5']];
+    return [[ls.name + ' ' + s.amount + '개', ls.color || '#ffffff'],
+      ['값 ' + (ls.value || 0) * s.amount + '골드' + (ls.trophy ? '  보스 전리품' : ''), '#f0d9b5']];
   },
 
   drawStashWindow(ctx, player) {
     const L = this.stashLayout();
     UI.panel(ctx, L.x, L.y, L.w, L.h, '#e8dcc0');
     UI.divider(ctx, L.x + 6, L.y + 14, L.w - 12);
-    UI.drawText(ctx, 'STASH', L.x + L.w / 2, L.y + 5, '#e8dcc0', true);
+    UI.drawText(ctx, '창고', L.x + L.w / 2, L.y + 5, '#e8dcc0', true);
     const bagN = this.stashBagN(player), used = Inventory.count(player);
-    UI.drawText(ctx, 'BAG ' + used + '/' + bagN, L.bagX, L.y + 5, used >= bagN ? '#ff6b6b' : '#7fa86a');
-    const boxText = 'BOX ' + this.stashCount() + '/' + CONFIG.stash.maxItems;
+    UI.drawText(ctx, '가방 ' + used + '/' + bagN, L.bagX, L.y + 5, used >= bagN ? '#ff6b6b' : '#7fa86a');
+    const boxText = '창고 ' + this.stashCount() + '/' + CONFIG.stash.maxItems;
     UI.drawText(ctx, boxText, L.boxX + L.boxW - UI.textWidth(boxText), L.y + 5, '#7fa86a');
 
     // 가방 — 포션 주머니(0번)를 뺀 칸 전부
@@ -15587,8 +15592,8 @@ const Village = {
 
     const footY = L.y + L.h - 17;
     if (this.stashMessage) UI.drawText(ctx, this.stashMessage, L.x + L.w / 2, footY, '#9be564', true);
-    else UI.drawText(ctx, 'WASD PICK  SPACE ' + (this.stashZone === 'bag' ? 'STORE' : 'TAKE') + '  DRAG MOVE', L.x + L.w / 2, footY, '#7fa86a', true);
-    UI.drawText(ctx, 'PAUSED - F TO CLOSE', L.x + L.w / 2, footY + 8, '#5f6b59', true);
+    else UI.drawText(ctx, 'WASD 고르기  스페이스 ' + (this.stashZone === 'bag' ? '맡기기' : '찾기') + '  끌어서 옮기기', L.x + L.w / 2, footY, '#7fa86a', true);
+    UI.drawText(ctx, '일시정지 · F 닫기', L.x + L.w / 2, footY + 8, '#5f6b59', true);
     // 끌고 있는 물건은 창 그림 맨 위에
     const d = Inventory.drag;
     if (d && d.active) Inventory.drawDrag(ctx, player, this.stashCellItem(player, d.from));
@@ -15725,9 +15730,9 @@ const Events = {
   onPhaseChange(from, to) {
     if (World.isArena) return;
     if (to === 'night') {
-      this.banner('NIGHT FALLS', '#8fa8e0');
+      this.banner('밤이 찾아왔다', '#8fa8e0');
     } else if (to === 'day') {
-      this.banner('DAY ' + this.day, '#ffe066');
+      this.banner(this.day + '일째 아침', '#ffe066');
     }
   },
 
@@ -15810,7 +15815,7 @@ const Events = {
         this.storm = 0;
         this.grains.length = 0;
         this.stormCooldown = Util.rand(cfg.minGap, cfg.maxGap);
-        this.banner('THE STORM PASSES', '#d9b779');
+        this.banner('폭풍이 지나갔다', '#d9b779');
         return;
       }
       this.updateGrains(dt);
@@ -15825,7 +15830,7 @@ const Events = {
     this.stormTick = 0;
     this.grains.length = 0;
     for (let i = 0; i < cfg.grains; i++) this.grains.push(this.newGrain(true));
-    this.banner('SANDSTORM', '#d9b779');
+    this.banner('모래폭풍이 분다', '#d9b779');
     Sound.play('spin');
   },
 
@@ -15940,7 +15945,7 @@ const Events = {
     const col = this.phase === 'night' ? '#8fa8e0'
       : (this.phase === 'dusk' ? '#ff8a3c' : (this.phase === 'dawn' ? '#9fc8ff' : '#ffe066'));
 
-    const label = 'DAY ' + this.day;
+    const label = this.day + '일째';
     UI.drawText(ctx, label, x - 3 - UI.textWidth(label), y - 1, '#cbbfa2', false);
 
     ctx.fillStyle = '#17110d';
@@ -15954,11 +15959,11 @@ const Events = {
     ctx.fillStyle = col;
     ctx.fillRect(x + Util.clamp(Math.round(w * this.time), 0, w - 2), y - 1, 2, 5);
 
-    const phase = this.phase.toUpperCase();
+    const phase = { dawn: '새벽', day: '낮', dusk: '황혼', night: '밤' }[this.phase];
     UI.drawText(ctx, phase, x + w + 4, y - 1, col, false);
 
     if (this.storm > 0) {
-      const s = 'SANDSTORM ' + Math.ceil(this.storm);
+      const s = '모래폭풍 ' + Math.ceil(this.storm) + '초';
       UI.drawText(ctx, s, CONFIG.VIEW_W / 2, y + 7, '#d9b779', true);
     }
   },
@@ -16064,8 +16069,8 @@ const Portal = {
     if (P.Space || P.Enter) {
       const pick = list[this.cursor];
       delete P.Space; delete P.Enter;
-      if (pick.here) { this.say('YOU ARE HERE'); Sound.play('error'); return; }
-      if (!pick.ok) { this.say('SLAY ' + pick.need); Sound.play('error'); return; }
+      if (pick.here) { this.say('지금 있는 곳이다'); Sound.play('error'); return; }
+      if (!pick.ok) { this.say(pick.need + ' 처치 필요'); Sound.play('error'); return; }
       this.close();
       Game.beginTransition(() => Game.travel(pick.id));
       return;
@@ -16085,14 +16090,14 @@ const Portal = {
       this.drawSealed(ctx, sx, sy, next);
       return;
     }
-    UI.drawText(ctx, open + ' WAYS OPEN', sx, sy - 44, '#8f9aa8', true);
+    UI.drawText(ctx, open + '곳으로 갈 수 있다', sx, sy - 44, '#8f9aa8', true);
     if (Math.floor(World.time * 3) % 2 === 0) return;
-    UI.drawText(ctx, 'F  OBELISK', sx, sy - 52, '#5ff0ff', true);
+    UI.drawText(ctx, 'F  비석', sx, sy - 52, '#5ff0ff', true);
   },
 
   drawSealed(ctx, sx, sy, next) {
-    UI.drawText(ctx, 'SEALED', sx, sy - 52, '#8f9aa8', true);
-    if (next && next.need) UI.drawText(ctx, 'SLAY ' + next.need, sx, sy - 44, '#ff6b6b', true);
+    UI.drawText(ctx, '봉인됨', sx, sy - 52, '#8f9aa8', true);
+    if (next && next.need) UI.drawText(ctx, next.need + ' 처치 필요', sx, sy - 44, '#ff6b6b', true);
   },
 
   /* ── 창 ──────────────────────────────────────────────── */
@@ -16102,7 +16107,7 @@ const Portal = {
     const x = Math.round((CONFIG.VIEW_W - w) / 2), y = Math.round((CONFIG.VIEW_H - h) / 2);
     UI.panel(ctx, x, y, w, h, '#5ff0ff');
     UI.divider(ctx, x + 6, y + 15, w - 12);
-    UI.drawText(ctx, 'THE OBELISK', x + w / 2, y + 6, '#5ff0ff', true);
+    UI.drawText(ctx, '비석', x + w / 2, y + 6, '#5ff0ff', true);
 
     const rowY = y + 24, rowH = 18;
     for (let i = 0; i < list.length; i++) {
@@ -16118,12 +16123,12 @@ const Portal = {
 
       // 오른쪽 — 여기 / 레벨대 / 잠금 조건
       if (it.here) {
-        UI.drawText(ctx, 'HERE', x + w - 12 - UI.textWidth('HERE'), ry, '#8f9aa8');
+        UI.drawText(ctx, '현재 위치', x + w - 12 - UI.textWidth('현재 위치'), ry, '#8f9aa8');
       } else if (it.ok) {
-        const lv = 'LV ' + it.range[0] + '-' + it.range[1];
+        const lv = it.range[0] + '~' + it.range[1] + '레벨';
         UI.drawText(ctx, lv, x + w - 12 - UI.textWidth(lv), ry, '#8f9aa8');
       } else {
-        const need = 'SLAY ' + it.need;
+        const need = it.need + ' 처치 필요';
         UI.drawText(ctx, need, x + w - 12 - UI.textWidth(need), ry, '#c05a5a');
       }
       // 둘째 줄 — 잠긴 곳만, 왜 못 가는지 한 번 더 또렷하게는 않는다 (줄이 빽빽해진다)
@@ -16131,8 +16136,8 @@ const Portal = {
 
     const footY = y + h - 19;
     if (this.message) UI.drawText(ctx, this.message, x + w / 2, footY, '#ff6b6b', true);
-    else UI.drawText(ctx, 'W S SELECT   SPACE TRAVEL', x + w / 2, footY, '#7fa86a', true);
-    UI.drawText(ctx, 'PAUSED - F TO CLOSE', x + w / 2, footY + 8, '#5f6b59', true);
+    else UI.drawText(ctx, 'W S 고르기   스페이스 이동', x + w / 2, footY, '#7fa86a', true);
+    UI.drawText(ctx, '일시정지 · F 닫기', x + w / 2, footY + 8, '#5f6b59', true);
   },
 };
 
@@ -16208,7 +16213,64 @@ const FONT = {
   '%': ['##..#', '##.#.', '...#.', '..#..', '.#...', '.#.##', '#..##'],
   '(': ['...#.', '..#..', '.#...', '.#...', '.#...', '..#..', '...#.'],
   ')': ['.#...', '..#..', '...#.', '...#.', '...#.', '..#..', '.#...'],
+  '~': ['.....', '.....', '.##.#', '#..#.', '.....', '.....', '.....'],   // 24~40레벨
+  '·': ['.....', '.....', '.....', '..#..', '.....', '.....', '.....'],   // 나열
+  ',': ['.....', '.....', '.....', '.....', '.....', '..#..', '.#...'],
   ' ': ['.....', '.....', '.....', '.....', '.....', '.....', '.....'],
+};
+
+/* 한글 — 5x7 격자에는 한글을 담을 수 없어서, 시스템 한글 글꼴로 한 글자씩 그린 뒤
+   **반투명한 칸을 없애 도트처럼 또렷하게 깎는다** (이미지 파일을 쓰지 않으니 HTML 한 장 그대로 돈다).
+   글자마다 (글자·배율·색) 별로 한 번만 깎아 두고 그 뒤로는 찍기만 한다 — 이름표와 데미지 숫자가
+   매 프레임 지나가는 길이라 fillRect 로 칸마다 칠하면 무겁다.
+   영문 키 이름과 숫자는 원래의 5x7 글꼴 그대로다. 그 글꼴에 없는 글자는 전부 이쪽으로 온다. */
+const Hangul = {
+  FAMILY: '"Malgun Gothic", "맑은 고딕", "Apple SD Gothic Neo", "Noto Sans KR", "Noto Sans CJK KR", "NanumGothic", sans-serif',
+  SIZE: 8,          // 글자 크기 (5x7 글꼴의 한 칸 단위) — 글꼴의 여백을 빼면 영문·숫자의 키(7칸)와 비슷해진다
+  ADVANCE: 8,       // 다음 글자까지 (같은 단위)
+  CUT: 150,         // 이 불투명도 아래의 칸은 버리고, 위의 칸은 꽉 채운다 (0~255)
+  masks: new Map(),
+  tints: new Map(),
+
+  // 흰색으로 깎은 글자 한 장
+  mask(ch, scale) {
+    const key = ch + '|' + scale;
+    let cv = this.masks.get(key);
+    if (cv) return cv;
+    const px = this.SIZE * scale;
+    cv = makeCanvas(Math.ceil(px * 1.25), Math.ceil(px * 1.3) + scale);
+    const c = cv.getContext('2d', { willReadFrequently: true });
+    c.font = '700 ' + px + 'px ' + this.FAMILY;
+    c.textBaseline = 'middle';
+    c.fillStyle = '#ffffff';
+    // 세로 가운데를 영문·숫자(7칸)의 가운데에 맞춘다. 위로 한 칸 삐져나오므로 그만큼 비워 두고 찍는다 (blitFine)
+    c.fillText(ch, 0, scale + Math.round(3.5 * scale));
+    const img = c.getImageData(0, 0, cv.width, cv.height), d = img.data;
+    for (let i = 0; i < d.length; i += 4) {
+      const on = d[i + 3] >= this.CUT;
+      d[i] = d[i + 1] = d[i + 2] = 255;
+      d[i + 3] = on ? 255 : 0;
+    }
+    c.putImageData(img, 0, 0);
+    this.masks.set(key, cv);
+    return cv;
+  },
+
+  // 그 색으로 물들인 글자 한 장
+  glyph(ch, scale, color) {
+    const key = ch + '|' + scale + '|' + color;
+    let cv = this.tints.get(key);
+    if (cv) return cv;
+    const m = this.mask(ch, scale);
+    cv = makeCanvas(m.width, m.height);
+    const c = cv.getContext('2d');
+    c.drawImage(m, 0, 0);
+    c.globalCompositeOperation = 'source-in';
+    c.fillStyle = color;
+    c.fillRect(0, 0, cv.width, cv.height);
+    this.tints.set(key, cv);
+    return cv;
+  },
 };
 
 const UI = {
@@ -16256,7 +16318,16 @@ const UI = {
   // 글자가 차지하는 너비 (게임 단위). scale 은 글자 배율 — 기본값이 예전 폰트와 같은 크기다
   textWidth(text, scale) {
     scale = scale || this.TEXT_SCALE;
-    return (String(text).length * (FONT_W + FONT_GAP) - FONT_GAP) * scale / this.FINE;
+    text = String(text);
+    let cells = 0;
+    for (let i = 0; i < text.length; i++) cells += this.charCells(text[i]);
+    return Math.max(0, cells - FONT_GAP) * scale / this.FINE;
+  },
+
+  // 글자 하나가 차지하는 폭 (5x7 글꼴의 한 칸 단위). 띄어쓰기는 한글에 맞춰 좁게, 한글은 영문보다 넓다
+  charCells(ch) {
+    if (ch === ' ') return 4;
+    return FONT[ch] ? FONT_W + FONT_GAP : Hangul.ADVANCE;
   },
 
   textHeight(scale) {
@@ -16282,23 +16353,22 @@ const UI = {
     text = String(text).toUpperCase();
     if (centered) x -= this.textWidth(text, scale) / 2;
     const fx = Math.round(x * this.FINE), fy = Math.round(y * this.FINE);
-    const adv = (FONT_W + FONT_GAP) * scale;
     const pal = CONFIG.weapons.rainbow;
     const shift = Math.floor(World.time * 9);
     const g = this.fx;
 
     this.blitFine(text, fx + scale, fy + scale, '#000000', scale);
     g.globalAlpha = 0.28;
-    for (let i = 0; i < text.length; i++) {
+    for (let i = 0, gx = fx; i < text.length; gx += this.charCells(text[i]) * scale, i++) {
       const c = pal[(i + shift) % pal.length];
-      this.blitFine(text[i], fx + i * adv - scale, fy, c, scale);
-      this.blitFine(text[i], fx + i * adv + scale, fy, c, scale);
-      this.blitFine(text[i], fx + i * adv, fy - scale, c, scale);
-      this.blitFine(text[i], fx + i * adv, fy + scale, c, scale);
+      this.blitFine(text[i], gx - scale, fy, c, scale);
+      this.blitFine(text[i], gx + scale, fy, c, scale);
+      this.blitFine(text[i], gx, fy - scale, c, scale);
+      this.blitFine(text[i], gx, fy + scale, c, scale);
     }
     g.globalAlpha = 1;
-    for (let i = 0; i < text.length; i++) {
-      this.blitFine(text[i], fx + i * adv, fy, pal[(i + shift) % pal.length], scale);
+    for (let i = 0, gx = fx; i < text.length; gx += this.charCells(text[i]) * scale, i++) {
+      this.blitFine(text[i], gx, fy, pal[(i + shift) % pal.length], scale);
     }
   },
 
@@ -16315,10 +16385,14 @@ const UI = {
     g.save();
     g.setTransform(1, 0, 0, 1, 0, 0);
     g.fillStyle = color;
-    const adv = (FONT_W + FONT_GAP) * scale;
-    for (let i = 0; i < text.length; i++) {
-      const glyph = FONT[text[i]] || FONT[' '];
-      const gx = fx + i * adv;
+    let gx = fx;
+    for (let i = 0; i < text.length; gx += this.charCells(text[i]) * scale, i++) {
+      const glyph = FONT[text[i]];
+      if (!glyph) {
+        // 5x7 글꼴에 없는 글자 — 한글이다 (깎아 둔 한 장을 찍는다)
+        g.drawImage(Hangul.glyph(text[i], scale, color), gx, fy - scale);
+        continue;
+      }
       for (let r = 0; r < FONT_H; r++) {
         const row = glyph[r];
         let c = 0;
@@ -16385,13 +16459,13 @@ const UI = {
     if (player.regenerating && player.regenerating() && Math.floor(World.time * 3) % 2 === 0) {
       this.drawText(ctx, '+', 83, 9, '#7dff8a');   // 자연 회복 중
     }
-    this.drawText(ctx, 'HP', 8, 16, '#f0d9b5');
-    this.drawText(ctx, Math.max(0, Math.ceil(player.hp)) + '/' + player.maxHp, 20, 16, '#f0d9b5');
+    this.drawText(ctx, '체력', 8, 16, '#f0d9b5');
+    this.drawText(ctx, Math.max(0, Math.ceil(player.hp)) + '/' + player.maxHp, 22, 16, '#f0d9b5');
 
 
     // ── 레벨 / 경험치
     this.bar(ctx, 8, 25, 72, 4, player.xp / player.xpNeed, '#9be564', '#25401c');
-    this.drawText(ctx, 'LV' + player.level, 8, 31, '#9be564');
+    this.drawText(ctx, player.level + '레벨', 8, 31, '#9be564');
     this.drawText(ctx, player.xp + '/' + player.xpNeed, 32, 31, '#7fa86a');
 
     // ── 처치 수
@@ -16424,7 +16498,7 @@ const UI = {
           }
         }
       }
-      this.drawText(ctx, 'DASH', 8 + charges * 12 + 2, 76, '#7ec8ff');
+      this.drawText(ctx, '대시', 8 + charges * 12 + 2, 76, '#7ec8ff');
     }
 
     // ── 걸려 있는 상태이상 — 색 칩에 남은 시간이 아래부터 어두워진다
@@ -16433,7 +16507,7 @@ const UI = {
     // ── 가방 — 몇 칸이 찼는지. 꽉 차면 붉게 (전리품이 더 안 끌려온다는 뜻)
     if (player.bag) {
       const used = Inventory.count(player), total = player.bag.length - 1;
-      this.drawText(ctx, 'BAG ' + used + '/' + total + ' I', 8, 86, used >= total ? '#ff6b6b' : '#7fa86a');
+      this.drawText(ctx, '가방 ' + used + '/' + total + ' I', 8, 86, used >= total ? '#ff6b6b' : '#7fa86a');
     }
 
     // ── 공격 쿨다운 (짧아서 눈에 잘 안 띄지만 리듬 파악에 도움이 된다)
@@ -16447,7 +16521,7 @@ const UI = {
     if (typeof SPRITES !== 'undefined' && SPRITES.potion) {
       ctx.drawImage(SPRITES.potion, 8, 44);
     }
-    this.drawText(ctx, 'X' + player.potions + '/' + player.maxPotions + ' E', 21, 48, '#ffd93d');
+    this.drawText(ctx, player.potions + '/' + player.maxPotions + '개  E', 21, 48, '#ffd93d');
 
     // ── 장착 무기 HUD (종류 + 레벨)
     if (player.weaponSpec) {
@@ -16467,7 +16541,7 @@ const UI = {
     // 체력이 낮고 포션이 있으면 깜빡이며 마시라고 알린다
     if (!player.dead && player.potions > 0 && player.hp / player.maxHp < 0.3 &&
         Math.floor(performance.now() / 350) % 2 === 0) {
-      const hint = 'PRESS E!';
+      const hint = 'E 키로 포션!';
       this.drawText(ctx, hint, CONFIG.VIEW_W / 2, 8, '#ff6b6b', true);
     }
 
@@ -16480,8 +16554,8 @@ const UI = {
     if (player.dead) {
       ctx.fillStyle = 'rgba(20,8,8,0.55)';
       ctx.fillRect(0, 0, CONFIG.VIEW_W, CONFIG.VIEW_H);
-      this.drawText(ctx, 'YOU DIED', CONFIG.VIEW_W / 2, CONFIG.VIEW_H / 2 - 8, '#ff6b6b', true);
-      this.drawText(ctx, 'RESPAWNING', CONFIG.VIEW_W / 2, CONFIG.VIEW_H / 2 + 4, '#c9a0a0', true);
+      this.drawText(ctx, '쓰러졌다', CONFIG.VIEW_W / 2, CONFIG.VIEW_H / 2 - 8, '#ff6b6b', true);
+      this.drawText(ctx, '곧 다시 일어선다', CONFIG.VIEW_W / 2, CONFIG.VIEW_H / 2 + 4, '#c9a0a0', true);
     }
   },
 
@@ -16489,7 +16563,7 @@ const UI = {
      쿨다운은 칸이 아래에서 위로 밝아지며 차오른다. */
   drawSkillBar(ctx, player) {
     const list = player.currentSkills();   // 무기마다 다르다
-    const slotW = 26, slotH = 16, gap = 5;
+    const slotW = 30, slotH = 16, gap = 5;   // 스킬 이름이 한글 다섯 자까지 간다
     const total = list.length * slotW + (list.length - 1) * gap;
     let x = Math.round((CONFIG.VIEW_W - total) / 2);
     const y = CONFIG.VIEW_H - 21;
@@ -16520,7 +16594,7 @@ const UI = {
 
       if (locked) {
         this.drawText(ctx, spec.key, x + 2, y + 2, '#5f6b59');
-        this.drawText(ctx, 'LV' + spec.unlockLevel, x + 2, y + 9, '#5f6b59');
+        this.drawText(ctx, spec.unlockLevel + '레벨', x + 2, y + 9, '#5f6b59');
       } else {
         const color = ready ? spec.color : '#96a08d';
         this.drawText(ctx, spec.key, x + 2, y + 2, color);
@@ -16552,7 +16626,7 @@ const UI = {
     ctx.fillStyle = '#17110d';
     ctx.fillRect(x + Math.round(w * boss.spec.phase2At), y, 1, 6);
 
-    const label = boss.name + (boss.phase2 ? '  ENRAGED' : '');
+    const label = boss.name + (boss.phase2 ? '  격노' : '');
     this.drawText(ctx, label, CONFIG.VIEW_W / 2, y - 9, boss.phase2 ? '#ff6b6b' : '#f0d9b5', true);
   },
 
@@ -16563,7 +16637,7 @@ const UI = {
     const sx = Math.round(cave.x - cam.x), sy = Math.round(cave.y - cam.y);
     if (readyIn > 0) {
       const m = Math.floor(readyIn / 60), s = Math.ceil(readyIn % 60);
-      const label = m > 0 ? (m + 'M' + (s < 10 ? '0' : '') + s) : (s + 'S');
+      const label = m > 0 ? (m + '분 ' + s + '초') : (s + '초');
       this.drawText(ctx, label, sx, sy - 40, '#8f9aa8', true);
       return;
     }
@@ -16586,7 +16660,7 @@ const UI = {
     if (!cave || !spec) return;
     const sx = Math.round(cave.x - cam.x), sy = Math.round(cave.y - cam.y);
     const face = this.bossFace(spec);
-    const lv = 'LV ' + spec.level, tag = info.slain ? 'CLEARED' : '';
+    const lv = spec.level + '레벨', tag = info.slain ? '처치함' : '';
     const textW = Math.max(this.textWidth(spec.name), this.textWidth(lv) + (tag ? 5 + this.textWidth(tag) : 0));
     const BOX_W = 26, BOX_H = 20;
     const w = Math.ceil(4 + BOX_W + 5 + textW + 5), h = BOX_H + 6;
@@ -16619,11 +16693,11 @@ const UI = {
     const ly = Math.max(y + h + 3, sy - 40);
     if (info.readyIn > 0) {
       const m = Math.floor(info.readyIn / 60), s = Math.ceil(info.readyIn % 60);
-      this.drawText(ctx, 'BACK IN ' + (m > 0 ? (m + 'M' + (s < 10 ? '0' : '') + s) : (s + 'S')), sx, ly, '#c8d0d8', true);
+      this.drawText(ctx, (m > 0 ? (m + '분 ' + s + '초') : (s + '초')) + ' 뒤에 돌아온다', sx, ly, '#c8d0d8', true);
       return;
     }
     if (Math.floor(World.time * 3) % 2 === 0) return;   // 깜빡여서 눈에 띄게
-    this.drawText(ctx, 'F  ENTER', sx, ly, '#ff6b6b', true);
+    this.drawText(ctx, 'F  들어가기', sx, ly, '#ff6b6b', true);
   },
 
   /* 이름판에 넣을 보스 얼굴 — 실제 보스와 같은 생성기로 칸(26x20)에 맞는 크기로 그린다.
@@ -16645,13 +16719,13 @@ const UI = {
     const sx = Math.round(portal.x - cam.x), sy = Math.round(portal.y - cam.y);
     if (locked) {
       const boss = CONFIG.bosses[CONFIG.gate.requiredBoss];
-      this.drawText(ctx, 'SLAY ' + (boss ? boss.name : 'THE BOSS'), sx, sy - 44, '#ff6b6b', true);
-      this.drawText(ctx, 'SEALED', sx, sy - 52, '#8f9aa8', true);
+      this.drawText(ctx, (boss ? boss.name : '보스') + ' 처치 필요', sx, sy - 44, '#ff6b6b', true);
+      this.drawText(ctx, '봉인됨', sx, sy - 52, '#8f9aa8', true);
       return;
     }
-    this.drawText(ctx, 'LV ' + dest.levelRange[0] + '-' + dest.levelRange[1], sx, sy - 44, '#8f9aa8', true);
+    this.drawText(ctx, dest.levelRange[0] + '~' + dest.levelRange[1] + '레벨', sx, sy - 44, '#8f9aa8', true);
     if (Math.floor(World.time * 3) % 2 === 0) return;
-    this.drawText(ctx, 'F  TO ' + dest.name, sx, sy - 52, '#5ff0ff', true);
+    this.drawText(ctx, 'F  ' + dest.name + '(으)로', sx, sy - 52, '#5ff0ff', true);
   },
 
   // 화면을 까맣게 덮는다 (동굴을 드나들 때의 장면 전환)
@@ -16686,7 +16760,7 @@ const UI = {
   },
 
   drawSoundState(ctx, on) {
-    this.drawText(ctx, on ? 'SOUND ON' : 'SOUND OFF', CONFIG.VIEW_W / 2, CONFIG.VIEW_H - 26, on ? '#9be564' : '#8f9aa8', true);
+    this.drawText(ctx, on ? '소리 켬' : '소리 끔', CONFIG.VIEW_W / 2, CONFIG.VIEW_H - 26, on ? '#9be564' : '#8f9aa8', true);
   },
 
   /* 창이 떠 있을 때의 포인터 — 끝(왼쪽 위 꼭짓점)이 마우스 자리다.
@@ -16769,14 +16843,14 @@ const UI = {
     ctx.fillRect(0, 0, CONFIG.VIEW_W, CONFIG.VIEW_H);
     const cx = CONFIG.VIEW_W / 2, cy = CONFIG.VIEW_H / 2;
     // 제목 — 두 배 크기
-    this.drawText(ctx, 'FOREST ADVENTURE', cx, cy - 30, '#9be564', true, true, UI.TEXT_SCALE * 2);
-    this.drawText(ctx, 'A TINY PIXEL ACTION RPG', cx, cy - 12, '#7fa86a', true);
+    this.drawText(ctx, '숲의 모험', cx, cy - 30, '#9be564', true, true, UI.TEXT_SCALE * 2);
+    this.drawText(ctx, '작은 도트 액션 롤플레잉', cx, cy - 12, '#7fa86a', true);
     // 세상이 멈춰 있으므로 깜빡임은 실제 시계로 돌린다
     if ((Date.now() % 1000) < 650) {
-      this.drawText(ctx, hasSave ? 'PRESS ANY KEY TO CONTINUE' : 'PRESS ANY KEY TO START', cx, cy + 10, '#ffe066', true);
+      this.drawText(ctx, hasSave ? '아무 키나 누르면 이어서 합니다' : '아무 키나 누르면 시작합니다', cx, cy + 10, '#ffe066', true);
     }
-    this.drawText(ctx, 'WASD MOVE   SPACE ATTACK   SHIFT DASH', cx, cy + 32, '#8fa383', true);
-    this.drawText(ctx, 'F INTERACT   E POTION   I BAG   M MAP', cx, cy + 41, '#8fa383', true);
+    this.drawText(ctx, 'WASD 이동   스페이스 공격   시프트 대시', cx, cy + 32, '#8fa383', true);
+    this.drawText(ctx, 'F 상호작용   E 포션   I 가방   M 지도', cx, cy + 41, '#8fa383', true);
   },
 
   // 새 게임 확인 — 저장을 지우는 되돌릴 수 없는 동작이라 한 번 묻는다
@@ -16791,16 +16865,16 @@ const UI = {
     ctx.strokeStyle = '#6b4a26';
     ctx.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1);
 
-    this.drawText(ctx, 'START NEW GAME?', x + w / 2, y + 10, '#ffd93d', true);
-    this.drawText(ctx, 'SAVED PROGRESS IS LOST', x + w / 2, y + 22, '#c9a0a0', true);
-    this.drawText(ctx, 'Y  YES        N  NO', x + w / 2, y + 36, '#f0d9b5', true);
+    this.drawText(ctx, '새 게임을 시작할까요?', x + w / 2, y + 10, '#ffd93d', true);
+    this.drawText(ctx, '저장된 진행이 사라집니다', x + w / 2, y + 22, '#c9a0a0', true);
+    this.drawText(ctx, 'Y  예        N  아니요', x + w / 2, y + 36, '#f0d9b5', true);
   },
 
   // 쿨다운(초)을 단어로 — 0.28 단검 FAST, 0.40 검 NORMAL, 0.62 도끼 SLOW
   speedWord(cooldown) {
-    if (cooldown < 0.34) return 'FAST';
-    if (cooldown < 0.51) return 'NORMAL';
-    return 'SLOW';
+    if (cooldown < 0.34) return '빠름';
+    if (cooldown < 0.51) return '보통';
+    return '느림';
   },
 
 };
@@ -16824,9 +16898,10 @@ const PATCH_NOTES = [
   {
     date: '2026-11-04',
     notes: [
-      '대시가 다시 차는 시간을 두 배로 — 한 칸에 1.7초에서 3.4초로 (PHANTOM 효과가 있으면 1.7초)',
+      '게임 안의 모든 글자를 한국어로 옮겼다 (아이템·스킬·몬스터 이름, 창, 안내, 패치노트까지). 키 이름만 그대로다',
+      '대시가 다시 차는 시간을 두 배로 — 한 칸에 1.7초에서 3.4초로 (환영 효과가 있으면 1.7초)',
       '대장간 창에서 강화·재련 이름이 재료 글자와 겹치던 것을 고쳤다 — 창을 넓히고 재료를 값 앞에 맞췄다. 장비 이름도 덜 잘린다',
-      '대장간 앞에서 F 안내와 FORGE 간판이 겹치던 것을 고쳤다',
+      '대장간 앞에서 F 안내와 대장간 간판이 겹치던 것을 고쳤다',
       '창이 떠 있는 동안에는 오른쪽 의뢰 목록을 숨긴다 (창 가장자리에 잘려 보였다)',
     ],
   },
@@ -16836,8 +16911,8 @@ const PATCH_NOTES = [
       '주인공이 후드 쓴 스카프 암살자로 바뀌었다 — 어두운 후드 속 보라 눈빛, 붉은 스카프',
       '모션이 생겼다: 걷기(스카프가 물결친다) · 공격 준비와 내지르기 · 대시 · 맞았을 때 젖히기 · 뛰어오른 자세',
       '공격하는 동안은 겨눈 쪽을 바라본다. 가만히 서 있으면 가끔 눈빛이 깜빡인다',
-      '포션 무적(AEGIS)이나 맵 이동 직후에 몸이 한참 붉게 보이던 것 — 이제 실제로 맞았을 때만 붉어진다',
-      '창고 창이 인벤토리처럼 칸마다 아이템 그림이 보인다 — 왼쪽 가방, 오른쪽 창고. WASD·마우스로 고르고 Space·클릭으로 옮긴다',
+      '포션 무적(수호)이나 맵 이동 직후에 몸이 한참 붉게 보이던 것 — 이제 실제로 맞았을 때만 붉어진다',
+      '창고 창이 인벤토리처럼 칸마다 아이템 그림이 보인다 — 왼쪽 가방, 오른쪽 창고. WASD·마우스로 고르고 스페이스·클릭으로 옮긴다',
       '고른 칸은 바탕이 밝아진다 (노란 커서가 전설 장비의 주황 테두리와 헷갈렸다)',
       '창을 열어 둔 동안에는 맵 이름표와 날짜 시계가 창 위에 겹쳐 뜨지 않는다',
       '인벤토리에서 아이템을 마우스로 끌어 옮긴다 — 가방 칸끼리 자리 바꾸기, 장비 칸으로 끌면 입기, 장비 칸에서 끌어내면 벗기',
@@ -16848,7 +16923,7 @@ const PATCH_NOTES = [
       '새벽도 같은 길을 거꾸로 — 보랏빛 → 붉은 여명 → 아침 햇살. 등불도 밤이 깊어질수록 서서히 밝아진다',
       '조준점을 절반 크기로 줄였다. 인벤토리·창고·상점 같은 창에서는 작은 화살표가 되어 칸 속 아이템을 가리지 않는다',
       '가방에서 장비를 버렸다 주우면 등급·옵션이 새로 굴려지던 것을 고쳤다 — 이제 버린 그대로 남는다',
-      '사막 동굴 탐험 의뢰가 숲 동굴 이름(SLIME LAIR)으로 뜨던 것을 고쳤다',
+      '사막 동굴 탐험 의뢰가 숲 동굴 이름(슬라임 굴)으로 뜨던 것을 고쳤다',
       '숲에서 받은 동굴 탐험 의뢰가 다른 맵의 동굴 앞에서 완료되던 것을 고쳤다',
       '설원 몬스터 처치 의뢰가 다시 켜면 사라지던 것을 고쳤다',
     ],
@@ -16861,7 +16936,7 @@ const PATCH_NOTES = [
       '전갈은 낮게 엎드린 갑각, 선인장은 가시 마귀, 모래벌레는 엄니 달린 아가리',
       '서리 망령은 두건 속 어둠에 타는 눈, 설인은 뿔 달린 구부정한 짐승, 골렘은 들쭉날쭉한 얼음 조각',
       '보스 넷도 같이 — 녹슨 왕관의 거대 슬라임, 하얀 갈기의 우두머리, 이끼 낀 늙은 버섯, 엄니의 군주',
-      '설인이 많은 곳에서 화면이 끊기던 것을 고쳤다 (빙판 그리기가 한 프레임 20ms를 먹었다)',
+      '설인이 많은 곳에서 화면이 끊기던 것을 고쳤다 (빙판 그리기가 한 프레임에 0.02초를 먹었다)',
     ],
   },
   {
@@ -16869,8 +16944,8 @@ const PATCH_NOTES = [
     notes: [
       '보스가 떨구는 무기가 성장 무기에서 이름 있는 전설 무기로 — 무지개 이름표·오라·잔상은 그대로',
       '레벨은 떨군 보스 레벨 + 10 으로 고정. 맵의 첫째 보스는 단검, 둘째는 검, 셋째는 도끼',
-      'SLIME MONARCH (거대 슬라임, L22) · ALPHA HOWL (우두머리 늑대, L30)',
-      'ELDER BLIGHT (늙은 버섯, L40) · SANDLORD FANG (모래의 군주, L56 — 새 고유 효과 PHANTOM)',
+      '점액 군주 (거대 슬라임, 22레벨) · 우두머리의 포효 (우두머리 늑대, 30레벨)',
+      '태고의 마름병 (늙은 버섯, 40레벨) · 군주의 송곳니 (모래의 군주, 56레벨 — 새 고유 효과 환영)',
       '전설 무기도 대장간에서 강화할 수 있다',
       '갖고 있던 성장 무기는 같은 종류의 전설 무기로 바뀐다 (레벨은 높은 쪽)',
       '42레벨 이상 무기의 아이콘과 이름 색이 비어 있던 것 — 설원 칼날 셋(서리·미스릴·별철)을 더했다',
@@ -16891,7 +16966,7 @@ const PATCH_NOTES = [
       '도끼: 대지 가르기(땅이 갈라지며 솟고 기절) · 거인의 일격(뛰어올라 내리찍기, 공중에선 무적)',
       '높은 레벨 스킬일수록 세다 — 10 < 20 < 30 < 40레벨 순으로 위력을 맞췄다',
       '검 Q 는 이제 십자베기 — 누르기만 하면 넓게 두 번 벤다 (이어 치기 타이밍이 필요 없다)',
-      '그림자 밟기가 세지고(x2.4 → x3.6), 광폭화는 6초로 조금 짧아졌다',
+      '그림자 밟기가 세지고(2.4배 → 3.6배), 광폭화는 6초로 조금 짧아졌다',
       '레벨업으로 새 스킬이 열리면 머리 위에 알려준다',
     ],
   },
@@ -16899,7 +16974,7 @@ const PATCH_NOTES = [
     date: '2026-10-23',
     notes: [
       '무기 스킬도 무기 성격에 맞게 다듬었다',
-      '검 강공격: 평타를 이어 치다가 쓰면 LINK — 휘두르던 쪽에서 이어 베고 1.4배',
+      '검 강공격: 평타를 이어 치다가 쓰면 연계 — 휘두르던 쪽에서 이어 베고 1.4배',
       '검 회전베기: 다 돌고 나면 마무리 일격으로 둘레를 한 번 더 크게 벤다',
       '단검 연속 찌르기: 평타처럼 곧게 찌르고, 찌를 때마다 마우스를 따라간다. 다섯 번째는 급소',
       '단검 그림자 밟기: 빠져나온 뒤 1.5초 안의 첫 찌르기는 반드시 급소 (매복)',
@@ -16930,7 +17005,7 @@ const PATCH_NOTES = [
   {
     date: '2026-10-20',
     notes: [
-      '보스 동굴에 다가가면 입구 위에 이름판이 뜬다 — 보스 얼굴·이름·레벨, 이미 잡았으면 CLEARED',
+      '보스 동굴에 다가가면 입구 위에 이름판이 뜬다 — 보스 얼굴·이름·레벨, 이미 잡았으면 처치함',
       '레벨 색은 몬스터 이름표와 같다. 내 레벨보다 높을수록 붉다',
       '잡은 지 얼마 안 된 굴은 얼굴이 흐려지고 돌아오기까지 남은 시간이 뜬다',
       '보스 방에서 나오면 맵 이름표와 동굴 이름판이 겹치던 것 — 이름판이 이름표 아래로 비켜선다',
@@ -16983,7 +17058,7 @@ const PATCH_NOTES = [
       '밤에 태어난 몬스터는 더 세고 엘리트가 세 배로 나온다. 날이 밝아도 그대로 — 이름표에 초승달',
       '사막에 모래폭풍 — 앞이 흐려지고 바람이 밀고 조금씩 깎인다. 마을 안은 안전하다',
       '밤에 가끔 마을이 습격당한다. 습격대는 울타리를 무시하고 들어온다',
-      '막아내면 골드와 RARE 이상 장비, 놓치면 상인이 이틀 문을 닫는다',
+      '막아내면 골드와 희귀 이상 장비, 놓치면 상인이 이틀 문을 닫는다',
     ],
   },
   {
@@ -16992,7 +17067,7 @@ const PATCH_NOTES = [
       '거점이 생겼다 — 상인 옆이 마을이 됐다 (모닥불·집 두 채·창고·연금 탁자)',
       '대장장이 확장: 속성 부여에 무기 강화(+1레벨)와 장비 재련(옵션 다시 굴리기) 추가',
       '연금술사 — 전리품 50개 팔면 이사 온다. 전리품+골드로 포션·해독제·강장제를 빚는다',
-      '창고 — 가방 밖 보관. Space 로 맡기고 찾는다 (처음부터 있다)',
+      '창고 — 가방 밖 보관. 스페이스로 맡기고 찾는다 (처음부터 있다)',
       '대장장이는 보스 하나를 잡아야 이사 온다. 조건을 채우면 마을에서 알림이 뜬다',
       'T 를 누르면 마을 시작점으로 귀환한다 (보스 방 안에서는 안 된다)',
     ],
@@ -17001,10 +17076,10 @@ const PATCH_NOTES = [
     date: '2026-10-14',
     notes: [
       '엘리트 몬스터가 나타난다 — 스폰의 3%가 접두사를 달고 나온다',
-      'SWIFT(날쌘) / TOUGH(단단한) / BURNING(불타는) / SPLITTING(분열하는)',
+      '날쌘 / 단단한 / 불타는 / 분열하는',
       '덩치가 크고 발밑에 고리가 돌고 이름표에 별이 붙는다. 미니맵에도 따로 찍힌다',
       '화면 밖에 있어도 가까우면 화면 가장자리에 별이 떠서 알려준다',
-      '보상은 경험치 4배, 골드 3배, 전리품 2배, 장비는 RARE 이상 확정',
+      '보상은 경험치 4배, 골드 3배, 전리품 2배, 장비는 희귀 이상 확정',
       '불타는 엘리트는 죽을 때 불꽃이 퍼져 주변 몬스터까지 태운다',
     ],
   },
@@ -17012,27 +17087,27 @@ const PATCH_NOTES = [
     date: '2026-10-13',
     notes: [
       '대장간이 생겼다 — 상인 옆 모루 앞에서 F. 전리품과 골드로 무기에 속성을 박는다',
-      'FLAME(화상) / FROST(빙결) / SHOCK(감전) / VENOM(중독) 넷 중 하나. 빼는 것은 공짜',
+      '불꽃(화상) / 서리(빙결) / 뇌전(감전) / 맹독(중독) 넷 중 하나. 빼는 것은 공짜',
       '속성은 추가 피해도 준다 — 몬스터마다 상성이 달라서 약점은 +50%, 강한 상대는 +5%',
       '숲은 대체로 불꽃, 사막은 대체로 서리 (늑대와 모래벌레는 뇌전)',
-      '상태이상 저항을 없앴다 — 이제 아무도 막을 수 없다 (WARD 옵션과 보스 저항 삭제)',
+      '상태이상 저항을 없앴다 — 이제 아무도 막을 수 없다 (저항 옵션과 보스 저항 삭제)',
     ],
   },
   {
     date: '2026-10-12',
     notes: [
       '상태이상 넷 — 화상(짧고 세게) / 중독(길고 약하게, 자연 회복 정지) / 빙결(절반으로 느리게) / 감전(받는 피해 1.3배)',
-      '몬스터와 플레이어 양쪽에 같은 규칙으로 걸린다. 머리 위 색 네모와 HUD 칩으로 보인다',
-      '장비 옵션 FIERY / FROSTY / SHOCKING / VENOMOUS 가 붙으면 때릴 때 확률로 건다 — 불 붙은 늑대가 타들어가며 달려온다',
-      'WARD 옵션은 걸리는 시간을 줄인다. 보스는 타고나길 절반만 걸린다',
-      '사막 비석이 이제 숲에서 가장 센 보스(ELDER SHROOM)를 잡아야 열린다',
+      '몬스터와 플레이어 양쪽에 같은 규칙으로 걸린다. 머리 위 색 네모와 화면 왼쪽 칩으로 보인다',
+      '장비에 불타는·얼어붙은·전격의·맹독의 옵션이 붙으면 때릴 때 확률로 건다 — 불 붙은 늑대가 타들어가며 달려온다',
+      '저항 옵션은 걸리는 시간을 줄인다. 보스는 타고나길 절반만 걸린다',
+      '사막 비석이 이제 숲에서 가장 센 보스(늙은 버섯)를 잡아야 열린다',
     ],
   },
   {
     date: '2026-10-11',
     notes: [
       '발견 안개 — 가본 곳만 지도가 밝아진다. 안 가본 곳의 몬스터·상자도 보이지 않는다',
-      '전체 지도에 밝힌 비율이 뜬다 (MAP 15%)',
+      '전체 지도에 밝힌 비율이 뜬다 (지도 15%)',
       '처음 들어간 구역마다 경험치 한 덩이 — 멀수록 크다 (맵마다 48구역)',
       '사막 비석이 잠겼다 — 숲 보스 셋 중 하나라도 잡아야 깨어난다 (잠긴 비석은 룬이 꺼져 있다)',
       '보물 상자의 장비 레벨 하한을 없앴다 — 그 자리 몬스터 레벨 그대로 나온다',
@@ -17053,13 +17128,13 @@ const PATCH_NOTES = [
       '의뢰 게시판 — 상인 옆에 나무 판이 섰다. F 로 들여다본다',
       '늘 세 개의 의뢰가 걸려 있고, 화면 오른쪽 위에 항상 적혀 있다 (다 하면 초록색)',
       '처치 / 수집(가방에 들고만 있으면 된다) / 탐험 세 가지. 하나를 받으면 새 의뢰가 바로 걸린다',
-      '보상은 골드와 장비 한 점 — 등급은 최소 FINE, 13% 로 전설까지',
+      '보상은 골드와 장비 한 점 — 등급은 최소 고급, 13% 로 전설까지',
     ],
   },
   {
     date: '2026-10-08',
     notes: [
-      '글자가 또렷해졌다 — 글자와 창을 세 배 고운 레이어에 따로 그린다 (5x7 폰트, 획이 절반으로 얇다)',
+      '글자가 또렷해졌다 — 글자와 창을 세 배 고운 레이어에 따로 그린다 (5×7칸 글꼴, 획이 절반으로 얇다)',
       '글자가 차지하는 자리는 그대로라 화면 배치는 달라지지 않았다',
       '창에 그림자·테두리·머리띠 색을 넣어 바닥에서 떠 보이게',
       '체력·경험치 게이지가 1/3 칸 단위로 부드럽게 차고, 위쪽에 얇은 빛이 얹힌다',
@@ -17068,27 +17143,27 @@ const PATCH_NOTES = [
   {
     date: '2026-10-07',
     notes: [
-      '세트 셋 — RANGER(사냥꾼) / GUARDIAN(파수꾼) / WANDERER(방랑자). 같은 세트를 두 점 이상 입으면 덤이 붙는다',
+      '세트 셋 — 사냥꾼 / 파수꾼 / 방랑자. 같은 세트를 두 점 이상 입으면 덤이 붙는다',
       '전설 고유 효과 여덟 — 수치가 아니라 규칙을 바꾸는 한 줄 (포션을 마시면 무적, 치명타가 쿨다운을 깎는다, 대시 충전 +1 …)',
-      '고유 효과는 바탕 아이템이 정해두고 있다 — 전설 가죽 모자는 언제나 EXECUTIONER',
-      '성장 무기도 고유 효과를 하나씩 가져간다 (SLIMELORD MOMENTUM / WOLFLORD SWIFT FOOT / SPORELORD EXECUTIONER)',
+      '고유 효과는 바탕 아이템이 정해두고 있다 — 전설 가죽 모자는 언제나 처형자',
+      '성장 무기도 고유 효과를 하나씩 가져간다 (점액왕은 기세, 늑대왕은 빠른 발, 포자왕은 처형자)',
       '인벤토리에 지금 켜진 세트와 고유 효과가 뜬다',
     ],
   },
   {
     date: '2026-10-06',
     notes: [
-      '장비에 등급이 생겼다 — COMMON / FINE / RARE / LEGEND. 등급이 높을수록 옵션이 1→4개 붙는다',
+      '장비에 등급이 생겼다 — 일반 / 고급 / 희귀 / 전설. 등급이 높을수록 옵션이 1→4개 붙는다',
       '랜덤 옵션 12종: 공격 속도·치명타 확률·치명타 배수·이동 속도·흡혈·포션 효율·쿨다운 감소·넉백 저항·골드 획득·방어·체력·공격력',
       '몬스터 레벨이 옵션의 크기를, 운이 개수를 정한다 — 같은 가죽 모자도 버리기 아까운 것이 생긴다',
-      '이름은 가장 센 옵션을 따라 지어진다 (SWIFT LEATHER CAP, VAMPIRIC CHAIN MAIL)',
+      '이름은 가장 센 옵션을 따라 지어진다 (날렵한 가죽 모자, 흡혈의 사슬 갑옷)',
       '희귀·전설은 가방 칸 테두리가 등급 색으로 둘러지고, 바닥에서도 그 색으로 빛난다',
     ],
   },
   {
     date: '2026-10-05',
     notes: [
-      '장비가 생겼다 — 머리 / 몸 / 장신구 세 칸. 몬스터가 떨구고, 인벤토리에서 Space 로 입는다',
+      '장비가 생겼다 — 머리 / 몸 / 장신구 세 칸. 몬스터가 떨구고, 인벤토리에서 스페이스로 입는다',
       '방어력(받는 피해 비율 감소) / 최대 체력 / 공격력 / 이동 속도 — 입은 것이 바로 능력치가 된다',
       '고른 장비 아래에 지금 입은 것과의 차이가 뜬다 (좋아지면 초록, 나빠지면 붉게)',
       '아이템 여덟 종: 가죽 모자·쇠 투구·가죽 조끼·사슬 갑옷·여행 망토·바람 반지·힘의 목걸이·생명 부적',
@@ -17105,18 +17180,18 @@ const PATCH_NOTES = [
   {
     date: '2026-09-14',
     notes: [
-      '두 번째 맵 "작열하는 사막(SCORCHED SANDS)" — 시작점 옆 텔레포트 비석에서 F. 숲과 같은 크기, 레벨 24~40',
+      '두 번째 맵 "작열하는 사막" — 시작점 옆 텔레포트 비석에서 F. 숲과 같은 크기, 레벨 24~40',
       '사막 몬스터 셋: 전갈(찌르기 + 독) / 선인장(사방 가시) / 모래벌레(땅속 접근 후 솟구침)',
       '색 등급 셋 추가 (24~29 호박 / 30~35 은빛 / 36~ 흑요석). 사막 무기 드랍은 23 상한 없음',
       '사막 전리품 셋과 사막 배경음 추가. 떠나 있는 동안 맵은 접어뒀다가 돌아오면 그대로',
       '전리품 드랍 확률 38% → 20%',
       '포션을 마셨을 때 회복량에 소수점이 찍히던 버그 수정',
       '인벤토리가 여러 칸짜리 가방이 됐다 (20칸, 상점 강화로 35칸) — 무기를 여럿 들고 다니며 바꿔 낄 수 있다',
-      '전리품: 슬라임 젤 / 늑대 이빨 / 포자 갓 + 보스 전리품 셋. 모아서 상인에게 판다 (SELL LOOT)',
-      '바닥 무기는 F 로 가방에 넣고, 인벤토리에서 Space 로 낀다. X 로 버리기',
+      '전리품: 슬라임 젤 / 늑대 이빨 / 포자 갓 + 보스 전리품 셋. 모아서 상인에게 판다 (전리품 팔기)',
+      '바닥 무기는 F 로 가방에 넣고, 인벤토리에서 스페이스로 낀다. X 로 버리기',
       '늑대 도트를 새로 그렸다 — 쫑긋한 귀, 주둥이, 꼬리, 네 다리 (납작한 슬라임 같다는 말이 있었다)',
-      '세 지역을 하나로 합쳐 "태초의 숲(PRIMEVAL FOREST)"으로 — 경계 없이 시작점에서 멀어질수록 세진다',
-      '시작 지점이 맵 한가운데로. 미니맵 위에 지금 자리의 기준 레벨(LV n AREA)이 표시된다',
+      '세 지역을 하나로 합쳐 "태초의 숲"으로 — 경계 없이 시작점에서 멀어질수록 세진다',
+      '시작 지점이 맵 한가운데로. 미니맵 위에 지금 자리의 기준 레벨(n레벨 지역)이 표시된다',
       '보스 동굴 셋은 가까운 곳(슬라임) → 중간(늑대) → 가장자리(버섯) 순으로 선다',
       '나무 뒤에 서면 나무가 반투명해진다 — 플레이어와 몬스터가 잎사귀에 가려 안 보이는 일이 없다',
     ],
@@ -17126,12 +17201,12 @@ const PATCH_NOTES = [
     notes: [
       '치명타 확률 12% → 10%',
       '플레이어가 맞아도 사라지지 않고 계속 보인다 (지도 십자도 안 깜빡임)',
-      '무기마다 스킬 둘 — 단검 FLURRY/SHADOW, 검 HEAVY/SPIN, 도끼 QUAKE/RAGE',
+      '무기마다 스킬 둘 — 단검 연속찌르기·그림자밟기, 검 강공격·회전베기, 도끼 땅찍기·광폭화',
       '스킬 위력은 무기 종류와 무관하게 계산 (단검 스킬이 약하지 않다)',
       '치명타가 안 터지던 버그 수정',
       '성장 무기 휘두르기 연출: 무지개 궤적, 잔상, 칼끝 불꽃',
-      '성장 무기(SLIMELORD 등)가 23레벨에 묶이던 문제 — 이제 내 레벨을 끝까지 따라간다',
-      '자동 저장 표시(SAVED) 제거 — 이제 조용히 저장된다',
+      '성장 무기(점액왕 등)가 23레벨에 묶이던 문제 — 이제 내 레벨을 끝까지 따라간다',
+      '자동 저장 표시 제거 — 이제 조용히 저장된다',
       '패치 노트를 버튼으로 — 새 소식이 있으면 붉은 느낌표',
       '자연 회복이 공격을 맞혔을 때도 끊긴다',
       '가방이 꽉 차면 포션이 끌려오지 않는다',
@@ -17594,7 +17669,7 @@ const Game = {
     Items.pickupRequested = false;
     // 무대가 셋이 되면서 "반대편"이 성립하지 않는다 — 어디로 갈지 고르는 창을 연다
     if (Portal.entries().every(e => e.here || !e.ok)) {
-      FX.number(p.x, p.y - 30, 'SEALED', '#ff6b6b');
+      FX.number(p.x, p.y - 30, '봉인됨', '#ff6b6b');
       Sound.play('error');
       return;
     }
@@ -18110,7 +18185,7 @@ const Game = {
         bannerUp: this.lairBanner > 0 || this.forestBanner > 0 || this.gateBanner > 0 || (typeof Events !== 'undefined' && Events.notice > 0),
       });
     }
-    if (this.exitPrompt) UI.drawCavePrompt(ui, World.arenaExit, cam, 0, 'LEAVE');
+    if (this.exitPrompt) UI.drawCavePrompt(ui, World.arenaExit, cam, 0, '나가기');
     if (this.shopPrompt && !this.showMap) Shop.drawPrompt(ui, cam);
     if (this.boardPrompt && !this.showMap) Quests.drawPrompt(ui, cam);
     if (this.forgePrompt && !this.showMap) Forge.drawPrompt(ui, cam);
@@ -18137,7 +18212,7 @@ const Game = {
       if (lair) UI.drawBanner(ui, lair.lairName, '#ff6b6b', this.lairBanner);
     }
     if (this.forestBanner > 0 && !windowUp && !this.title) UI.drawBanner(ui, World.spec.name, World.spec.color, this.forestBanner);
-    if (this.gateBanner > 0 && !windowUp) UI.drawBanner(ui, 'THE OBELISK AWAKENS', '#5ff0ff', this.gateBanner);
+    if (this.gateBanner > 0 && !windowUp) UI.drawBanner(ui, '비석이 깨어났다', '#5ff0ff', this.gateBanner);
     if (typeof Events !== 'undefined') {
       // 보스 방에서는 화면 위를 보스 체력바가 쓴다 — 날짜 시계는 비켜준다
       if (!windowUp && !this.title && !this.inArena) Events.drawHud(ui);

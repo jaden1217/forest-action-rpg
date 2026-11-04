@@ -97,7 +97,7 @@ const Gear = {
   },
 
   // 레벨까지 붙인 긴 이름 (바닥 이름표에는 짧은 쪽을 쓴다)
-  fullName(item) { return this.name(item) + ' L' + item.level; },
+  fullName(item) { return this.name(item) + ' ' + item.level + '레벨'; },
 
   color(item) { return this.rarity(item).color; },
 
@@ -108,7 +108,7 @@ const Gear = {
   statLine(stats) {
     const order = ['armor', 'maxHp', 'power', 'speed', 'attackSpeed', 'crit', 'critMult',
                    'lifesteal', 'potion', 'cooldown', 'knockRes', 'gold'];
-    const base = { armor: 'ARM', maxHp: 'HP', power: 'ATK', speed: 'SPD' };
+    const base = { armor: '방어', maxHp: '체력', power: '공격', speed: '이속' };
     const out = [];
     for (const k of order) {
       if (!stats[k]) continue;

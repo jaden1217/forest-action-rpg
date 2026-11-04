@@ -128,7 +128,7 @@ class Sandworm extends Enemy {
       const cv = Creatures.wormMound(Math.round(16 * this.scale * grow));
       const top = Creatures.blit(ctx, cv, sx + jitter, sy);
       if (this.state === 'rise') this.drawWarning(ctx, sx, top, 1 - this.timer / cfg.windup);
-      UI.drawText(ctx, 'L' + this.level, sx - 4, top - 5, this.labelColor, false);
+      UI.drawText(ctx, this.level + '레벨', sx, top - 5, this.labelColor, true);
       return;
     }
     // 밖에 나온 몸통 — 막 솟았을 땐 위로 늘어났다가 자리를 잡는다

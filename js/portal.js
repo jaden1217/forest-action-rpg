@@ -81,8 +81,8 @@ const Portal = {
     if (P.Space || P.Enter) {
       const pick = list[this.cursor];
       delete P.Space; delete P.Enter;
-      if (pick.here) { this.say('YOU ARE HERE'); Sound.play('error'); return; }
-      if (!pick.ok) { this.say('SLAY ' + pick.need); Sound.play('error'); return; }
+      if (pick.here) { this.say('지금 있는 곳이다'); Sound.play('error'); return; }
+      if (!pick.ok) { this.say(pick.need + ' 처치 필요'); Sound.play('error'); return; }
       this.close();
       Game.beginTransition(() => Game.travel(pick.id));
       return;
@@ -102,14 +102,14 @@ const Portal = {
       this.drawSealed(ctx, sx, sy, next);
       return;
     }
-    UI.drawText(ctx, open + ' WAYS OPEN', sx, sy - 44, '#8f9aa8', true);
+    UI.drawText(ctx, open + '곳으로 갈 수 있다', sx, sy - 44, '#8f9aa8', true);
     if (Math.floor(World.time * 3) % 2 === 0) return;
-    UI.drawText(ctx, 'F  OBELISK', sx, sy - 52, '#5ff0ff', true);
+    UI.drawText(ctx, 'F  비석', sx, sy - 52, '#5ff0ff', true);
   },
 
   drawSealed(ctx, sx, sy, next) {
-    UI.drawText(ctx, 'SEALED', sx, sy - 52, '#8f9aa8', true);
-    if (next && next.need) UI.drawText(ctx, 'SLAY ' + next.need, sx, sy - 44, '#ff6b6b', true);
+    UI.drawText(ctx, '봉인됨', sx, sy - 52, '#8f9aa8', true);
+    if (next && next.need) UI.drawText(ctx, next.need + ' 처치 필요', sx, sy - 44, '#ff6b6b', true);
   },
 
   /* ── 창 ──────────────────────────────────────────────── */
@@ -119,7 +119,7 @@ const Portal = {
     const x = Math.round((CONFIG.VIEW_W - w) / 2), y = Math.round((CONFIG.VIEW_H - h) / 2);
     UI.panel(ctx, x, y, w, h, '#5ff0ff');
     UI.divider(ctx, x + 6, y + 15, w - 12);
-    UI.drawText(ctx, 'THE OBELISK', x + w / 2, y + 6, '#5ff0ff', true);
+    UI.drawText(ctx, '비석', x + w / 2, y + 6, '#5ff0ff', true);
 
     const rowY = y + 24, rowH = 18;
     for (let i = 0; i < list.length; i++) {
@@ -135,12 +135,12 @@ const Portal = {
 
       // 오른쪽 — 여기 / 레벨대 / 잠금 조건
       if (it.here) {
-        UI.drawText(ctx, 'HERE', x + w - 12 - UI.textWidth('HERE'), ry, '#8f9aa8');
+        UI.drawText(ctx, '현재 위치', x + w - 12 - UI.textWidth('현재 위치'), ry, '#8f9aa8');
       } else if (it.ok) {
-        const lv = 'LV ' + it.range[0] + '-' + it.range[1];
+        const lv = it.range[0] + '~' + it.range[1] + '레벨';
         UI.drawText(ctx, lv, x + w - 12 - UI.textWidth(lv), ry, '#8f9aa8');
       } else {
-        const need = 'SLAY ' + it.need;
+        const need = it.need + ' 처치 필요';
         UI.drawText(ctx, need, x + w - 12 - UI.textWidth(need), ry, '#c05a5a');
       }
       // 둘째 줄 — 잠긴 곳만, 왜 못 가는지 한 번 더 또렷하게는 않는다 (줄이 빽빽해진다)
@@ -148,7 +148,7 @@ const Portal = {
 
     const footY = y + h - 19;
     if (this.message) UI.drawText(ctx, this.message, x + w / 2, footY, '#ff6b6b', true);
-    else UI.drawText(ctx, 'W S SELECT   SPACE TRAVEL', x + w / 2, footY, '#7fa86a', true);
-    UI.drawText(ctx, 'PAUSED - F TO CLOSE', x + w / 2, footY + 8, '#5f6b59', true);
+    else UI.drawText(ctx, 'W S 고르기   스페이스 이동', x + w / 2, footY, '#7fa86a', true);
+    UI.drawText(ctx, '일시정지 · F 닫기', x + w / 2, footY + 8, '#5f6b59', true);
   },
 };

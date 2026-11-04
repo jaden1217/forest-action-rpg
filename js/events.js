@@ -93,9 +93,9 @@ const Events = {
   onPhaseChange(from, to) {
     if (World.isArena) return;
     if (to === 'night') {
-      this.banner('NIGHT FALLS', '#8fa8e0');
+      this.banner('밤이 찾아왔다', '#8fa8e0');
     } else if (to === 'day') {
-      this.banner('DAY ' + this.day, '#ffe066');
+      this.banner(this.day + '일째 아침', '#ffe066');
     }
   },
 
@@ -178,7 +178,7 @@ const Events = {
         this.storm = 0;
         this.grains.length = 0;
         this.stormCooldown = Util.rand(cfg.minGap, cfg.maxGap);
-        this.banner('THE STORM PASSES', '#d9b779');
+        this.banner('폭풍이 지나갔다', '#d9b779');
         return;
       }
       this.updateGrains(dt);
@@ -193,7 +193,7 @@ const Events = {
     this.stormTick = 0;
     this.grains.length = 0;
     for (let i = 0; i < cfg.grains; i++) this.grains.push(this.newGrain(true));
-    this.banner('SANDSTORM', '#d9b779');
+    this.banner('모래폭풍이 분다', '#d9b779');
     Sound.play('spin');
   },
 
@@ -308,7 +308,7 @@ const Events = {
     const col = this.phase === 'night' ? '#8fa8e0'
       : (this.phase === 'dusk' ? '#ff8a3c' : (this.phase === 'dawn' ? '#9fc8ff' : '#ffe066'));
 
-    const label = 'DAY ' + this.day;
+    const label = this.day + '일째';
     UI.drawText(ctx, label, x - 3 - UI.textWidth(label), y - 1, '#cbbfa2', false);
 
     ctx.fillStyle = '#17110d';
@@ -322,11 +322,11 @@ const Events = {
     ctx.fillStyle = col;
     ctx.fillRect(x + Util.clamp(Math.round(w * this.time), 0, w - 2), y - 1, 2, 5);
 
-    const phase = this.phase.toUpperCase();
+    const phase = { dawn: '새벽', day: '낮', dusk: '황혼', night: '밤' }[this.phase];
     UI.drawText(ctx, phase, x + w + 4, y - 1, col, false);
 
     if (this.storm > 0) {
-      const s = 'SANDSTORM ' + Math.ceil(this.storm);
+      const s = '모래폭풍 ' + Math.ceil(this.storm) + '초';
       UI.drawText(ctx, s, CONFIG.VIEW_W / 2, y + 7, '#d9b779', true);
     }
   },

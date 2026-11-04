@@ -172,7 +172,7 @@ SkillKit.reaper = {
   },
   canStart(p, spec, enemies) {
     if (this.targets(p, spec, enemies).length) return true;
-    FX.number(p.x, p.y - 22, 'NO TARGET', '#8f9aa8');   // 벨 적이 없으면 나가지 않는다 (쿨다운도 그대로)
+    FX.number(p.x, p.y - 22, '대상 없음', '#8f9aa8');   // 벨 적이 없으면 나가지 않는다 (쿨다운도 그대로)
     return false;
   },
   start(p, spec, enemies) {
