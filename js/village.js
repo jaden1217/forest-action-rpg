@@ -9,6 +9,7 @@
      연금술사  포션·해독제 제작 — 전리품 50개를 팔아야 이사 온다
      창고      가방 밖 보관 — 처음부터 있다 (맡기는 데 조건은 없다)
      귀환      T 를 누르면 마을 시작점으로 돌아온다 (보스 방 안에서는 안 된다)
+     귀환 주문 B 를 누르고 5초 동안 피해를 받지 않으면 마을로 순간이동한다
 
    테라리아처럼 조건을 걸어 "마을이 커지는 맛"을 준다.
    조건을 채운 뒤 마을에 가면 새 집과 함께 알림이 뜬다. */
@@ -73,8 +74,10 @@ const Village = {
   bench: null,        // 연금 탁자 (간판을 띄우려고 들고 있는다)
   zone: null,         // 지금 맵의 안전구역 {cx,cy,x0,y0,x1,y1}
   zones: {},          // 맵마다 { forest: zone, desert: zone } — 오가도 남는다
+  recall: null,       // 귀환 주문 { t: 남은 초, hp: 직전 체력, spark: 다음 불꽃까지 }
 
   reset() {
+    this.recall = null;
     this.stash = [];
     this.lootSold = 0;
     this.announced = {};
@@ -445,20 +448,81 @@ const Village = {
     if (!player || player.dead) return false;
     if (Game.inArena || Game.transition) return false;
     if (Game.paused()) return false;
-    const tx = World.startX, ty = World.startY + 10;
-    Game.beginTransition(() => {
-      player.x = tx; player.y = ty;
-      player.kx = player.ky = 0;
-      player.invuln = Math.max(player.invuln, 0.9);
-      player.attackTimer = 0;
-      player.activeSkill = null;
-      Game.updateCamera(true);
-      FX.burst(tx, ty, 24, ['#7dff8a', '#ffffff', '#5ff0ff'], { speed: 70, life: 0.7, gravity: -20 });
-      Sound.play('caveOut');
-      this.checkMoveIns(false);
-    });
+    this.recall = null;
+    Game.beginTransition(() => this.landHome(player));
     Sound.play('blip');
     return true;
+  },
+
+  // 마을 시작점 앞에 내려선다 — T 와 귀환 주문이 같은 자리로 돌아온다
+  landHome(player) {
+    const tx = World.startX, ty = World.startY + 10;
+    player.x = tx; player.y = ty;
+    player.kx = player.ky = 0;
+    player.invuln = Math.max(player.invuln, 0.9);
+    player.attackTimer = 0;
+    player.activeSkill = null;
+    Game.updateCamera(true);
+    FX.burst(tx, ty, 24, ['#7dff8a', '#ffffff', '#5ff0ff'], { speed: 70, life: 0.7, gravity: -20 });
+    Sound.play('caveOut');
+    this.checkMoveIns(false);
+  },
+
+  /* ── 귀환 주문 (B) ───────────────────────────────────────
+     누르고 recallTime 초 동안 피해를 받지 않으면 지금 맵의 마을로 순간이동한다.
+     걷고 싸워도 되지만 맞으면 끊긴다 — 위험할 때 빠져나가는 수단이 아니라, 싸움을 끝내고 돌아가는 수단이다.
+     독·화상·모래폭풍은 takeDamage 를 거치지 않으므로 피해는 체력이 줄었는지로 잰다
+     (그래서 대시 무적으로 피한 공격에는 끊기지 않는다). 다시 누르면 스스로 그만둔다. */
+  pressRecall(player) {
+    if (!player || player.dead || Game.transition || Game.paused()) return;
+    if (this.recall) { this.stopRecall(player, '귀환 취소', 'blip'); return; }
+    if (Game.inArena) { this.stopRecall(player, '보스 방에서는 귀환할 수 없다', 'error'); return; }
+    if (this.isSafe(player.x, player.y)) { this.stopRecall(player, '이미 마을에 있다', 'error'); return; }
+    this.recall = { t: CONFIG.village.recallTime, hp: player.hp, spark: 0 };
+    FX.ring(player.x, player.y + 2, 18, '#7dff8a');
+    Sound.play('toggle');
+  },
+
+  stopRecall(player, text, sound) {
+    this.recall = null;
+    FX.number(player.x, player.y - 22, text, sound === 'error' ? '#ff6b6b' : '#c8d0d8');
+    Sound.play(sound);
+  },
+
+  // 몬스터·투사체·폭풍이 다 움직인 뒤에 불린다 — 끝나는 순간의 피해까지 보고 판단하도록
+  updateRecall(dt, player) {
+    const r = this.recall;
+    if (!r) return;
+    // 쓰러졌거나, 동굴로 들어갔거나, 걸어서 마을에 닿았으면 주문은 그냥 사라진다
+    if (player.dead || Game.inArena || this.isSafe(player.x, player.y)) { this.recall = null; return; }
+    // 최대 체력이 줄어 잘린 것(장비를 벗었을 때)은 피해가 아니다
+    if (player.hp < Math.min(r.hp, player.maxHp)) { this.stopRecall(player, '맞아서 귀환이 끊겼다', 'error'); return; }
+    r.hp = player.hp;
+
+    const before = Math.ceil(r.t);
+    r.t -= dt;
+    if (r.t <= 0) {
+      this.recall = null;
+      FX.ring(player.x, player.y + 2, 24, '#ffffff');
+      Game.beginTransition(() => this.landHome(player));
+      return;
+    }
+    // 한 초에 한 번 작게 울려서, 싸우느라 안 보고 있어도 돌아가는 중인 걸 안다
+    if (Math.ceil(r.t) < before) { FX.ring(player.x, player.y + 2, 18, '#7dff8a'); Sound.play('toggle'); }
+    r.spark -= dt;
+    if (r.spark <= 0) {
+      r.spark = 0.3;
+      FX.burst(player.x, player.y, 3, ['#7dff8a', '#ffffff', '#5ff0ff'], { speed: 22, life: 0.6, gravity: -50 });
+    }
+  },
+
+  // 머리 위 남은 시간
+  drawRecall(ctx, cam, player) {
+    const r = this.recall;
+    if (!r) return;
+    const sx = Math.round(player.x - cam.x), sy = Math.round(player.y - cam.y);
+    UI.drawText(ctx, '귀환 ' + r.t.toFixed(1) + '초', sx, sy - 38, '#7dff8a', true);
+    UI.bar(ctx, sx - 15, sy - 31, 30, 2, 1 - r.t / CONFIG.village.recallTime, '#7dff8a', '#20303a');
   },
 
   /* ── 연금술 ────────────────────────────────────────────── */

@@ -702,6 +702,8 @@ const Game = {
       if (Input.pickupPressed()) Items.pickupRequested = true;
       // 거점 귀환 — T 로 마을 시작점으로 (보스 방·일시정지 중에는 안 된다)
       if (Input.pressed.KeyT && typeof Village !== 'undefined') Village.tryReturn(this.player);
+      // 귀환 주문 — B 를 누르고 5초 동안 맞지 않으면 돌아간다
+      if (Input.pressed.KeyB && typeof Village !== 'undefined') Village.pressRecall(this.player);
 
       Save.tick(dt, this);
       this.soundFlash = Math.max(0, this.soundFlash - dt);
@@ -731,6 +733,7 @@ const Game = {
           Quests.update(dt, this.player);
           Landmarks.update(dt, this.player);
           Fog.update(dt, this.player);
+          if (typeof Village !== 'undefined') Village.updateRecall(dt, this.player);
         }
         FX.update(dt);
       }
@@ -878,6 +881,7 @@ const Game = {
     if (this.stashPrompt && !this.showMap && typeof Village !== 'undefined') Village.drawStashPrompt(ui, cam);
     if (this.chestPrompt && !this.showMap) Landmarks.drawPrompt(ui, cam, this.chestPrompt);
     if (this.portalPrompt && !this.showMap) Portal.drawPrompt(ui, cam);
+    if (!this.showMap && typeof Village !== 'undefined') Village.drawRecall(ui, cam, this.player);
     if (!this.paused() && !this.title) Quests.drawTracker(ui, this.player);   // 창이 떠 있으면 가장자리에 잘리므로 숨긴다
     if (Shop.open) Shop.draw(ui, this.player);
     if (Quests.open) Quests.draw(ui, this.player);
