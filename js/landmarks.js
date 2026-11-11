@@ -90,7 +90,7 @@ const Landmarks = {
     chest.chest = true;
     chest.index = index;
     chest.mapId = World.mapId;
-    chest.kind = kind;
+    chest.site = kind;   // 'kind' 라고 부르면 안 된다 — 그리기(Game.render)가 kind 가 있는 것을 바닥 드랍으로 본다
     chest.landmark = 'chest';
     chest.draw = (ctx, cam) => this.drawChest(ctx, cam, chest);
     World.chests.push(chest);
