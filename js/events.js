@@ -17,7 +17,6 @@
 
 const Events = {
   time: 0,            // 하루 중 위치 (0~1)
-  day: 1,
   phase: 'day',       // dawn | day | dusk | night
 
   storm: 0,           // 모래폭풍 남은 시간 (초)
@@ -33,7 +32,6 @@ const Events = {
   reset() {
     const cfg = CONFIG.events;
     this.time = cfg.startAt;
-    this.day = 1;
     this.phase = 'day';
     this.storm = 0;
     this.stormCooldown = cfg.storm.minGap;
@@ -71,7 +69,7 @@ const Events = {
     const was = this.phase;
 
     this.time += dt / cfg.dayLength;
-    while (this.time >= 1) { this.time -= 1; this.day++; }
+    while (this.time >= 1) this.time -= 1;
     this.phase = this.phaseAt(this.time);
 
     if (was !== this.phase) this.onPhaseChange(was, this.phase);
@@ -95,7 +93,7 @@ const Events = {
     if (to === 'night') {
       this.banner('밤이 찾아왔다', '#8fa8e0');
     } else if (to === 'day') {
-      this.banner(this.day + '일째 아침', '#ffe066');
+      this.banner('아침이 밝았다', '#ffe066');
     }
   },
 
@@ -300,16 +298,13 @@ const Events = {
     ctx.restore();
   },
 
-  /* 화면 위쪽 한가운데의 작은 시계 — 며칠째인지, 지금이 언제인지, 해가 어디쯤인지.
+  /* 화면 위쪽 한가운데의 작은 시계 — 지금이 언제인지, 해가 어디쯤인지.
      "가만히 서 있어도 시간이 흐른다"를 눈으로 확인하는 자리다. */
   drawHud(ctx) {
     const w = 46, x = Math.round(CONFIG.VIEW_W / 2 - w / 2), y = 5;
     const e = CONFIG.events;
     const col = this.phase === 'night' ? '#8fa8e0'
       : (this.phase === 'dusk' ? '#ff8a3c' : (this.phase === 'dawn' ? '#9fc8ff' : '#ffe066'));
-
-    const label = this.day + '일째';
-    UI.drawText(ctx, label, x - 3 - UI.textWidth(label), y - 1, '#cbbfa2', false);
 
     ctx.fillStyle = '#17110d';
     ctx.fillRect(x - 1, y - 1, w + 2, 5);
@@ -334,14 +329,13 @@ const Events = {
   /* ── 저장 ──────────────────────────────────────────────── */
 
   serialize() {
-    return { time: this.time, day: this.day };
+    return { time: this.time };   // 예전 저장의 day(며칠째)는 읽지 않고 버린다
   },
 
   deserialize(data) {
     this.reset();
     if (!data) return;
     this.time = Util.clamp(+data.time || 0, 0, 0.999);
-    this.day = Math.max(1, data.day | 0);
     this.phase = this.phaseAt(this.time);
   },
 };
