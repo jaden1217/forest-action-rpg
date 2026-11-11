@@ -586,8 +586,6 @@ const Village = {
     if (id === 'antidote') {
       Status.clear(player);
       player.wardTimer = a.wardTime;
-      const heal = Math.round(player.maxHp * a.antidoteHeal);
-      player.hp = Math.min(player.maxHp, player.hp + heal);
       FX.number(player.x, player.y - 26, '해독 · ' + a.wardTime + '초 면역', '#7dff8a');
     } else if (id === 'tonic') {
       player.tonicTimer = a.tonicTime;

@@ -1620,16 +1620,15 @@ const CONFIG = {
       potionBig: { name: '포션 2병 빚기', desc: '포션 2병을 한 번에 만든다', color: '#ffd93d', gold: 8, loot: { fang: 3, cap: 3 }, gain: 2 },
       // 걸린 상태이상을 전부 지우고 잠깐 해독 상태가 된다 (그 동안 새로 안 걸린다)
       antidote: { name: '해독제', effect: '상태이상 치료',
-        desc: '가방에 들어간다. 마시면 독·화상·빙결·감전이 풀리고 체력이 25% 차며, 30초 동안 새로 걸리지 않는다', color: '#7dff8a', gold: 10, loot: { cap: 2, stinger: 1 }, wardTime: 15 },
+        desc: '가방에 들어간다. 마시면 독·화상·빙결·감전이 풀리고, 30초 동안 새로 걸리지 않는다', color: '#7dff8a', gold: 10, loot: { cap: 2, stinger: 1 }, wardTime: 15 },
       // 중독·화상에 걸려도 자연 회복이 멈추지 않는 약 (다음에 걸릴 때부터 적용, 60초)
       tonic: { name: '강장제', effect: '독에 걸려도 회복',
-        desc: '가방에 들어간다. 마시면 120초 동안 독·화상 중에도 체력이 찬다. 3초만 쉬어도 차고, 두 배 빠르다', color: '#5ff0ff', gold: 14, loot: { cactusFruit: 2, wormScale: 1 }, tonicTime: 60 },
+        desc: '가방에 들어간다. 마시면 45초 동안 독·화상 중에도 체력이 찬다. 3초만 쉬어도 차고, 두 배 빠르다', color: '#5ff0ff', gold: 14, loot: { cactusFruit: 2, wormScale: 1 }, tonicTime: 60 },
     },
     /* 해독제·강장제는 빚으면 가방에 들어가는 물건이다 (CONFIG.loot.items 의 antidote / tonic — drink 가 붙은 것).
        인벤토리에서 골라 스페이스(또는 클릭)로 마신다 */
     wardTime: 30,     // 해독제 — 이만큼 새 상태이상에 걸리지 않는다
-    antidoteHeal: 0.25, // 해독제 — 마시는 순간 최대 체력의 이만큼 찬다
-    tonicTime: 120,   // 강장제 지속
+    tonicTime: 45,    // 강장제 지속
     tonicRegen: 2,    // 강장제 — 자연 회복이 이 배로 빠르고, 기다리는 시간은 이 배로 짧다
   },
 
