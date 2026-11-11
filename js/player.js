@@ -886,8 +886,10 @@ class Player {
     const c = CONFIG.player;
     this.sinceCombat += dt;
     if (Status.blocksRegen(this)) { this.sinceCombat = 0; this.regenTick = 0; return; }   // 중독·화상 중에는 안 찬다
-    if (this.sinceCombat < c.regenDelay || this.hp >= this.maxHp) { this.regenTick = 0; return; }
-    this.hp = Math.min(this.maxHp, this.hp + this.maxHp * c.regenRate * dt);
+    // 강장제가 도는 동안은 기다리는 시간이 짧고 차는 속도가 빠르다
+    const k = this.tonicTimer > 0 ? CONFIG.alchemy.tonicRegen : 1;
+    if (this.sinceCombat < c.regenDelay / k || this.hp >= this.maxHp) { this.regenTick = 0; return; }
+    this.hp = Math.min(this.maxHp, this.hp + this.maxHp * c.regenRate * k * dt);
     // 1.5초마다 작은 + 표시 — 지금 차고 있다는 걸 알려준다
     this.regenTick -= dt;
     if (this.regenTick <= 0) {
@@ -897,7 +899,8 @@ class Player {
   }
 
   regenerating() {
-    return !this.dead && this.sinceCombat >= CONFIG.player.regenDelay && this.hp < this.maxHp;
+    const k = this.tonicTimer > 0 ? CONFIG.alchemy.tonicRegen : 1;
+    return !this.dead && this.sinceCombat >= CONFIG.player.regenDelay / k && this.hp < this.maxHp;
   }
 
   /* SECOND WIND — 체력이 바닥나기 전에 알아서 포션을 한 병 비운다.

@@ -36,7 +36,10 @@ const Inventory = {
   },
 
   spec(id) { return CONFIG.loot.items[id]; },
-  stackMax(id) { return this.spec(id).trophy ? CONFIG.inventory.trophyStack : CONFIG.inventory.lootStack; },
+  stackMax(id) {
+    const s = this.spec(id);
+    return s.drink ? CONFIG.inventory.drinkStack : (s.trophy ? CONFIG.inventory.trophyStack : CONFIG.inventory.lootStack);
+  },
 
   /* ── 넣기 / 빼기 ───────────────────────────────────────── */
 
@@ -114,7 +117,7 @@ const Inventory = {
     let value = 0, items = 0;
     for (let i = 1; i < player.bag.length; i++) {
       const s = player.bag[i];
-      if (!s || s.kind !== 'loot') continue;
+      if (!s || s.kind !== 'loot' || this.spec(s.id).drink) continue;   // 약은 한꺼번에 팔지 않는다
       value += this.spec(s.id).value * s.amount;
       items += s.amount;
     }
@@ -124,7 +127,8 @@ const Inventory = {
   sellLoot(player) {
     const v = this.lootValue(player);
     for (let i = 1; i < player.bag.length; i++) {
-      if (player.bag[i] && player.bag[i].kind === 'loot') player.bag[i] = null;
+      const s = player.bag[i];
+      if (s && s.kind === 'loot' && !this.spec(s.id).drink) player.bag[i] = null;
     }
     player.gold += v.value;
     // 연금술사 이사 조건 — 판 전리품 개수를 센다
@@ -214,6 +218,14 @@ const Inventory = {
       if (!r) return;
       player.bag[index] = old;
       this.say(this.itemName(player, s) + ' 장착');
+      return;
+    }
+    if (s.kind === 'loot' && this.spec(s.id).drink) {
+      if (Village.drink(player, s.id)) {
+        s.amount -= 1;
+        if (s.amount <= 0) player.bag[index] = null;
+        this.say(Util.eul(this.spec(s.id).name) + ' 마셨다');
+      }
       return;
     }
     this.say('상점에 팔 수 있다');
@@ -485,7 +497,7 @@ const Inventory = {
     if (at.zone === 'gear') return '스페이스 벗기  ';
     if (s.kind === 'gear') return '스페이스 입기  ';
     if (s.kind === 'weapon') return '스페이스 장착  ';
-    return s.kind === 'potion' ? '스페이스 마시기  ' : '';
+    return (s.kind === 'potion' || (s.kind === 'loot' && this.spec(s.id).drink)) ? '스페이스 마시기  ' : '';
   },
 
   /* ── 판정 표시 ─────────────────────────────────────────── */
@@ -617,6 +629,12 @@ const Inventory = {
       return;
     }
     const ls = this.spec(s.id);
+    if (ls.drink) {
+      const r = CONFIG.alchemy.recipes[ls.drink];
+      line(ls.name + '  ' + s.amount + '개', ls.color);
+      for (const t of this.wrap((r ? r.desc : '').replace('가방에 들어간다. ', '').split(' '), box.w, ' ').slice(0, 3)) line(t, '#c8d0d8');
+      return;
+    }
     line(ls.name, ls.color);
     line(s.amount + '개  값 ' + (ls.value * s.amount) + '골드', '#f0d9b5');
     line((ls.trophy ? '보스 전리품' : '몬스터 전리품') + ' · 상점에 판다', '#7fa86a');

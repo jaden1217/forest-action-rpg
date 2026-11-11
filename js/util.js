@@ -1,6 +1,12 @@
 'use strict';
 
 const Util = {
+  // 받침에 맞춘 목적격 조사 — '해독제를', '설인 가죽을'
+  eul(word) {
+    const c = String(word).charCodeAt(String(word).length - 1);
+    return word + ((c >= 0xac00 && c <= 0xd7a3 && (c - 0xac00) % 28) ? '을' : '를');
+  },
+
   clamp(v, a, b) { return v < a ? a : (v > b ? b : v); },
   lerp(a, b, t) { return a + (b - a) * t; },
   rand(a, b) { return a + Math.random() * (b - a); },

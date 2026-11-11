@@ -906,7 +906,7 @@ const Game = {
       if (Events.notice > 0 && !windowUp) UI.drawBanner(ui, Events.noticeText, Events.noticeColor, Events.notice);
     }
     if (this.confirmNewGame) UI.drawConfirm(ui);
-    if (this.soundFlash > 0) UI.drawSoundState(ui, Sound.enabled);
+    if (this.soundFlash > 0 && !windowUp) UI.drawSoundState(ui, Sound.enabled);   // 창 아래쪽 안내와 같은 자리라 창이 떠 있으면 비켜준다
     // 장면 전환은 맨 위를 덮는다
     if (this.transition) UI.drawFade(ui, this.fadeAlpha());
     if (this.title) UI.drawTitle(ui, this.hasSave);

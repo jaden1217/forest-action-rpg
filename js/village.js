@@ -547,6 +547,8 @@ const Village = {
       let reason = '';
       if (id === 'potion' || id === 'potionBig') {
         if (player.potions >= player.maxPotions) { ok = false; reason = '주머니 가득'; }
+      } else if (CONFIG.loot.items[id] && Inventory.roomFor(player, id) <= 0) {
+        ok = false; reason = '가방 가득';
       }
       out.push({ id: id, spec: r, held: held, lootOk: lootOk, ok: ok, reason: reason });
     }
@@ -560,6 +562,8 @@ const Village = {
     if ((entry.id === 'potion' || entry.id === 'potionBig') && player.potions >= player.maxPotions) {
       this.sayAlchemy('포션 주머니가 가득 찼다'); Sound.play('error'); return;
     }
+    const bottled = !!CONFIG.loot.items[entry.id];   // 해독제·강장제 — 가방에 들어가는 약
+    if (bottled && Inventory.roomFor(player, entry.id) <= 0) { this.sayAlchemy('가방이 가득 찼다'); Sound.play('error'); return; }
     for (const h of entry.held) this.takeLoot(player, h.id, h.need);
     player.gold -= r.gold;
 
@@ -567,18 +571,32 @@ const Village = {
       const got = player.addPotion(r.gain);
       if (got <= 0) { this.sayAlchemy('포션 주머니가 가득 찼다'); Sound.play('error'); return; }
       this.sayAlchemy('포션 ' + got + '병을 빚었다');
-    } else if (entry.id === 'antidote') {
-      Status.clear(player);
-      player.wardTimer = CONFIG.alchemy.wardTime;
-      FX.number(player.x, player.y - 26, '해독', '#7dff8a');
-      this.sayAlchemy('해독 · 15초 동안 면역');
-    } else if (entry.id === 'tonic') {
-      player.tonicTimer = CONFIG.alchemy.tonicTime;
-      FX.number(player.x, player.y - 26, '강장제 60초', '#5ff0ff');
-      this.sayAlchemy('60초 동안 회복이 멈추지 않는다');
+    } else if (bottled) {
+      Inventory.addLoot(player, entry.id, 1);
+      this.sayAlchemy(Util.eul(r.name) + ' 빚었다 · 인벤토리에서 마신다');
     }
     Sound.play('potion');
     FX.burst(player.x, player.y - 4, 14, [r.color, '#ffffff'], { speed: 45, life: 0.5, gravity: 30 });
+  },
+
+  /* 약 마시기 — 인벤토리에서 해독제·강장제를 고르면 불린다. 마셨으면 true */
+  drink(player, id) {
+    const a = CONFIG.alchemy;
+    if (player.dead) return false;
+    if (id === 'antidote') {
+      Status.clear(player);
+      player.wardTimer = a.wardTime;
+      const heal = Math.round(player.maxHp * a.antidoteHeal);
+      player.hp = Math.min(player.maxHp, player.hp + heal);
+      FX.number(player.x, player.y - 26, '해독 · ' + a.wardTime + '초 면역', '#7dff8a');
+    } else if (id === 'tonic') {
+      player.tonicTimer = a.tonicTime;
+      FX.number(player.x, player.y - 26, '강장제 ' + a.tonicTime + '초', '#5ff0ff');
+    } else return false;
+    Sound.play('potion');
+    const color = CONFIG.loot.items[id].color;
+    FX.burst(player.x, player.y - 4, 14, [color, '#ffffff'], { speed: 45, life: 0.5, gravity: 30 });
+    return true;
   },
 
   sayAlchemy(text) { this.alchemyMessage = text; this.alchemyTimer = 1.8; },

@@ -1123,6 +1123,9 @@ function buildSprites() {
     yetiPelt: makeSprite('loot_pelt', LOOT_PELT, { M: '#b89a74', n: '#f0e2cc' }),
     frostCore: makeSprite('loot_frostcore', LOOT_FROSTCORE, { M: '#4aa8c4', n: '#e8fbff' }),
     lordScale: makeSprite('loot_lordscale', LOOT_LORDSCALE, { D: '#b07a2a', R: '#ffb35c', d: '#ffe0a0' }),
+    // 연금술 약 — 포션 병에 약 색만 바꿔 담는다
+    antidote: makeSprite('loot_antidote', POTION, { R: '#3fa347', r: '#7dff8a' }),
+    tonic: makeSprite('loot_tonic', POTION, { R: '#2a8fa0', r: '#5ff0ff' }),
   };
   SPRITES.merchant = [makeSprite('merchant', MERCHANT), makeSprite('merchant_blink', MERCHANT_BLINK)];
   SPRITES.stall = makeStall(1201);
