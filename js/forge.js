@@ -114,15 +114,21 @@ const Forge = {
     }
   },
 
-  /* 강화 값 — 지금 든 무기 레벨 기준 */
-  upgradeCost(player) {
+  /* 강화 값 — 지금 레벨에서 한 단계 올리는 값. 무기·장비 가리지 않고 레벨만 본다 (표: CONFIG.forge.upgrade.cost) */
+  upgradeCost(level) {
     const u = CONFIG.forge.upgrade;
-    const lv = player.weaponLevel || 1;
-    return {
-      gold: Math.round(u.goldBase + lv * u.goldPerLevel),
-      loot: u.loot,
-      need: Math.round(u.lootBase + lv * u.lootPerLevel / 4),
-    };
+    if (level >= u.maxLevel) return null;
+    return u.cost[Util.clamp(level, 1, u.cost.length) - 1];
+  },
+
+  /* 강화할 수 있는 것 — 지금 든 무기와 입고 있는 장비뿐이다 (가방 속 물건은 입거나 들어야 강화된다) */
+  upgradeTargets(player) {
+    const out = [{ weapon: true, name: player.weaponLabel(), color: player.weaponColor(), level: player.weaponLevel }];
+    for (const slot of CONFIG.gear.slots) {
+      const s = player.gear && player.gear[slot];
+      if (s) out.push({ slot: slot, name: Gear.name(s) + ' ' + s.level + '레벨', color: Gear.color(s), level: s.level });
+    }
+    return out;
   },
 
   reforgeCost(item) {
@@ -163,17 +169,15 @@ const Forge = {
       });
     }
     list.push({ id: null, name: '속성 지우기', color: '#8f9aa8', remove: true, ok: !!player.weaponElement });
-    // 강화 — 전설 무기도 레벨이 고정이라 똑같이 올릴 수 있다
-    const up = this.upgradeCost(player);
-    const upHeld = this.lootHeld(player, up.loot);
-    const upMax = player.weaponLevel >= CONFIG.forge.upgrade.maxLevel;
-    list.push({
-      upgrade: true, name: '강화  ' + player.weaponLabel(), color: '#ffe066',
-      loot: CONFIG.loot.items[up.loot].name, need: up.need, held: upHeld,
-      gold: up.gold, worn: false,
-      maxed: upMax,
-      ok: !upMax && upHeld >= up.need && player.gold >= up.gold,
-    });
+    // 강화 — 든 무기와 입은 장비마다 한 줄. 골드만 든다 (전설 무기도 레벨이 고정이라 똑같이 올릴 수 있다)
+    for (const t of this.upgradeTargets(player)) {
+      const gold = this.upgradeCost(t.level);
+      list.push({
+        upgrade: true, target: t, name: '강화  ' + t.name, color: t.color,
+        gold: gold || 0, worn: false, maxed: gold === null,
+        ok: gold !== null && player.gold >= gold,
+      });
+    }
     // 재련 — 장비 하나당 한 줄
     for (const t of this.reforgeTargets(player).slice(0, 6)) {
       const c = this.reforgeCost(t.item);
@@ -242,18 +246,20 @@ const Forge = {
       return;
     }
     if (item.upgrade) {
-      if (player.weaponLevel >= CONFIG.forge.upgrade.maxLevel) { this.say('이미 최고 레벨이다'); Sound.play('error'); return; }
-      if (item.held < item.need) { this.say(item.loot + ' 모자람'); Sound.play('error'); return; }
-      if (player.gold < item.gold) { this.say('골드가 모자란다'); Sound.play('error'); return; }
-      const up = this.upgradeCost(player);
-      this.takeLoot(player, up.loot, up.need);
-      player.gold -= up.gold;
-      player.weaponLevel = Math.min(CONFIG.forge.upgrade.maxLevel, player.weaponLevel + 1);
+      const t = item.target, gear = t.slot ? player.gear[t.slot] : null;
+      if (t.slot && !gear) { this.say('입은 장비가 없다'); Sound.play('error'); return; }
+      const level = gear ? gear.level : player.weaponLevel, gold = this.upgradeCost(level);
+      if (gold === null) { this.say('이미 최고 레벨이다'); Sound.play('error'); return; }
+      if (player.gold < gold) { this.say('골드가 모자란다'); Sound.play('error'); return; }
+      player.gold -= gold;
+      if (gear) gear.level = level + 1;          // 장비는 바탕 수치가 레벨을 따라 오른다
+      else player.weaponLevel = level + 1;
       player.recalcStats();
       Sound.play('levelup');
+      const label = gear ? Gear.name(gear) + ' ' + gear.level + '레벨' : player.weaponLabel();
       FX.burst(player.x, player.y - 4, 20, ['#ffe066', '#ffffff'], { speed: 60, life: 0.6, gravity: 20 });
-      FX.number(player.x, player.y - 30, player.weaponLabel() + '!', '#ffe066');
-      this.say(player.weaponLevel + '레벨로 강화');
+      FX.number(player.x, player.y - 30, label + '!', '#ffe066');
+      this.say((gear ? Gear.spec(gear.id).name : player.weaponSpec().name) + ' ' + (level + 1) + '레벨로 강화');
       return;
     }
     if (item.reforge) {
@@ -361,6 +367,14 @@ const Forge = {
       }
       if (it.maxed) {
         UI.drawText(ctx, '최대', x + w - 12 - UI.textWidth('최대'), ry, '#6f7a68');
+        continue;
+      }
+      // 강화는 재료가 없다 — 재료 자리에 몇 레벨이 되는지를 적는다
+      if (it.upgrade) {
+        const to = it.target.level + 1 + '레벨로';
+        UI.drawText(ctx, to, matRight - UI.textWidth(to), ry, '#7fa86a');
+        const cp = it.gold + '골드';
+        UI.drawText(ctx, cp, x + w - 12 - UI.textWidth(cp), ry, player.gold >= it.gold ? CONFIG.gold.color : '#c05a5a');
         continue;
       }
       // 제작은 재료가 둘이라 한 줄로 이어 붙인다
