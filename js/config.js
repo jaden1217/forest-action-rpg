@@ -876,8 +876,8 @@ const CONFIG = {
      늘 세 개가 걸려 있고, 그 셋이 화면 오른쪽에 항상 적혀 있다.
      이 게임에 가장 크게 비어 있던 것이 "다음에 뭘 하지?" 였다.
 
-     보상을 골드 + 장비 한 점으로 잡은 이유: 의뢰를 하다 보면 장비가 저절로 갖춰지게 하려고.
-     등급은 최소 FINE 이라 바닥에서 줍는 것보다 쓸 만하다. */
+     보상은 골드만 준다. 예전엔 골드 + 장비 한 점이었는데, 장비는 몬스터·상자에서 넉넉히 나오므로
+     그 몫을 골드로 돌려 두 배로 올렸다 (대장간 강화·상점에 쓸 돈). */
   quests: {
     slots: 3,
     interactRange: 26,
@@ -885,10 +885,9 @@ const CONFIG = {
     types: ['kill', 'collect', 'explore'],
     kill: { min: 8, max: 16 },
     collect: { min: 4, max: 9 },
-    goldBase: 40,
-    goldPerLevel: 14,
+    goldBase: 80,
+    goldPerLevel: 28,
     goldMult: { kill: 1.0, collect: 0.9, explore: 1.25 },
-    rarityWeights: [0, 55, 32, 13],   // COMMON 은 보상으로 안 나온다
     monsterNames: {
       slime: '슬라임', wolf: '늑대', mushroom: '버섯',
       scorpion: '전갈', cactus: '선인장', sandworm: '모래벌레',

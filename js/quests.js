@@ -95,7 +95,7 @@ const Quests = {
       if (this.list.some(o => this.sameGoal(o, q))) continue;
       q.id = this.nextId++;
       q.gold = Math.round((cfg.goldBase + player.level * cfg.goldPerLevel) * cfg.goldMult[q.type]);
-      q.reward = Gear.roll(Gear.randomId(), player.level, Util.weightedIndex(cfg.rarityWeights));
+      q.reward = null;   // 장비 보상은 없앴다 — 예전 저장에 걸려 있던 의뢰만 장비를 들고 있다
       return q;
     }
     return null;
@@ -182,6 +182,7 @@ const Quests = {
     }
 
     player.addGold(q.gold);
+    this.say('의뢰 완료  +' + q.gold + '골드');
     if (q.reward) {
       if (!Inventory.addGear(player, q.reward)) {
         // 가방이 꽉 찼으면 발밑에 둔다 — 보상을 그냥 날리지는 않는다
@@ -290,7 +291,7 @@ const Quests = {
         UI.drawText(ctx, p + '/' + q.need, x + 82, ry + 8, done ? '#9be564' : '#7fa86a');
       }
 
-      // 보상 — 골드와 장비 한 점 (등급 색으로)
+      // 보상 — 골드 (예전 저장의 의뢰는 장비 한 점도 — 등급 색으로)
       const g = q.gold + '골드';
       UI.drawText(ctx, g, x + w - 12 - UI.textWidth(g), ry, CONFIG.gold.color);
       if (q.reward) {
