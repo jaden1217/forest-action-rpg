@@ -516,7 +516,7 @@ WASD 를 누르고 있으면 그쪽으로, 아무것도 안 누르면 겨냥한 
 | **FROSTHEART PLATE** | YETI PELT ×16 + FROST CORE ×10 | ARM 18 + 0.46/Lv, HP 12 + 1.4/Lv, SPD −3 |
 | **FROSTHEART SIGIL** | FROST CORE ×14 + WISP EMBER ×8 | ATK 2 + 0.4/Lv, HP 10 + 1.2/Lv |
 
-등급은 RARE 고정(옵션 셋)이고 레벨은 만들 때의 내 레벨을 따른다. 옵션이 아쉬우면 **재련**으로 다시 굴리면 된다.
+등급은 RARE 고정(옵션 셋)이고 레벨은 만들 때의 내 레벨을 따른다. 옵션이 아쉬우면 **재련**으로 다시 굴리면 된다 (재련도 강화처럼 입고 있는 장비만 된다).
 세 점을 다 갖추면 **FROSTHEART 세트** — 2점에 ARM +20·FREEZE +20%, 3점에 HP +90·CDMG +40%·BRACE +40%.
 
 ## 비석 — 어디로 갈지 고른다 (12주차)

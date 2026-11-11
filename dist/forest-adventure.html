@@ -154,7 +154,7 @@ html, body {
 }
 
 </style>
-<!-- built 2026-11-11 08:12 by tools/build.js -->
+<!-- built 2026-11-11 08:16 by tools/build.js -->
 </head>
 <body>
   <div id="stage">
@@ -14603,13 +14603,9 @@ const Forge = {
     };
   },
 
-  // 재련할 수 있는 장비 목록 — 가방 + 입고 있는 것
+  // 재련할 수 있는 장비 목록 — 강화와 같이 입고 있는 것만 (가방 속 물건은 입어야 손볼 수 있다)
   reforgeTargets(player) {
     const out = [];
-    for (let i = 1; i < player.bag.length; i++) {
-      const s = player.bag[i];
-      if (s && s.kind === 'gear') out.push({ bagIndex: i, item: s });
-    }
     for (const slot of CONFIG.gear.slots) {
       const s = player.gear && player.gear[slot];
       if (s) out.push({ slot: slot, item: s });
@@ -17393,6 +17389,7 @@ const PATCH_NOTES = [
   {
     date: '2026-11-11',
     notes: [
+      '대장간 재련도 입고 있는 장비만 목록에 뜬다 — 가방 속 장비가 대장간에 나오지 않는다',
       '대장간 강화가 바뀌었다 — 지금 든 무기와 입고 있는 장비(머리·몸·장신구)를 강화할 수 있고, 한 번에 1레벨씩 오른다. 장비는 레벨이 오르면 바탕 수치(방어·체력 등)가 함께 오른다',
       '강화에는 이제 골드만 든다 (늑대 이빨은 필요 없다). 값은 레벨마다 정해져 있어서 무기든 장비든 같은 레벨이면 같은 값이다 — 1레벨 20골드에서 59레벨 1355골드까지',
       '상점이 구매창과 판매창으로 나뉘었다 (Tab, 1·2, 또는 위쪽 이름을 눌러 오간다). 판매창에서는 가방 칸을 골라 장비·무기·전리품을 하나씩 팔 수 있고, R 로 전리품만 한꺼번에 판다',

@@ -141,13 +141,9 @@ const Forge = {
     };
   },
 
-  // 재련할 수 있는 장비 목록 — 가방 + 입고 있는 것
+  // 재련할 수 있는 장비 목록 — 강화와 같이 입고 있는 것만 (가방 속 물건은 입어야 손볼 수 있다)
   reforgeTargets(player) {
     const out = [];
-    for (let i = 1; i < player.bag.length; i++) {
-      const s = player.bag[i];
-      if (s && s.kind === 'gear') out.push({ bagIndex: i, item: s });
-    }
     for (const slot of CONFIG.gear.slots) {
       const s = player.gear && player.gear[slot];
       if (s) out.push({ slot: slot, item: s });
