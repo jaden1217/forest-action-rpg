@@ -1285,6 +1285,11 @@ const CONFIG = {
   shop: {
     interactRange: 26,      // 상인에게서 이 거리 안이면 말을 걸 수 있다
     potionPrice: 20,
+    /* 판매창에서 장비·무기를 팔 때의 값 — 전리품은 자기 value 그대로.
+       장비는 (기본 + 레벨당) x 등급 배수, 무기는 기본 + 레벨당 (전설 무기는 legendMult 배).
+       사는 값(강화)보다 한참 싸게 잡아서, 줍는 대로 팔아 강화를 다 사 버리지는 못하게 했다 */
+    sell: { gearBase: 4, gearPerLevel: 1.2, rarityMult: [1, 1.6, 2.6, 4], weaponBase: 3, weaponPerLevel: 1, legendMult: 5,
+            confirmRarity: 2 },   // 이 등급 이상의 장비와 전설 무기는 스페이스를 한 번 더 눌러야 팔린다
     upgrades: [
       { id: 'hp',    name: '최대 체력 +10',    stat: 'maxHp',      gain: 10, basePrice: 40, priceMult: 1.4, maxRank: 10 },
       { id: 'atk',   name: '공격력 +1',     stat: 'damage',     gain: 1,  basePrice: 60, priceMult: 1.4, maxRank: 10 },
