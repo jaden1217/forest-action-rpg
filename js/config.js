@@ -877,7 +877,7 @@ const CONFIG = {
      이 게임에 가장 크게 비어 있던 것이 "다음에 뭘 하지?" 였다.
 
      보상은 골드만 준다. 예전엔 골드 + 장비 한 점이었는데, 장비는 몬스터·상자에서 넉넉히 나오므로
-     그 몫을 골드로 돌려 두 배로 올렸다 (대장간 강화·상점에 쓸 돈). */
+     그 몫을 골드로 돌려 예전의 1.4배쯤으로 올렸다 (대장간 강화·상점에 쓸 돈). */
   quests: {
     slots: 3,
     interactRange: 26,
@@ -885,8 +885,8 @@ const CONFIG = {
     types: ['kill', 'collect', 'explore'],
     kill: { min: 8, max: 16 },
     collect: { min: 4, max: 9 },
-    goldBase: 80,
-    goldPerLevel: 28,
+    goldBase: 56,
+    goldPerLevel: 20,
     goldMult: { kill: 1.0, collect: 0.9, explore: 1.25 },
     monsterNames: {
       slime: '슬라임', wolf: '늑대', mushroom: '버섯',
