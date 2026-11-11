@@ -90,11 +90,7 @@ const Events = {
 
   onPhaseChange(from, to) {
     if (World.isArena) return;
-    if (to === 'night') {
-      this.banner('밤이 찾아왔다', '#8fa8e0');
-    } else if (to === 'day') {
-      this.banner('아침이 밝았다', '#ffe066');
-    }
+    if (to === 'night') this.banner('밤이 찾아왔다', '#8fa8e0');
   },
 
   banner(text, color) {

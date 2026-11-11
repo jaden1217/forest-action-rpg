@@ -154,7 +154,7 @@ html, body {
 }
 
 </style>
-<!-- built 2026-11-11 07:45 by tools/build.js -->
+<!-- built 2026-11-11 07:47 by tools/build.js -->
 </head>
 <body>
   <div id="stage">
@@ -16006,11 +16006,7 @@ const Events = {
 
   onPhaseChange(from, to) {
     if (World.isArena) return;
-    if (to === 'night') {
-      this.banner('밤이 찾아왔다', '#8fa8e0');
-    } else if (to === 'day') {
-      this.banner('아침이 밝았다', '#ffe066');
-    }
+    if (to === 'night') this.banner('밤이 찾아왔다', '#8fa8e0');
   },
 
   banner(text, color) {
@@ -17171,7 +17167,7 @@ const PATCH_NOTES = [
   {
     date: '2026-11-11',
     notes: [
-      '며칠째인지 세던 것을 없앴다 — 화면 위 시계 옆의 "n일째"가 사라지고, 아침 알림은 "아침이 밝았다"로 뜬다. 낮과 밤은 그대로 돈다',
+      '며칠째인지 세던 것을 없앴다 — 화면 위 시계 옆의 "n일째"가 사라지고, 아침 알림도 없앴다. 낮과 밤은 그대로 돌고, 밤이 올 때 알림만 남는다',
     ],
   },
   {
