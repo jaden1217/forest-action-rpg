@@ -131,26 +131,6 @@ const Forge = {
     return out;
   },
 
-  reforgeCost(item) {
-    const r = CONFIG.forge.reforge;
-    const lv = (item && item.level) || 1;
-    return {
-      gold: Math.round(r.goldBase + lv * r.goldPerLevel),
-      loot: r.loot,
-      need: r.lootBase,
-    };
-  },
-
-  // 재련할 수 있는 장비 목록 — 강화와 같이 입고 있는 것만 (가방 속 물건은 입어야 손볼 수 있다)
-  reforgeTargets(player) {
-    const out = [];
-    for (const slot of CONFIG.gear.slots) {
-      const s = player.gear && player.gear[slot];
-      if (s) out.push({ slot: slot, item: s });
-    }
-    return out;
-  },
-
   entries(player) {
     const list = [];
     for (const id in CONFIG.forge.elements) {
@@ -172,18 +152,6 @@ const Forge = {
         upgrade: true, target: t, name: '강화  ' + t.name, color: t.color,
         gold: gold || 0, worn: false, maxed: gold === null,
         ok: gold !== null && player.gold >= gold,
-      });
-    }
-    // 재련 — 장비 하나당 한 줄
-    for (const t of this.reforgeTargets(player).slice(0, 6)) {
-      const c = this.reforgeCost(t.item);
-      const held = this.lootHeld(player, c.loot);
-      list.push({
-        reforge: true, target: t, name: '재련  ' + Gear.name(t.item).slice(0, 24),
-        fullName: Gear.name(t.item), color: Gear.color(t.item),
-        loot: CONFIG.loot.items[c.loot].name, need: c.need, held: held,
-        gold: c.gold, worn: false,
-        ok: held >= c.need && player.gold >= c.gold,
       });
     }
     /* 제작 — 설원 자원으로만 만드는 서리심 한 벌 (로드맵 12주차).
@@ -258,27 +226,6 @@ const Forge = {
       this.say((gear ? Gear.spec(gear.id).name : player.weaponSpec().name) + ' ' + (level + 1) + '레벨로 강화');
       return;
     }
-    if (item.reforge) {
-      if (item.held < item.need) { this.say(item.loot + ' 모자람'); Sound.play('error'); return; }
-      if (player.gold < item.gold) { this.say('골드가 모자란다'); Sound.play('error'); return; }
-      const t = item.target;
-      const src = t.bagIndex !== undefined ? player.bag[t.bagIndex] : player.gear[t.slot];
-      if (!src || src.kind !== 'gear') { this.say('장비가 없다'); Sound.play('error'); return; }
-      const c = this.reforgeCost(src);
-      this.takeLoot(player, c.loot, c.need);
-      player.gold -= c.gold;
-      // 등급·개수는 그대로, 값만 다시 굴린다
-      const fresh = Gear.roll(src.id, src.level, src.rarity);
-      if (fresh) {
-        src.affixes = fresh.affixes;
-        player.recalcStats();
-      }
-      Sound.play('levelup');
-      FX.burst(player.x, player.y - 4, 18, [Gear.color(src), '#ffffff'], { speed: 55, life: 0.6, gravity: 20 });
-      FX.number(player.x, player.y - 30, Gear.name(src), Gear.color(src));
-      this.say(Gear.spec(src.id).name + ' 재련');
-      return;
-    }
     if (item.worn) { this.say('이미 박혀 있다'); Sound.play('error'); return; }
     if (item.held < item.need) { this.say(item.loot + ' 모자람'); Sound.play('error'); return; }
     if (player.gold < item.gold) { this.say('골드가 모자란다'); Sound.play('error'); return; }
@@ -340,7 +287,7 @@ const Forge = {
     const cur = el ? el.name : '속성 없음';
     UI.drawText(ctx, cur, x + w - 10 - UI.textWidth(cur), y + 19, el ? el.color : '#5f6b59');
 
-    /* 줄이 많아져서(속성 넷 + 해제 + 강화 + 재련 여섯 + 제작 셋) 창 하나에 다 안 들어간다.
+    /* 줄이 많아져서(속성 넷 + 해제 + 강화 넷 + 제작 셋) 창 하나에 다 안 들어간다.
        커서를 따라 목록이 흐르게 하고, 위아래에 더 있다는 표시를 둔다 */
     const rowY = y + 32, rowH = 13;
     const matRight = x + w - 40;   // 재료 글자의 오른쪽 끝 — 값(최대 '1600 G')과 틈을 둔 자리

@@ -154,7 +154,7 @@ html, body {
 }
 
 </style>
-<!-- built 2026-11-11 08:16 by tools/build.js -->
+<!-- built 2026-11-11 08:21 by tools/build.js -->
 </head>
 <body>
   <div id="stage">
@@ -917,9 +917,11 @@ const CONFIG = {
      숲에서 불·뇌전·서리를 미리 만들어 두고 사막으로 간다. */
   forge: {
     interactRange: 26,
-    goldBase: 60,
-    goldPerLevel: 8,
-    bonus: 0.25,            // 추가 피해 = 그 일격 x 이 값 x 약점 배수
+    /* 속성 부여 값 — 한 번 박으면 그 무기에 영영 남으므로 싸면 안 된다.
+       예전(60 + 8/레벨, 재료 8~10개)에는 10레벨에 140골드로 약점 상대 화력이 거의 두 배가 됐다 */
+    goldBase: 120,
+    goldPerLevel: 15,
+    bonus: 0.15,            // 추가 피해 = 그 일격 x 이 값 x 약점 배수 (약점 +30%, 보통 +15%, 강한 상대 +3%)
     /* 강화 — **지금 든 무기와 입은 장비**의 레벨을 한 번에 +1 (최대 60). 골드만 든다.
        값은 강화하기 **전** 레벨로 정해진 표다 — 무기든 장비든 같은 레벨이면 같은 값이다.
        cost[L - 1] = L레벨을 L+1레벨로 올리는 값. 오를수록 비싸진다 (20 → 60레벨 직전 1355) */
@@ -937,7 +939,7 @@ const CONFIG = {
     /* 제작 — **설원 자원으로만** 만드는 서리심 한 벌 (로드맵 12주차).
        떨어지지 않는 장비라 "설원에 가서 모아 와야만" 손에 들어온다.
        등급은 RARE 고정(옵션 셋), 레벨은 만들 때의 내 레벨을 따른다 —
-       재련으로 옵션을 다시 굴릴 수 있으니 한 번 만들면 계속 쓴다. */
+       한 번 만들면 강화로 레벨을 올려 가며 계속 쓴다. */
     craft: {
       goldBase: 400, goldPerLevel: 20,
       rarity: 2,
@@ -947,14 +949,12 @@ const CONFIG = {
         { id: 'frostSigil', loot: { frostCore: 14, wispEmber: 8 } },
       ],
     },
-    /* 재련 — 장비 한 점의 옵션 값을 다시 굴린다 (등급·개수는 그대로, 값만 새로).
-       전설 고유 효과·세트는 바뀌지 않으므로 "아깝게 굴러간 것"을 고치는 용도다. */
-    reforge: { goldBase: 40, goldPerLevel: 10, loot: 'gel', lootBase: 3 },
     elements: {
-      flame: { name: '불꽃', status: 'burn',   color: '#ff8a3c', chance: 1.0, loot: 'cap',     cost: 8 },
-      frost: { name: '서리', status: 'freeze', color: '#9fe8ff', chance: 0.4, loot: 'gel',     cost: 10 },
-      shock: { name: '뇌전', status: 'shock',  color: '#ffe066', chance: 0.6, loot: 'fang',    cost: 8 },
-      venom: { name: '맹독', status: 'poison', color: '#7dff8a', chance: 1.0, loot: 'stinger', cost: 6 },
+      // chance 는 때릴 때 상태이상이 걸릴 확률. 뇌전은 감전(받는 피해 x1.3)이 늘 붙어 있으면 너무 세서 낮게 잡았다
+      flame: { name: '불꽃', status: 'burn',   color: '#ff8a3c', chance: 0.6,  loot: 'cap',     cost: 12 },
+      frost: { name: '서리', status: 'freeze', color: '#9fe8ff', chance: 0.3,  loot: 'gel',     cost: 15 },
+      shock: { name: '뇌전', status: 'shock',  color: '#ffe066', chance: 0.25, loot: 'fang',    cost: 12 },
+      venom: { name: '맹독', status: 'poison', color: '#7dff8a', chance: 0.6,  loot: 'stinger', cost: 9 },
     },
     /* 약점과 강함 — 적혀 있지 않은 것은 1.0.
        숲은 대체로 불, 사막은 대체로 서리. 늑대와 모래벌레만 뇌전이라 외우기만 해서는 안 된다 */
@@ -1694,7 +1694,7 @@ const CONFIG = {
      상인 옆을 마을로 키운다. 마을은 "돌아오는 곳"이다 —
      팔고, 박고, 빚고, 맡기고, 다시 나간다.
 
-       대장장이  강화·재련·속성 부여 (보스 하나 처치하면 이사 온다)
+       대장장이  강화·속성 부여·제작 (보스 하나 처치하면 이사 온다)
        연금술사  포션·해독제 제작 (전리품 50개 팔면 이사 온다)
        창고      가방 밖 보관 (처음부터 있다 — 맡기는 데 조건은 없다)
        귀환 주문 B 를 누르고 recallTime 초 동안 피해를 받지 않으면 마을로 순간이동한다 (보스 방 안에서는 안 된다)
@@ -14593,26 +14593,6 @@ const Forge = {
     return out;
   },
 
-  reforgeCost(item) {
-    const r = CONFIG.forge.reforge;
-    const lv = (item && item.level) || 1;
-    return {
-      gold: Math.round(r.goldBase + lv * r.goldPerLevel),
-      loot: r.loot,
-      need: r.lootBase,
-    };
-  },
-
-  // 재련할 수 있는 장비 목록 — 강화와 같이 입고 있는 것만 (가방 속 물건은 입어야 손볼 수 있다)
-  reforgeTargets(player) {
-    const out = [];
-    for (const slot of CONFIG.gear.slots) {
-      const s = player.gear && player.gear[slot];
-      if (s) out.push({ slot: slot, item: s });
-    }
-    return out;
-  },
-
   entries(player) {
     const list = [];
     for (const id in CONFIG.forge.elements) {
@@ -14634,18 +14614,6 @@ const Forge = {
         upgrade: true, target: t, name: '강화  ' + t.name, color: t.color,
         gold: gold || 0, worn: false, maxed: gold === null,
         ok: gold !== null && player.gold >= gold,
-      });
-    }
-    // 재련 — 장비 하나당 한 줄
-    for (const t of this.reforgeTargets(player).slice(0, 6)) {
-      const c = this.reforgeCost(t.item);
-      const held = this.lootHeld(player, c.loot);
-      list.push({
-        reforge: true, target: t, name: '재련  ' + Gear.name(t.item).slice(0, 24),
-        fullName: Gear.name(t.item), color: Gear.color(t.item),
-        loot: CONFIG.loot.items[c.loot].name, need: c.need, held: held,
-        gold: c.gold, worn: false,
-        ok: held >= c.need && player.gold >= c.gold,
       });
     }
     /* 제작 — 설원 자원으로만 만드는 서리심 한 벌 (로드맵 12주차).
@@ -14720,27 +14688,6 @@ const Forge = {
       this.say((gear ? Gear.spec(gear.id).name : player.weaponSpec().name) + ' ' + (level + 1) + '레벨로 강화');
       return;
     }
-    if (item.reforge) {
-      if (item.held < item.need) { this.say(item.loot + ' 모자람'); Sound.play('error'); return; }
-      if (player.gold < item.gold) { this.say('골드가 모자란다'); Sound.play('error'); return; }
-      const t = item.target;
-      const src = t.bagIndex !== undefined ? player.bag[t.bagIndex] : player.gear[t.slot];
-      if (!src || src.kind !== 'gear') { this.say('장비가 없다'); Sound.play('error'); return; }
-      const c = this.reforgeCost(src);
-      this.takeLoot(player, c.loot, c.need);
-      player.gold -= c.gold;
-      // 등급·개수는 그대로, 값만 다시 굴린다
-      const fresh = Gear.roll(src.id, src.level, src.rarity);
-      if (fresh) {
-        src.affixes = fresh.affixes;
-        player.recalcStats();
-      }
-      Sound.play('levelup');
-      FX.burst(player.x, player.y - 4, 18, [Gear.color(src), '#ffffff'], { speed: 55, life: 0.6, gravity: 20 });
-      FX.number(player.x, player.y - 30, Gear.name(src), Gear.color(src));
-      this.say(Gear.spec(src.id).name + ' 재련');
-      return;
-    }
     if (item.worn) { this.say('이미 박혀 있다'); Sound.play('error'); return; }
     if (item.held < item.need) { this.say(item.loot + ' 모자람'); Sound.play('error'); return; }
     if (player.gold < item.gold) { this.say('골드가 모자란다'); Sound.play('error'); return; }
@@ -14802,7 +14749,7 @@ const Forge = {
     const cur = el ? el.name : '속성 없음';
     UI.drawText(ctx, cur, x + w - 10 - UI.textWidth(cur), y + 19, el ? el.color : '#5f6b59');
 
-    /* 줄이 많아져서(속성 넷 + 해제 + 강화 + 재련 여섯 + 제작 셋) 창 하나에 다 안 들어간다.
+    /* 줄이 많아져서(속성 넷 + 해제 + 강화 넷 + 제작 셋) 창 하나에 다 안 들어간다.
        커서를 따라 목록이 흐르게 하고, 위아래에 더 있다는 표시를 둔다 */
     const rowY = y + 32, rowH = 13;
     const matRight = x + w - 40;   // 재료 글자의 오른쪽 끝 — 값(최대 '1600 G')과 틈을 둔 자리
@@ -15067,7 +15014,7 @@ const Elite = {
    마을은 "돌아오는 곳"이다. 사냥을 나가 전리품을 모아 오면
    팔고(상인) · 박고(대장간) · 빚고(연금술사) · 맡기고(창고) 다시 나간다.
 
-     대장장이  강화·재련·속성 부여 — 보스 하나를 잡아야 이사 온다
+     대장장이  강화·속성 부여·제작 — 보스 하나를 잡아야 이사 온다
      연금술사  포션·해독제 제작 — 전리품 50개를 팔아야 이사 온다
      창고      가방 밖 보관 — 처음부터 있다 (맡기는 데 조건은 없다)
      귀환 주문 B 를 누르고 5초 동안 피해를 받지 않으면 마을로 순간이동한다 (보스 방 안에서는 안 된다)
@@ -17389,6 +17336,8 @@ const PATCH_NOTES = [
   {
     date: '2026-11-11',
     notes: [
+      '대장간 재련을 없앴다. 대장간에서는 강화·속성 부여·서리심 제작만 한다',
+      '무기 속성 부여를 조정했다 — 추가 피해 25%에서 15%로(약점 +30%), 상태이상 확률 불꽃·맹독 100%에서 60%, 서리 40%에서 30%, 뇌전 60%에서 25%. 값은 골드 120 + 레벨당 15(10레벨 270골드), 재료는 1.5배. 이미 박힌 속성은 그대로 남는다',
       '대장간 재련도 입고 있는 장비만 목록에 뜬다 — 가방 속 장비가 대장간에 나오지 않는다',
       '대장간 강화가 바뀌었다 — 지금 든 무기와 입고 있는 장비(머리·몸·장신구)를 강화할 수 있고, 한 번에 1레벨씩 오른다. 장비는 레벨이 오르면 바탕 수치(방어·체력 등)가 함께 오른다',
       '강화에는 이제 골드만 든다 (늑대 이빨은 필요 없다). 값은 레벨마다 정해져 있어서 무기든 장비든 같은 레벨이면 같은 값이다 — 1레벨 20골드에서 59레벨 1355골드까지',

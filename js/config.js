@@ -732,9 +732,11 @@ const CONFIG = {
      숲에서 불·뇌전·서리를 미리 만들어 두고 사막으로 간다. */
   forge: {
     interactRange: 26,
-    goldBase: 60,
-    goldPerLevel: 8,
-    bonus: 0.25,            // 추가 피해 = 그 일격 x 이 값 x 약점 배수
+    /* 속성 부여 값 — 한 번 박으면 그 무기에 영영 남으므로 싸면 안 된다.
+       예전(60 + 8/레벨, 재료 8~10개)에는 10레벨에 140골드로 약점 상대 화력이 거의 두 배가 됐다 */
+    goldBase: 120,
+    goldPerLevel: 15,
+    bonus: 0.15,            // 추가 피해 = 그 일격 x 이 값 x 약점 배수 (약점 +30%, 보통 +15%, 강한 상대 +3%)
     /* 강화 — **지금 든 무기와 입은 장비**의 레벨을 한 번에 +1 (최대 60). 골드만 든다.
        값은 강화하기 **전** 레벨로 정해진 표다 — 무기든 장비든 같은 레벨이면 같은 값이다.
        cost[L - 1] = L레벨을 L+1레벨로 올리는 값. 오를수록 비싸진다 (20 → 60레벨 직전 1355) */
@@ -752,7 +754,7 @@ const CONFIG = {
     /* 제작 — **설원 자원으로만** 만드는 서리심 한 벌 (로드맵 12주차).
        떨어지지 않는 장비라 "설원에 가서 모아 와야만" 손에 들어온다.
        등급은 RARE 고정(옵션 셋), 레벨은 만들 때의 내 레벨을 따른다 —
-       재련으로 옵션을 다시 굴릴 수 있으니 한 번 만들면 계속 쓴다. */
+       한 번 만들면 강화로 레벨을 올려 가며 계속 쓴다. */
     craft: {
       goldBase: 400, goldPerLevel: 20,
       rarity: 2,
@@ -762,14 +764,12 @@ const CONFIG = {
         { id: 'frostSigil', loot: { frostCore: 14, wispEmber: 8 } },
       ],
     },
-    /* 재련 — 장비 한 점의 옵션 값을 다시 굴린다 (등급·개수는 그대로, 값만 새로).
-       전설 고유 효과·세트는 바뀌지 않으므로 "아깝게 굴러간 것"을 고치는 용도다. */
-    reforge: { goldBase: 40, goldPerLevel: 10, loot: 'gel', lootBase: 3 },
     elements: {
-      flame: { name: '불꽃', status: 'burn',   color: '#ff8a3c', chance: 1.0, loot: 'cap',     cost: 8 },
-      frost: { name: '서리', status: 'freeze', color: '#9fe8ff', chance: 0.4, loot: 'gel',     cost: 10 },
-      shock: { name: '뇌전', status: 'shock',  color: '#ffe066', chance: 0.6, loot: 'fang',    cost: 8 },
-      venom: { name: '맹독', status: 'poison', color: '#7dff8a', chance: 1.0, loot: 'stinger', cost: 6 },
+      // chance 는 때릴 때 상태이상이 걸릴 확률. 뇌전은 감전(받는 피해 x1.3)이 늘 붙어 있으면 너무 세서 낮게 잡았다
+      flame: { name: '불꽃', status: 'burn',   color: '#ff8a3c', chance: 0.6,  loot: 'cap',     cost: 12 },
+      frost: { name: '서리', status: 'freeze', color: '#9fe8ff', chance: 0.3,  loot: 'gel',     cost: 15 },
+      shock: { name: '뇌전', status: 'shock',  color: '#ffe066', chance: 0.25, loot: 'fang',    cost: 12 },
+      venom: { name: '맹독', status: 'poison', color: '#7dff8a', chance: 0.6,  loot: 'stinger', cost: 9 },
     },
     /* 약점과 강함 — 적혀 있지 않은 것은 1.0.
        숲은 대체로 불, 사막은 대체로 서리. 늑대와 모래벌레만 뇌전이라 외우기만 해서는 안 된다 */
@@ -1509,7 +1509,7 @@ const CONFIG = {
      상인 옆을 마을로 키운다. 마을은 "돌아오는 곳"이다 —
      팔고, 박고, 빚고, 맡기고, 다시 나간다.
 
-       대장장이  강화·재련·속성 부여 (보스 하나 처치하면 이사 온다)
+       대장장이  강화·속성 부여·제작 (보스 하나 처치하면 이사 온다)
        연금술사  포션·해독제 제작 (전리품 50개 팔면 이사 온다)
        창고      가방 밖 보관 (처음부터 있다 — 맡기는 데 조건은 없다)
        귀환 주문 B 를 누르고 recallTime 초 동안 피해를 받지 않으면 마을로 순간이동한다 (보스 방 안에서는 안 된다)
