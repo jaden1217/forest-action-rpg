@@ -3,13 +3,14 @@
 /* 2주차: 바닥 드랍, 자석 끌림, 자동 줍기 (포션)
    3주차: 무기 드랍. 무기는 발밑에서 F 를 눌러야 가방에 들어간다.
           (지나가다 실수로 좋은 무기가 나쁜 무기로 바뀌면 안 되므로 자동으로는 줍지 않는다)
-   인벤토리: 전리품 드랍 — 포션처럼 끌려와 가방에 쌓인다. 가방이 차면 그 자리에 남는다. */
+   인벤토리: 전리품 드랍 — 포션처럼 끌려와 가방에 쌓인다. 가방이 차면 그 자리에 남는다.
+   버린 장비: 인벤토리에서 내가 버린 장비(manual)는 끌려오지 않는다. 무기처럼 발밑에서 F 를 눌러야 다시 줍는다. */
 
 const Items = {
   drops: [],
   fullHintCooldown: 0,   // 가방이 찼을 때 FULL 표시 스팸 방지
   pickupRequested: false, // F 눌림 — 히트스톱 중에도 놓치지 않게 Game이 미리 받아둔다
-  nearWeapon: null,       // 지금 발밑에 있는 무기 (안내 문구용)
+  nearWeapon: null,       // 지금 발밑에 있는 F 대상 — 무기, 또는 내가 버린 장비 (안내 문구용)
 
   reset() {
     this.drops.length = 0;
@@ -142,6 +143,9 @@ const Items = {
     d.level = item.level;
     d.amount = 1;
     d.auraTimer = 0;
+    // 내가 버린 것 — 끌려오지 않고 F 로만 줍는다 (버린 걸 지나가다 도로 줍지 않게)
+    d.manual = !!(opts && opts.manual);
+    if (d.manual) d.armed = true;
     this.drops.push(d);
     // 희귀한 것이 떨어지면 그 색으로 한 번 터져서 멀리서도 눈에 띈다
     if (item.rarity >= 2) {
@@ -237,6 +241,14 @@ const Items = {
       /* ── 장비: 끌려와 가방에 들어간다 (입지는 않는다 — 입는 건 인벤토리에서 고른다).
             가방에 빈 칸이 없으면 끌려오지도 않고 그 자리에 그대로 둔다 */
       if (d.kind === 'gear') {
+        // 내가 버린 것은 무기와 같다 — 발밑에 서면 F 안내만 띄운다
+        if (d.manual) {
+          if (dist < cfg.pickupRadius + 5) {
+            d.playerNear = true;
+            if (dist < bestDist) { bestDist = dist; bestWeapon = i; }
+          }
+          continue;
+        }
         if (Inventory.firstEmpty(player) < 0) continue;
         // 희귀한 것은 바닥에서도 색 알갱이가 피어오른다
         if (d.item.rarity >= 2) {
@@ -307,11 +319,30 @@ const Items = {
       }
     }
 
-    // 발밑 무기 중 가장 가까운 것 하나만 F 대상으로 삼는다
+    // 발밑의 무기·버린 장비 중 가장 가까운 것 하나만 F 대상으로 삼는다
     if (bestWeapon >= 0) {
-      this.nearWeapon = this.drops[bestWeapon];
-      if (wantPickup) this.pickupWeapon(bestWeapon, this.drops[bestWeapon], player);
+      const d = this.drops[bestWeapon];
+      this.nearWeapon = d;
+      if (wantPickup) {
+        if (d.kind === 'gear') this.pickupGear(bestWeapon, d, player);
+        else this.pickupWeapon(bestWeapon, d, player);
+      }
     }
+  },
+
+  // 버린 장비를 F 로 다시 줍는다 — 가방이 차 있으면 그대로 둔다
+  pickupGear(index, d, player) {
+    if (player.dead) return;
+    if (!Inventory.addGear(player, d.item)) {
+      FX.number(player.x, player.y - 20, '가방이 가득 찼다', '#8f9aa8');
+      Sound.play('error');
+      return;
+    }
+    const color = Gear.color(d.item);
+    FX.burst(d.x, d.y - 4, 10, [color, '#ffffff'], { speed: 45, life: 0.4, gravity: 60 });
+    FX.number(d.x, d.y - 14, '+' + Gear.name(d.item), color);
+    Sound.play('pickup');
+    this.drops.splice(index, 1);
   },
 
   /* 무기 줍기 = 가방에 넣기 (끼는 건 인벤토리에서 고른다).
@@ -396,7 +427,8 @@ const Items = {
       }
       ctx.drawImage(sp, sx - Math.floor(sp.width / 2), sy - 8 + bob);
       UI.drawText(ctx, Gear.name(d.item), sx, sy + 8, color, true);
-      if (Math.floor(d.age * 3) % 2 === 0) { ctx.fillStyle = '#ffffff'; ctx.fillRect(sx + 4, sy - 10 + bob, 1, 1); }
+      if (d.playerNear) UI.drawText(ctx, 'F 줍기', sx, sy - 19, '#ffffff', true);
+      else if (Math.floor(d.age * 3) % 2 === 0) { ctx.fillStyle = '#ffffff'; ctx.fillRect(sx + 4, sy - 10 + bob, 1, 1); }
       return;
     }
 
