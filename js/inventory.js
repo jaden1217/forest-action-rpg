@@ -656,12 +656,13 @@ const Inventory = {
     return y + 4;
   },
 
-  // 낱말 묶음을 폭에 맞춰 여러 줄로 — 세트 덤·합계처럼 길이가 들쭉날쭉한 것에 쓴다
-  wrap(parts, wide) {
+  // 낱말 묶음을 폭에 맞춰 여러 줄로 — 세트 덤·합계처럼 길이가 들쭉날쭉한 것에 쓴다 (sep: 낱말 사이, 문장이면 ' ')
+  wrap(parts, wide, sep) {
+    sep = sep === undefined ? '  ' : sep;
     const lines = [];
     let cur = '';
     for (const p of parts) {
-      const next = cur ? cur + '  ' + p : p;
+      const next = cur ? cur + sep + p : p;
       if (cur && UI.textWidth(next) > wide) { lines.push(cur); cur = p; }
       else cur = next;
     }

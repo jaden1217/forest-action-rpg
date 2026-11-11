@@ -1611,13 +1611,15 @@ const CONFIG = {
     interactRange: 26,
     recipes: {
       // 가벼운 전리품 몇 개로 포션 한 병 — 상점(20G)보다 싸다
-      potion: { name: '포션 빚기', color: '#e5484d', gold: 4, loot: { gel: 3 }, gain: 1 },
+      potion: { name: '포션 빚기', desc: '포션 1병을 만든다. 상점에서 사는 것(20골드)보다 싸다', color: '#e5484d', gold: 4, loot: { gel: 3 }, gain: 1 },
       // 묵직한 전리품으로 포션 두 병
-      potionBig: { name: '포션 2병 빚기', color: '#ffd93d', gold: 8, loot: { fang: 3, cap: 3 }, gain: 2 },
+      potionBig: { name: '포션 2병 빚기', desc: '포션 2병을 한 번에 만든다', color: '#ffd93d', gold: 8, loot: { fang: 3, cap: 3 }, gain: 2 },
       // 걸린 상태이상을 전부 지우고 잠깐 해독 상태가 된다 (그 동안 새로 안 걸린다)
-      antidote: { name: '해독제', effect: '상태이상 해제, 15초 면역', color: '#7dff8a', gold: 10, loot: { cap: 2, stinger: 1 }, wardTime: 15 },
+      antidote: { name: '해독제', effect: '상태이상 치료',
+        desc: '만들자마자 마신다. 지금 걸린 독·화상·빙결·감전이 바로 풀리고, 15초 동안은 새로 걸리지 않는다', color: '#7dff8a', gold: 10, loot: { cap: 2, stinger: 1 }, wardTime: 15 },
       // 중독·화상에 걸려도 자연 회복이 멈추지 않는 약 (다음에 걸릴 때부터 적용, 60초)
-      tonic: { name: '강장제', effect: '60초 독·화상 중 회복', color: '#5ff0ff', gold: 14, loot: { cactusFruit: 2, wormScale: 1 }, tonicTime: 60 },
+      tonic: { name: '강장제', effect: '독에 걸려도 회복',
+        desc: '만들자마자 마신다. 60초 동안 독·화상에 걸려 있어도, 싸움을 멈추고 6초 쉬면 체력이 저절로 차오른다', color: '#5ff0ff', gold: 14, loot: { cactusFruit: 2, wormScale: 1 }, tonicTime: 60 },
     },
     wardTime: 15,     // 해독제 해독 지속
     tonicTime: 60,    // 강장제 지속

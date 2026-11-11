@@ -607,7 +607,7 @@ const Village = {
   },
 
   drawAlchemy(ctx, player) {
-    const w = 214, h = 112;
+    const w = 214, h = 136;   // 아래에 고른 것의 설명 두 줄
     const x = Math.round((CONFIG.VIEW_W - w) / 2), y = Math.round((CONFIG.VIEW_H - h) / 2);
     UI.panel(ctx, x, y, w, h, '#7dff8a');
     UI.divider(ctx, x + 6, y + 15, w - 12);
@@ -636,6 +636,15 @@ const Village = {
       const price = it.reason || (it.spec.gold + '골드');
       UI.drawText(ctx, price, x + w - 12 - UI.textWidth(price), ry,
         it.reason ? '#6f7a68' : (player.gold >= it.spec.gold ? '#ffe066' : '#c05a5a'));
+    }
+
+    // 고른 것이 무엇을 하는지 — 처음 보는 사람도 알아듣게 문장으로 (폭에 맞춰 두 줄까지)
+    const pick = list[this.alchemyCursor];
+    if (pick && pick.spec.desc) {
+      const dy = rowY + list.length * rowH;
+      UI.divider(ctx, x + 6, dy - 2, w - 12);
+      Inventory.wrap(pick.spec.desc.split(' '), w - 20, ' ').slice(0, 2)
+        .forEach((t, i) => UI.drawText(ctx, t, x + 10, dy + 2 + i * 8, '#c8d0d8'));
     }
 
     const footY = y + h - 19;
