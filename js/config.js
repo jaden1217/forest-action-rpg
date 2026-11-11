@@ -1615,9 +1615,9 @@ const CONFIG = {
       // 묵직한 전리품으로 포션 두 병
       potionBig: { name: '포션 2병 빚기', color: '#ffd93d', gold: 8, loot: { fang: 3, cap: 3 }, gain: 2 },
       // 걸린 상태이상을 전부 지우고 잠깐 해독 상태가 된다 (그 동안 새로 안 걸린다)
-      antidote: { name: '해독제', color: '#7dff8a', gold: 10, loot: { cap: 2, stinger: 1 }, wardTime: 15 },
+      antidote: { name: '해독제', effect: '상태이상 해제, 15초 면역', color: '#7dff8a', gold: 10, loot: { cap: 2, stinger: 1 }, wardTime: 15 },
       // 중독·화상에 걸려도 자연 회복이 멈추지 않는 약 (다음에 걸릴 때부터 적용, 60초)
-      tonic: { name: '강장제', color: '#5ff0ff', gold: 14, loot: { cactusFruit: 2, wormScale: 1 }, tonicTime: 60 },
+      tonic: { name: '강장제', effect: '60초 독·화상 중 회복', color: '#5ff0ff', gold: 14, loot: { cactusFruit: 2, wormScale: 1 }, tonicTime: 60 },
     },
     wardTime: 15,     // 해독제 해독 지속
     tonicTime: 60,    // 강장제 지속

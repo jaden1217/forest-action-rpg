@@ -108,7 +108,8 @@ const Status = {
         target.hp -= hit;
         FX.number(target.x + Util.rand(-6, 6), target.y - 12, '-' + hit, spec.color);
       }
-      target.sinceCombat = 0;
+      // 강장제가 도는 동안은 지속 피해가 회복 대기 시계를 되돌리지 않는다 — 안 그러면 강장제를 마셔도 끝내 안 찬다
+      if (!(target.tonicTimer > 0)) target.sinceCombat = 0;
       return;
     }
     target.hp -= dmg;

@@ -31,7 +31,7 @@ const Village = {
     board:     { x:  14, y: -46 },   // 북 (우)
     shop:      { x:  64, y: -32 },   // 북동 — 가판대는 이 자리 16px 뒤에 선다
     forge:     { x:  78, y:  40 },   // 동 (남쪽) — 대장장이는 16px 왼쪽
-    alchemy:   { x: -40, y:  48 },   // 남 (좌) — 연금술사는 14px 왼쪽
+    alchemy:   { x: -40, y:  48 },   // 남 (좌) — 탁자는 10px 뒤, 연금술사는 그 앞 (상인과 같은 꼴)
     portal:    { x: -80, y:   4 },   // 서
     houseA:    { x: -78, y: -44 },   // 북서 모서리
     houseB:    { x: -80, y:  44 },   // 남서 모서리
@@ -212,12 +212,14 @@ const Village = {
     // 연금술사 — 남쪽 울타리 안쪽. 조건을 채워야 이사 오고, 비어 있을 땐 빈 탁자만 둔다
     try {
       const s4 = this.spot('alchemy');
-      const bench = World.addProp(SPRITES.stall || SPRITES.chest[0], s4.x, s4.y, { solid: [10, 3, 5], footHeight: 3 });
+      /* 탁자는 뒤로 물리고 연금술사는 그 앞에 세운다 — 예전처럼 탁자 옆 뒤쪽에 서면
+         나중에 그려지는 차양이 몸 절반을 덮었다 (상점 상인과 같은 배치) */
+      const bench = World.addProp(SPRITES.stall || SPRITES.chest[0], s4.x, s4.y - 10, { solid: [10, 3, 5], footHeight: 3 });
       bench.alchemyBench = true;
       bench.sign = { text: '연금술', color: '#c79ce8', dy: 36 };   // 탁자 차양 위로
       this.bench = bench;
       if (this.alchemistHome()) {
-        this.spawnAlchemist(s4.x - 14, s4.y - 2);
+        this.spawnAlchemist(s4.x, s4.y + 4);
       } else {
         World.alchemist = null;
       }
@@ -410,7 +412,7 @@ const Village = {
     // 연금술사
     if (this.alchemistHome() && !World.alchemist) {
       const a = this.spot('alchemy');
-      this.spawnAlchemist(a.x - 14, a.y - 2);
+      this.spawnAlchemist(a.x, a.y + 4);   // place() 와 같은 자리 — 탁자 앞
       if (!silent && !this.announced.alchemist) {
         this.announced.alchemist = true;
         FX.number(Game.player.x, Game.player.y - 30, '연금술사가 이사 왔다', '#7dff8a');
@@ -623,6 +625,8 @@ const Village = {
         UI.drawText(ctx, '>', x + 9, ry, '#7dff8a');
       }
       UI.drawText(ctx, it.spec.name, x + 18, ry, it.ok ? '#f0d9b5' : '#6f7a68');
+      // 해독제·강장제는 무엇을 하는지 이름 옆에 (포션은 이름이 곧 효과다)
+      if (it.spec.effect) UI.drawText(ctx, it.spec.effect, x + 24 + UI.textWidth(it.spec.name), ry, it.ok ? it.spec.color : '#5f6b59');
       // 재료 — 모자라면 붉게
       const mat = it.held.map(hl => {
         const nm = (CONFIG.loot.items[hl.id] || {}).name || hl.id;
