@@ -154,7 +154,7 @@ html, body {
 }
 
 </style>
-<!-- built 2026-11-11 08:48 by tools/build.js -->
+<!-- built 2026-11-15 02:39 by tools/build.js -->
 </head>
 <body>
   <div id="stage">
@@ -667,18 +667,19 @@ const CONFIG = {
        **레벨은 보스 레벨 + legendLevelBonus** 로 고정이다 (예전 '성장 무기'는 내 레벨을 따라 올랐다).
        이름표가 무지개로 흐르고, 바닥에선 오라가 돌고, 휘두르면 무지개 잔상이 남는 것은 그대로다.
        이름은 떨군 보스에게서 따 왔고, 고유 효과(CONFIG.uniques)를 하나씩 들고 온다 — 전설 장비와 같은 규칙.
-         GIANT SLIME  → SLIME MONARCH  왕관 쓴 젤리 군주의 독침
-         ALPHA WOLF   → ALPHA HOWL     우두머리의 울음이 깃든 검
-         ELDER SHROOM → ELDER BLIGHT   늙은 버섯의 마름병을 두른 도끼
-         SAND LORD    → SANDLORD FANG  모래의 군주의 이빨 하나 */
+         한자어 두 글자로 짧고 묵직하게 — '~의 ~' 꼴은 설명이라 무게가 실리지 않는다
+         거대 슬라임   → 부식(腐蝕)  찔린 자리가 녹아내리는 독침
+         우두머리 늑대 → 혈랑(血狼)  피에 젖은 무리의 우두머리
+         늙은 버섯     → 고사(枯死)  찍힌 것은 말라 죽는다
+         모래의 군주   → 유사(流沙)  발밑을 삼키는 모래 */
     legendColor: '#ffd93d',          // 이름표를 무지개로 못 쓰는 곳(창고 목록 등)에 쓰는 금색
     legendOrder: ['dagger', 'sword', 'axe'],
     legendLevelBonus: 10,
     legends: {
-      slime:    { name: '점액 군주', unique: 'momentum' },
-      wolf:     { name: '우두머리의 포효',    unique: 'swiftFoot' },
-      mushroom: { name: '태고의 마름병',  unique: 'executioner' },
-      sandlord: { name: '군주의 송곳니', unique: 'phantom' },
+      slime:    { name: '부식', unique: 'momentum' },
+      wolf:     { name: '혈랑', unique: 'swiftFoot' },
+      mushroom: { name: '고사', unique: 'executioner' },
+      sandlord: { name: '유사', unique: 'phantom' },
     },
     /* 전설 무기의 이름표와 바닥 오라에 쓰는 무지개.
        hsl 로 매끈하게 돌리지 않고 일곱 색을 딱딱 끊어 쓴다 — 도트 그림에는 이쪽이 어울린다 */
@@ -1269,7 +1270,7 @@ const CONFIG = {
       speed: 26,              // 평소엔 느릿느릿 다가온다
       detect: 260,
       contactCooldown: 1.0,
-      reward: { chance: 0.10, potions: 6, trophy: 'slimeCore' },   // 전설 무기 — 숲 첫째: 단검 SLIME MONARCH L22
+      reward: { chance: 0.10, potions: 6, trophy: 'slimeCore' },   // 전설 무기 — 숲 첫째: 단검 부식 L22
 
       phase2At: 0.5,
       phase2Speed: 1.35,
@@ -1309,7 +1310,7 @@ const CONFIG = {
       speed: 58,              // 평소에도 플레이어만큼 빠르다
       detect: 300,
       contactCooldown: 0.8,
-      reward: { chance: 0.10, potions: 6, trophy: 'alphaFang' },   // 숲 둘째: 검 ALPHA HOWL L30
+      reward: { chance: 0.10, potions: 6, trophy: 'alphaFang' },   // 숲 둘째: 검 혈랑 L30
 
       phase2At: 0.5,
       phase2Speed: 1.3,
@@ -1351,7 +1352,7 @@ const CONFIG = {
       speed: 12,              // 뿌리를 끌며 아주 천천히 다가온다 (2페이즈에서 빨라진다)
       detect: 300,
       contactCooldown: 1.0,
-      reward: { chance: 0.10, potions: 6, trophy: 'elderSpore' },  // 숲 셋째: 도끼 ELDER BLIGHT L40
+      reward: { chance: 0.10, potions: 6, trophy: 'elderSpore' },  // 숲 셋째: 도끼 고사 L40
 
       phase2At: 0.5,
       phase2Speed: 1.3,
@@ -1400,7 +1401,7 @@ const CONFIG = {
       speed: 96,              // 땅속에서는 빠르다 (밖에 나오면 거의 안 움직인다)
       detect: 400,
       contactCooldown: 1.0,
-      reward: { chance: 0.12, potions: 8, trophy: 'lordScale' },   // 사막 첫째: 단검 SANDLORD FANG L56
+      reward: { chance: 0.12, potions: 8, trophy: 'lordScale' },   // 사막 첫째: 단검 유사 L56
 
       phase2At: 0.5,
       phase2Speed: 1.3,
@@ -1588,7 +1589,7 @@ const CONFIG = {
 
      수치가 아니라 **규칙을 바꾸는 한 줄**이어야 한다 — +10% 는 옵션이 할 일이고,
      여기서는 '포션을 마시면 무적', '치명타가 쿨다운을 깎는다' 같은 것만 둔다.
-     보스의 전설 무기(SLIME MONARCH 등)도 같은 목록에서 하나씩 가져간다 (weapons.legends). */
+     보스의 전설 무기(부식·혈랑·고사·유사)도 같은 목록에서 하나씩 가져간다 (weapons.legends). */
   uniques: {
     executioner: { name: '처형자', text: '빈사의 적에게 피해 +50%',      ratio: 0.25, mult: 1.5 },
     thorns:      { name: '가시',      text: '맞으면 주위에 되돌려준다',      ratio: 0.6, radius: 34 },
@@ -17403,6 +17404,12 @@ const UI = {
    새 작업을 올릴 때 PATCH_NOTES 맨 앞에 한 항목을 추가하면 된다. */
 
 const PATCH_NOTES = [
+  {
+    date: '2026-11-15',
+    notes: [
+      '보스 전설 무기 이름을 짧고 묵직하게 — 부식(거대 슬라임) · 혈랑(우두머리 늑대) · 고사(늙은 버섯) · 유사(모래의 군주)',
+    ],
+  },
   {
     date: '2026-11-11',
     notes: [
