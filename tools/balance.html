@@ -156,8 +156,12 @@
   out.appendChild(el('p', 'note', totals.join(' · ') + ' · 포션 ' + CONFIG.shop.potionPrice + 'G'));
 
   /* ── 보스 ── */
-  const BIG = { slime: ['slam', '내려찍기'], wolf: ['pounce', '덮치기'], mushroom: ['pulse', '맥동'], sandlord: ['dive', '솟구침'] };
-  const PLV = { slime: [8, 10, 12, 14, 16, 18], wolf: [14, 16, 18, 20, 22, 24], mushroom: [20, 23, 26, 28, 30, 34], sandlord: [38, 40, 42, 44, 46, 50] };
+  const BIG = { slime: ['slam', '내려찍기'], wolf: ['pounce', '덮치기'], mushroom: ['pulse', '맥동'],
+    queen: ['sting', '꼬리 찌르기'], tyrant: ['burst', '가시 폭발'], sandlord: ['dive', '솟구침'],
+    wraith: ['beam', '서리 숨결'], chief: ['avalanche', '눈사태'], colossus: ['tremor', '지진'] };
+  const PLV = { slime: [8, 10, 12, 14, 16, 18], wolf: [14, 16, 18, 20, 22, 24], mushroom: [20, 23, 26, 28, 30, 34],
+    queen: [28, 30, 32, 34, 36, 40], tyrant: [33, 35, 37, 39, 41, 45], sandlord: [38, 40, 42, 44, 46, 50],
+    wraith: [44, 46, 48, 50, 52, 56], chief: [50, 52, 54, 56, 58, 62], colossus: [56, 58, 60, 62, 64, 68] };
   // 보스가 어느 맵 어느 위험도에 사는지 — 맵마다 동굴 목록을 뒤진다
   const caveOf = key => { for (const id in CONFIG.maps) { const c = CONFIG.maps[id].caves.find(c => c.boss === key); if (c) return { map: CONFIG.maps[id].name, t: c.t }; } };
   for (const key in CONFIG.bosses) {

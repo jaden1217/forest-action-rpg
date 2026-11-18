@@ -139,7 +139,7 @@ const Game = {
     if (typeof Village !== 'undefined') Village.deserialize(saved && saved.village, this.player);
     this.forestBanner = 2.8;   // 맵 이름을 한 번 띄운다
     this.boss = null;
-    // 동굴은 맵마다 다르다 (숲 셋, 사막 하나, 설원 없음)
+    // 동굴은 맵마다 셋 — 다시 열리기까지의 시간도 맵마다 따로 센다
     this.bossReadyIn = {};
     for (const id in CONFIG.maps) this.bossReadyIn[id] = CONFIG.maps[id].caves.map(() => 0);
     this.cavePrompt = null;
@@ -173,12 +173,20 @@ const Game = {
     golem: (x, y, lv) => new Golem(x, y, lv),
   },
 
-  // 보스 종류 -> 클래스 (CONFIG.bosses[*].type)
+  /* 보스 종류 -> 클래스 (CONFIG.bosses[*].type).
+     보스는 그 땅 몬스터 하나씩을 키운 것이라 종류마다 딱 하나다 — 숲 셋, 사막 셋, 설원 셋 */
   BOSS_TYPES: {
     slime: (x, y) => new GiantSlime(x, y),
     wolf: (x, y) => new AlphaWolf(x, y),
     mushroom: (x, y) => new ElderShroom(x, y),
+    // 사막
+    scorpion: (x, y) => new QueenScorpion(x, y),
+    cactus: (x, y) => new ThornTyrant(x, y),
     sandworm: (x, y) => new SandLord(x, y),
+    // 설원
+    wisp: (x, y) => new WraithKing(x, y),
+    yeti: (x, y) => new YetiChief(x, y),
+    golem: (x, y) => new IceColossus(x, y),
   },
 
   /* 몇 번째 동굴의 보스 설정인가 — **지금 맵의** caves 순서다.
@@ -786,11 +794,15 @@ const Game = {
     Ambient.drawWater(ctx, cam);
     // 보스의 바닥 예고(돌진 경로, 착지 범위, 포자비 표시)는 바닥 바로 위, 캐릭터 아래에
     /* 바닥 예고는 화면 안에 있는 것만 그린다 — 설원의 설인·골렘은 250마리가 모두
-       빙판과 범위 원을 그리려 들어서, 안 걸러주면 프레임이 두 배로 무거워진다 */
+       빙판과 범위 원을 그리려 들어서, 안 걸러주면 프레임이 두 배로 무거워진다.
+       **보스는 거르지 않는다** — 몸은 화면 밖에 있어도 그 수(쫓아오는 혼불, 방을 쓰는 눈사태,
+       내 발밑에 떨어지는 결정)는 내 곁에 있다 */
     for (const e of this.enemies) {
       if (!e.drawGround || e.dead) continue;
-      if (e.x < cam.x - 80 || e.x > cam.x + CONFIG.VIEW_W + 80) continue;
-      if (e.y < cam.y - 80 || e.y > cam.y + CONFIG.VIEW_H + 80) continue;
+      if (!e.isBoss) {
+        if (e.x < cam.x - 80 || e.x > cam.x + CONFIG.VIEW_W + 80) continue;
+        if (e.y < cam.y - 80 || e.y > cam.y + CONFIG.VIEW_H + 80) continue;
+      }
       e.drawGround(ctx, cam);
     }
 
@@ -803,8 +815,10 @@ const Game = {
       drawables.push(p);
     }
     for (const e of this.enemies) {
-      if (e.x < cam.x - pad || e.x > cam.x + CONFIG.VIEW_W + pad) continue;
-      if (e.y < cam.y - pad || e.y > cam.y + CONFIG.VIEW_H + pad) continue;
+      if (!e.isBoss) {   // 보스는 화면 밖에 있어도 그린다 (날아오는 눈덩이·혼불이 몸과 함께 그려진다)
+        if (e.x < cam.x - pad || e.x > cam.x + CONFIG.VIEW_W + pad) continue;
+        if (e.y < cam.y - pad || e.y > cam.y + CONFIG.VIEW_H + pad) continue;
+      }
       drawables.push(e);
     }
     // 바닥 드랍도 같은 목록에 넣어야 나무 앞뒤 관계가 맞는다

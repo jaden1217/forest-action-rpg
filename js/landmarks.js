@@ -37,7 +37,12 @@ const Landmarks = {
       const spot = this.findSpot(rng, want, spots, cfg);
       if (!spot) continue;
       spots.push(spot);
-      this.build(Util.choice(kinds), spot.x, spot.y, rng, World.chests.length);
+      /* 종류는 **그 자리가 정한다** (시드 난수도, Math.random 도 아니다).
+         예전엔 Util.choice 로 골라서 켤 때마다 폐허가 야영지로 바뀌었고, 사당은 난수를 안 쓰는 탓에
+         사막에서는 종류에 따라 그 뒤 상자 자리까지 통째로 달라졌다 (같은 시드인데 켤 때마다 다른 사막).
+         자리에서 뽑으면 난수 순서를 건드리지 않아 숲·설원의 상자 자리는 예전 그대로다 */
+      const kind = kinds[(Math.round(spot.x) * 7 + Math.round(spot.y) * 13) % kinds.length];
+      this.build(kind, spot.x, spot.y, rng, World.chests.length);
     }
   },
 
@@ -78,6 +83,7 @@ const Landmarks = {
       put(Util.choice(SPRITES.boulder), 20, -6, [7, 4, 6]);
       if (rng() < 0.5) put(Util.choice(SPRITES.log), -4, 16, null);
     } else if (kind === 'shrine') {
+      rng();   // 다른 종류와 같은 횟수만큼 난수를 쓴다 — 종류가 무엇이든 다음 상자 자리가 같아야 한다
       put(Util.choice(SPRITES.shrine), 0, -14, [5, 5, 6]);
       put(Util.choice(SPRITES.ruinBlock), -16, 4, [6, 3, 4]);
       put(Util.choice(SPRITES.ruinBlock), 16, 4, [6, 3, 4]);

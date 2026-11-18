@@ -39,7 +39,7 @@ const World = {
     this.props = [];
     this.solids = [];
     this.time = 0;
-    this.caves = this.spec.caves.map(() => null);   // 동굴 입구 — 각자 자기 보스 방으로 이어진다 (사막엔 없다)
+    this.caves = this.spec.caves.map(() => null);   // 동굴 입구 — 각자 자기 보스 방으로 이어진다 (맵마다 셋)
     this.merchant = null;   // 상인 (Shop.place 가 채운다)
     this.alchemist = null;
     this.stashChest = null;
@@ -53,7 +53,7 @@ const World = {
     this.placeTrees(Util.makeRng(seed + 17));
     this.buildGrid();   // 나무 충돌을 먼저 등록해야 장식이 나무를 피해서 놓인다
     this.placeDecor(Util.makeRng(seed + 41));
-    this.placeCaves(Util.makeRng(seed + 61));   // 동굴 입구 — 맵마다 자기 caves 표대로
+    this.placeCaves(seed, false);   // 동굴 입구 — 맵마다 자기 caves 표대로 (먼저 있던 동굴들)
     Landmarks.place(Util.makeRng(seed + 97));   // 폐허·야영지·묻힌 상자 — 그 한가운데에 보물 상자
     this.board = null;  // 의뢰 게시판 (Quests.place 가 채운다)
     Shop.place();       // 9주차: 시작 지점 옆 가판대와 상인
@@ -61,6 +61,13 @@ const World = {
     Forge.place();      // 대장간 — 무기에 속성을 박는 모루 (보스 전에는 모루만)
     if (typeof Village !== 'undefined') Village.place();   // 10주차: 거점 — 연금술사·창고·모닥불·집
     this.placePortal(); // 텔레포트 비석 — 시작 지점 반대편
+    /* 나중에 생긴 동굴(caves 의 late)은 **맨 마지막에** 놓는다 — 이미 선 것 전부(나무·바위·폐허·마을)를 피해서.
+       먼저 놓으면 그 뒤에 놓이는 랜드마크가 동굴을 피하느라 자리를 옮기고, 그러면 예전 저장의
+       보물 상자 자리가 전부 달라진다. 맨 끝에 놓으면 예전 것은 한 칸도 안 바뀐다 */
+    if (this.spec.caves.some(c => c.late)) {
+      this.buildGrid();
+      this.placeCaves(seed, true);
+    }
     Props.bakeShadows(this);   // 서 있는 것들의 그림자를 바닥에 굽는다 (빛 반대편)
     this.buildGrid();   // 바위·그루터기·가판대까지 포함해 다시 만든다
   },
@@ -169,12 +176,34 @@ const World = {
     this.bossY = WALL * T + 78;
   },
 
+  /* 보스 방의 빛깔 — 맵마다 동굴 셋 (caves 순서). tint 벽을 덮는 어둠, grain 벽의 바위 틈, floor 바닥에 도는 빛.
+       숲    슬라임 굴은 흙빛, 늑대 굴은 이끼빛, 포자 둥지는 포자빛
+       사막  전갈 소굴은 녹슨 빛, 가시 뜰은 마른 풀빛, 모래 구덩이는 모래빛
+       설원  얼음 묘실은 푸른 밤빛, 눈보라 굴은 잿빛 눈, 빙하의 심장은 짙은 남빛 */
+  ARENA_LOOK: {
+    forest: [
+      { tint: 'rgba(14,11,8,0.88)', grain: '#2b2620', floor: null },
+      { tint: 'rgba(8,14,10,0.88)', grain: '#20301f', floor: null },
+      { tint: 'rgba(14,9,16,0.88)', grain: '#2e2033', floor: null },
+    ],
+    desert: [
+      { tint: 'rgba(16,9,6,0.88)', grain: '#3a2418', floor: 'rgba(176,104,56,0.10)' },
+      { tint: 'rgba(11,13,6,0.88)', grain: '#2c3018', floor: 'rgba(150,140,70,0.10)' },
+      { tint: 'rgba(15,12,7,0.88)', grain: '#3a3020', floor: 'rgba(204,170,100,0.10)' },
+    ],
+    tundra: [
+      { tint: 'rgba(6,10,18,0.88)', grain: '#1c2a40', floor: 'rgba(110,160,230,0.14)' },
+      { tint: 'rgba(10,12,15,0.88)', grain: '#2a323c', floor: 'rgba(190,215,235,0.13)' },
+      { tint: 'rgba(6,8,20,0.90)', grain: '#22285a', floor: 'rgba(120,130,240,0.14)' },
+    ],
+  },
+
   // 보스 방 바닥 굽기 — 벽은 캄캄하게, 바닥은 자갈이 굴러다니는 돌바닥
   bakeArena(rng, WALL, caveIndex) {
     const T = CONFIG.TILE;
-    // 동굴마다 벽 색조가 조금 다르다 — 슬라임 굴은 흙빛, 늑대 굴은 이끼빛, 버섯 굴은 포자빛
-    const WALL_TINT = ['rgba(14,11,8,0.88)', 'rgba(8,14,10,0.88)', 'rgba(14,9,16,0.88)'][caveIndex] || 'rgba(12,11,10,0.88)';
-    const WALL_GRAIN = ['#2b2620', '#20301f', '#2e2033'][caveIndex] || '#2b2620';
+    // 동굴마다 벽 색조가 조금 다르고, 사막·설원의 굴은 바닥에도 그 땅의 빛이 돈다 (ARENA_LOOK)
+    const look = (this.ARENA_LOOK[this.mapId] || this.ARENA_LOOK.forest)[caveIndex] || this.ARENA_LOOK.forest[0];
+    const WALL_TINT = look.tint, WALL_GRAIN = look.grain;
     this.ground = makeCanvas(this.w, this.h);
     const ctx = this.ground.getContext('2d');
     ctx.imageSmoothingEnabled = false;
@@ -197,9 +226,11 @@ const World = {
           const off = ((tx + ty) & 1) ? 7 : 2;
           ctx.fillRect(x + off, y + 4, 6, 1); ctx.fillRect(x + ((off + 8) % 16), y + 11, 5, 1);
           ctx.fillRect(x + off + 5, y + 5, 1, 1);
-        } else if (rng() < 0.035) {
+        } else {
+          // 바닥 빛 — 돌바닥 위에 옅게 한 겹 (난수는 안 쓴다 — 방 안 바위 배치가 그대로여야 한다)
+          if (look.floor) { ctx.fillStyle = look.floor; ctx.fillRect(x, y, T, T); }
           // 자갈은 아주 드물게 — 흔하면 바닥이 어수선해서 보스 동작이 안 보인다
-          ctx.drawImage(SPRITES.rock[0], x + Math.floor(rng() * 6), y + Math.floor(rng() * 7));
+          if (rng() < 0.035) ctx.drawImage(SPRITES.rock[0], x + Math.floor(rng() * 6), y + Math.floor(rng() * 7));
         }
       }
     }
@@ -633,19 +664,28 @@ const World = {
   },
 
   // 사막 소품 — 마른 풀, 마른 수풀, 바위(많다), 공 선인장(부딪힌다), 뼈
-  /* 동굴 입구 — **맵마다** 자기 caves 표대로 놓는다 (숲 셋, 사막 하나, 설원 없음).
+  /* 동굴 입구 — **맵마다** 자기 caves 표대로 놓는다 (맵마다 셋).
      예전에는 숲 소품 함수 안에 있어서 사막에 보스를 넣어도 입구가 안 생겼다.
-     위험도 고리 위에 하나씩, 방향은 120도씩 벌려 서로 다른 쪽에 둔다. */
-  placeCaves(rng) {
-    const base = rng() * Math.PI * 2;
+     위험도 고리 위에 하나씩, 방향은 120도씩 벌려 서로 다른 쪽에 둔다 (칸은 caves 의 slot, 없으면 순서).
+
+     두 번 부른다 — 먼저 있던 동굴(late 아님)은 예전 그 자리에서, 나중에 생긴 동굴(late)은 맵을 다 짓고 난 맨 끝에.
+     기준각은 늘 같은 난수의 첫 값이라 두 차례가 같은 120도 틀을 쓰고, 먼저 차례는 그 난수를 이어 써서
+     **예전 맵과 똑같이 나온다.** 나중 차례는 자기 난수를 따로 쓴다 */
+  placeCaves(seed, late) {
+    const first = Util.makeRng(seed + 61);
+    const base = first() * Math.PI * 2;
+    const rng = late ? Util.makeRng(seed + 67) : first;
     this.spec.caves.forEach((spec, index) => {
-      const want = base + index * (Math.PI * 2 / 3);
+      if (!!spec.late !== !!late) return;
+      const want = base + (spec.slot === undefined ? index : spec.slot) * (Math.PI * 2 / 3);
       let best = null, bestErr = Infinity;
       // 한 자리를 재 본다 — 빈자리면 바로 연다. 나무에 막혔어도 땅(물·맵 끝)이 괜찮으면 후보로 기억해 둔다
       const tryAt = (x, y, apart) => {
         const err = Math.abs(this.dangerAt(x, y) - spec.t);
         if (err > 0.06) return false;
         if (apart && this.caves.some(c => c && Util.dist(c.x, c.y, x, y) < 320)) return false;
+        // 나중에 놓는 동굴은 이미 선 것(보물 상자가 있는 랜드마크·마을)에 붙지 않는다
+        if (late && !this.clearOfSites(x, y)) return false;
         if (this.isFreeSpot(x, y, 22)) { this.addCave(x, y, index); return true; }
         if (err < bestErr && this.groundFree(x, y, 22)) { best = { x, y }; bestErr = err; }
         return false;
@@ -656,7 +696,7 @@ const World = {
         const tt = spec.t + (rng() - 0.5) * 0.1;
         const x = Util.clamp(this.startX + Math.cos(a) * tt * this.w / 2, 40, this.w - 40);
         const y = Util.clamp(this.startY + Math.sin(a) * tt * this.h / 2, 50, this.h - 40);
-        if (tryAt(x, y, false)) return;
+        if (tryAt(x, y, !!late)) return;
       }
       /* 여기까지 왔으면 그 방향 고리에 빈자리가 하나도 없다 — 예전엔 동굴이 그냥 안 생겨서 그 보스를
          영영 만날 수 없었다 (시드 11762: 늙은 버섯 쪽 고리가 통째로 호수였다).
@@ -671,6 +711,12 @@ const World = {
         this.addCave(best.x, best.y, index);
       }
     });
+  },
+
+  // 이미 서 있는 것들과 떨어져 있는가 — 보물 상자(랜드마크 한가운데)와 마을
+  clearOfSites(x, y) {
+    if ((this.chests || []).some(c => Util.dist(c.x, c.y, x, y) < 100)) return false;
+    return !Village.inRect(x, y, this.villageZone, 60);
   },
 
   addCave(x, y, index) {

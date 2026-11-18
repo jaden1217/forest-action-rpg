@@ -380,12 +380,16 @@ const Creatures = {
 
   /* ── 전갈 → 갑각 전갈 ────────────────────────────────────
      어두운 갑각 마디(마디마다 윗날이 빛난다), 톱니 난 큰 집게, 머리의 붉은 눈 셋,
-     등 위로 감아 올린 꼬리 끝에 독이 맺힌 침. 다리는 무릎을 세웠다 내려 디딘다 */
-  scorpion(W, H, frame, pose, flash) {
-    const key = ['scorp', W, H, frame, pose, flash ? 1 : 0].join(':');
+     등 위로 감아 올린 꼬리 끝에 독이 맺힌 침. 다리는 무릎을 세웠다 내려 디딘다.
+     queen — 여왕 전갈: 호박빛 대신 검붉은 껍질에 금빛 무늬, 머리에 가시 왕관, 집게와 꼬리가 굵고 눈이 다섯 */
+  scorpion(W, H, frame, pose, flash, queen) {
+    const key = ['scorp', W, H, frame, pose, flash ? 1 : 0, queen ? 1 : 0].join(':');
     return this.get(key, () => {
-      const R = this.ramp('scorpion', 8, 62), RD = R.map((c, i) => R[Math.max(0, i - 1)]);
-      const p = new Pix(W + 2, H + 3), ox = 1, oy = 1;
+      const R = queen ? Art.ramp(350, 52, 6, 9, 58) : this.ramp('scorpion', 8, 62), RD = R.map((c, i) => R[Math.max(0, i - 1)]);
+      // 여왕은 왕관이 솟을 위쪽과 큰 집게가 나갈 오른쪽에 자리를 더 잡는다
+      const crown = queen ? Math.max(2, Math.round(H * 0.1)) : 0, pad = queen ? Math.round(W * 0.08) : 0;
+      const p = new Pix(W + 2 + pad, H + 3 + crown), ox = 1, oy = 1 + crown;
+      const GOLD = '#ffcf4a';
       const X = (f) => ox + f * W, Y = (f) => oy + f * H;
       const B = (f) => Y(f + 0.1);                                // 몸은 낮게 깔린다 (다리를 옆으로 벌려 엎드린 자세)
       // 다리 — 한쪽에 둘씩. 몸에서 무릎을 세웠다가 앞뒤로 벌려 디딘다 (빽빽하면 빗처럼 보인다)
@@ -403,25 +407,54 @@ const Creatures = {
       };
       legs(RD, 1);
       // 마디 — 하나 걸러 한 단 어둡게 (갑각이 겹친 띠)
-      for (let i = 0; i < 3; i++) p.blob(X(0.33 + i * 0.13), B(0.56), W * 0.1, H * 0.14, i === 1 ? RD : R, { ambient: 0.2 });
-      p.blob(X(0.72), B(0.54), W * 0.1, H * 0.13, R, { ambient: 0.24 });   // 머리
+      const fat = queen ? 1.35 : 1;                               // 여왕은 배가 훨씬 두껍다 (알을 품었다)
+      for (let i = 0; i < 3; i++) p.blob(X(0.33 + i * 0.13), B(0.56), W * 0.1 * (queen ? 1.1 : 1), H * 0.14 * fat, i === 1 ? RD : R, { ambient: 0.2 });
+      p.blob(X(0.72), B(0.54), W * 0.1, H * 0.13 * (queen ? 1.2 : 1), R, { ambient: 0.24 });   // 머리
       // 마디 윗날 — 빛 받는 모서리
       for (let x = Math.round(X(0.24)); x < X(0.8); x++) {
         for (let y = 0; y < p.h; y++) if (p.has(x, y)) { if (p.get(x, y) !== R[0]) p.set(x, y, R[4]); break; }
       }
+      if (queen) {
+        // 등판의 금빛 무늬 — 마디마다 모래시계 한 점
+        for (let i = 0; i < 3; i++) {
+          const mx = Math.round(X(0.33 + i * 0.13)), my = Math.round(B(0.56));
+          p.over(mx, my, GOLD); p.over(mx - 1, my + 1, '#c8862a'); p.over(mx + 1, my + 1, '#c8862a'); p.over(mx, my + 2, GOLD);
+        }
+      }
       // 집게 — 굵은 팔 끝에 톱니 난 두 갈래. 찌를 땐 벌어진다
       const reach = pose === 'sting' ? 0.04 : 0, open = pose === 'windup' || pose === 'sting' ? 1 : 0;
-      p.blob(X(0.84 + reach), B(0.56), W * 0.07, H * 0.08, R, {});
-      p.blob(X(0.94 + reach), B(0.46 - open * 0.04), W * 0.08, H * 0.1, R, { ambient: 0.3 });
-      p.blob(X(0.94 + reach), B(0.67 + open * 0.04), W * 0.07, H * 0.08, RD, {});
-      const gx = Math.round(X(0.98 + reach)), gy = Math.round(B(0.57));
-      for (let j = -1 - open; j <= 1 + open; j++) p.clear(gx, gy + j);
-      if (W >= 24) { p.set(gx - 1, gy - 1 - open, this.FANG); p.set(gx - 1, gy + 1 + open, this.FANG); }
+      if (queen) {
+        // 여왕의 집게 — 공이 아니라 길쭉한 가위. 위 날이 크고, 벌어진 안쪽에 톱니가 선다
+        p.blob(X(0.83 + reach), B(0.56), W * 0.08, H * 0.1, R, {});
+        p.blob(X(0.95 + reach), B(0.4 - open * 0.05), W * 0.125, H * 0.085, R, { ambient: 0.3 });
+        p.blob(X(0.94 + reach), B(0.71 + open * 0.05), W * 0.11, H * 0.07, RD, {});
+        const qx = Math.round(X(0.9 + reach)), qy = Math.round(B(0.56));
+        for (let xx = qx; xx < p.w; xx++) for (let j = -1 - open; j <= 1 + open; j++) p.clear(xx, qy + j);
+        if (W >= 30) for (let i = 0; i < 4; i++) { p.over(qx + 1 + i * 2, qy - 2 - open, this.FANG); p.over(qx + 2 + i * 2, qy + 2 + open, this.FANG); }
+      } else {
+        p.blob(X(0.84 + reach), B(0.56), W * 0.07, H * 0.08, R, {});
+        p.blob(X(0.94 + reach), B(0.46 - open * 0.04), W * 0.08, H * 0.1, R, { ambient: 0.3 });
+        p.blob(X(0.94 + reach), B(0.67 + open * 0.04), W * 0.07, H * 0.08, RD, {});
+        const gx = Math.round(X(0.98 + reach)), gy = Math.round(B(0.57));
+        for (let j = -1 - open; j <= 1 + open; j++) p.clear(gx, gy + j);
+        if (W >= 24) { p.set(gx - 1, gy - 1 - open, this.FANG); p.set(gx - 1, gy + 1 + open, this.FANG); }
+      }
       legs(R, 0);
       // 꼬리 — 등 뒤에서 위로 감아 올라 앞을 겨눈다. 마디마다 가늘어지고 윗날이 밝다
       const curl = pose === 'windup' ? -0.06 : (pose === 'sting' ? 0.1 : 0);
       const seg = [[0.18, 0.5, 0.085], [0.1, 0.36, 0.08], [0.1, 0.22, 0.075], [0.18, 0.12, 0.068], [0.29 + curl, 0.09, 0.058]];
-      for (const [sx, sy, r] of seg) p.blob(X(sx), Y(sy + 0.1 * (sy > 0.3 ? 1 : 0.6)), W * r * 0.85, H * r * 1.25, R, { ambient: 0.24 });
+      if (queen) {
+        // 여왕의 꼬리 — 구슬 다섯이 아니라 겹겹이 물린 마디 아홉. 하나 걸러 어둡게 칠해 갑각 띠가 보인다
+        const mid = [[0.14, 0.43, 0.083], [0.095, 0.29, 0.078], [0.135, 0.165, 0.071], [0.235 + curl / 2, 0.1, 0.063]];
+        const all = [];
+        for (let i = 0; i < seg.length; i++) { all.push(seg[i]); if (mid[i]) all.push(mid[i]); }
+        all.forEach(([sx, sy, r], i) => p.blob(X(sx), Y(sy + 0.1 * (sy > 0.3 ? 1 : 0.6)), W * r * 0.9, H * r * 1.3, (i & 1) ? RD : R, { ambient: 0.24 }));
+        // 마디마다 등 쪽(바깥)으로 짧은 가시
+        for (const [sx, sy] of seg.slice(0, 4)) {
+          const kx = Math.round(X(sx) - W * 0.075), ky = Math.round(Y(sy + 0.1 * (sy > 0.3 ? 1 : 0.6)) - H * 0.04);
+          if (W >= 30) { p.set(kx, ky, GOLD); p.set(kx - 1, ky - 1, GOLD); }
+        }
+      } else for (const [sx, sy, r] of seg) p.blob(X(sx), Y(sy + 0.1 * (sy > 0.3 ? 1 : 0.6)), W * r * 0.85, H * r * 1.25, R, { ambient: 0.24 });
       // 침 — 갈고리진 끝에 독이 맺혀 떨어진다
       const tx = Math.round(X(0.37 + curl)), ty = Math.round(Y(0.21));
       p.set(tx, ty, R[5]); p.set(tx + 1, ty + 1, '#e8e0c0'); p.set(tx + 1, ty + 2, '#9dff4a');
@@ -429,6 +462,21 @@ const Creatures = {
       // 눈 — 머리 위 붉은 점 셋
       const hx = Math.round(X(0.72)), hy2 = Math.round(B(0.48));
       p.set(hx, hy2, '#ff3a2a'); p.set(hx + 2, hy2, '#ff3a2a'); if (W >= 24) p.set(hx + 1, hy2 - 1, '#ff7a5a');
+      if (queen) {
+        // 굵은 갈고리 침 — 끝에서 독이 길게 늘어진다
+        if (W >= 30) {
+          p.set(tx + 2, ty + 1, '#fff6d8'); p.set(tx + 3, ty + 2, '#e8e0c0'); p.set(tx + 3, ty + 3, '#e8e0c0'); p.set(tx + 2, ty + 3, '#9dff4a');
+          p.set(tx + 2, ty + 4, '#9dff4a'); p.set(tx + 2, ty + 5, '#5fd02a'); p.set(tx + 2, ty + 7, '#5fd02a');
+        }
+        // 눈 다섯 — 아래 줄 셋은 크게 타고, 그 위에 작은 것 둘
+        if (W >= 30) {
+          for (const dx of [-2, 1, 4]) { p.over(hx + dx, hy2, '#ff3a2a'); p.over(hx + dx + 1, hy2, '#ffb09a'); }
+          p.over(hx, hy2 - 2, '#ff7a5a'); p.over(hx + 3, hy2 - 2, '#ff7a5a');
+        } else { p.over(hx - 1, hy2, '#ff3a2a'); p.over(hx + 3, hy2, '#ff7a5a'); }
+        // 가시 왕관 — 머리 위로 솟은 금빛 가시 (가운데가 가장 길다)
+        const cx0 = X(0.72), cw = Math.max(2, W * 0.07);
+        this.spikes(p, cx0 - cw, cx0 + cw, { every: 2, len: (x) => Math.max(1, Math.round(crown * (1 - Math.abs(x - cx0) / (cw * 2)) + 1)), col: GOLD });
+      }
       return this.finish(p, flash);
     });
   },
@@ -436,12 +484,15 @@ const Creatures = {
   /* ── 선인장 → 가시 마귀 ──────────────────────────────────
      비틀린 몸통 사방에 가시, 움푹 팬 눈구멍 속 붉은 눈, 몸통을 세로로 가른 가시 이빨 아가리,
      발톱처럼 굽은 팔, 머리 위엔 이빨 달린 핏빛 꽃 */
-  cactusMob(S, grow, flash) {
-    const W = Math.round(S * grow), key = ['cact', W, flash ? 1 : 0].join(':');
+  // tyrant — 가시 폭군: 짙푸른 몸통에 팔이 넷, 머리 위에 핏빛 꽃 왕관, 가시가 두 칸씩 뻗는다
+  cactusMob(S, grow, flash, tyrant) {
+    const W = Math.round(S * grow), key = ['cact', W, flash ? 1 : 0, tyrant ? 1 : 0].join(':');
     return this.get(key, () => {
-      const R = this.ramp('cactus', 9, 58);
+      const R = tyrant ? Art.ramp(112, 40, 6, 8, 50) : this.ramp('cactus', 9, 58);
       const w = W, h = Math.round(W * 1.08);
-      const p = new Pix(w + 4, h + 4), ox = 2, oy = 3;
+      // 폭군은 머리 위 꽃 왕관과 길게 뻗은 가시가 들어갈 자리를 더 잡는다
+      const bloom = tyrant ? Math.max(2, Math.round(w * 0.16)) : 0, crown = Math.ceil(bloom * 1.5), side = tyrant ? 2 : 0;
+      const p = new Pix(w + 4 + side * 2, h + 4 + crown), ox = 2 + side, oy = 3 + crown;
       const bw = Math.max(5, Math.round(w * 0.5)), top = oy + Math.round(h * 0.1);
       // 몸통 — 위로 갈수록 한쪽으로 휜다 (비틀림)
       const bend = (y) => Math.round(Math.sin(((y - top) / (oy + h - top)) * Math.PI) * w * 0.06);
@@ -464,12 +515,27 @@ const Creatures = {
       col(ox + w - aw, top + Math.round(h * 0.06), armY - 2, aw);
       for (let x = ox + aw - 1; x < bodyX(armY) + 1; x++) { p.set(x, armY, R[2]); p.set(x, armY - 1, R[3]); }
       for (let x = bodyX(armY - 1) + bw - 1; x < ox + w - aw + 1; x++) { p.set(x, armY - 2, R[2]); p.set(x, armY - 3, R[3]); }
+      if (tyrant) {
+        // 아래쪽 팔 한 쌍 — 폭군은 팔이 넷이다 (위 팔보다 짧고 안쪽에서 솟는다)
+        const arm2 = top + Math.round(h * 0.72), in2 = Math.max(1, Math.round(w * 0.07));
+        col(ox + in2, top + Math.round(h * 0.54), arm2, aw);
+        col(ox + w - aw - in2, top + Math.round(h * 0.48), arm2 - 2, aw);
+        for (let x = ox + in2 + aw - 1; x < bodyX(arm2) + 1; x++) { p.set(x, arm2, R[2]); p.set(x, arm2 - 1, R[3]); }
+        for (let x = bodyX(arm2 - 1) + bw - 1; x < ox + w - aw - in2 + 1; x++) { p.set(x, arm2 - 2, R[2]); p.set(x, arm2 - 3, R[3]); }
+      }
       col(bodyX, top, oy + h - 1, bw);
       // 눈구멍 — 움푹 팬 어둠 속에 붉은 눈
       const ey = top + Math.round(h * 0.18);
       const e1 = bodyX(ey) + Math.round(bw * 0.18), e2 = bodyX(ey) + Math.round(bw * 0.62);
       for (const ex of [e1, e2]) { p.set(ex, ey, '#1a0c08'); p.set(ex + 1, ey, '#1a0c08'); if (S >= 18) { p.set(ex, ey + 1, '#1a0c08'); p.set(ex + 1, ey + 1, '#1a0c08'); } }
       p.set(e1 + 1, ey, '#ff3a2a'); p.set(e2, ey, '#ff3a2a');
+      if (tyrant && S >= 24) {
+        // 폭군의 눈 — 구멍이 깊고 크다. 불씨처럼 타는 눈 둘, 그 위에 작은 눈 둘
+        for (const ex of [e1, e2]) for (let j = -1; j <= 2; j++) for (let i = -1; i <= 2; i++) p.over(ex + i, ey + j, '#1a0c08');
+        this.glowEye(p, e1 + 1, ey, 30, -1, '#ff3a2a', '#ff7a3a');
+        this.glowEye(p, e2, ey, 30, 1, '#ff3a2a', '#ff7a3a');
+        p.over(e1 - 1, ey - 3, '#ff7a5a'); p.over(e2 + 2, ey - 3, '#ff7a5a');
+      }
       // 아가리 — 몸통을 세로로 가른다, 양쪽에 가시 이빨
       const mx = bodyX(ey) + Math.round(bw / 2) - 1, m0 = ey + (S >= 18 ? 3 : 2), m1 = Math.min(oy + h - 3, m0 + Math.round(h * 0.32));
       for (let y = m0; y <= m1; y++) {
@@ -483,13 +549,28 @@ const Creatures = {
       const pet = ['#8a1428', '#c0283a', '#e04a5a'];
       p.set(fx - 1, top - 1, pet[1]); p.set(fx + 1, top - 1, pet[0]); p.set(fx, top - 2, pet[2]); p.set(fx, top - 1, this.MAW);
       if (S >= 20) { p.set(fx - 2, top - 2, pet[2]); p.set(fx + 2, top - 2, pet[1]); p.set(fx, top - 3, pet[1]); p.set(fx - 1, top - 2, this.FANG); p.set(fx + 1, top - 2, this.FANG); }
-      // 가시 — 외곽선 밖으로 삐죽 (외곽선을 두른 뒤에 찍는다)
-      const thorn = '#efe6c4';
+      if (tyrant) {
+        // 폭군의 꽃 — 끝이 뾰족한 핏빛 꽃잎 일곱 장이 왕관처럼 벌어지고, 한가운데는 이빨 난 입
+        const R1 = bloom * 1.5, fcx = fx + 0.5, fcy = top - 0.5;
+        for (let y = Math.floor(fcy - R1); y <= Math.floor(fcy); y++) for (let x = Math.floor(fcx - R1 * 1.2); x <= Math.ceil(fcx + R1 * 1.2); x++) {
+          const dx = (x + 0.5 - fcx) / 1.2, dy = y + 0.5 - fcy;
+          const rr = Math.hypot(dx, dy);
+          if (rr > R1 || dy > 0) continue;
+          const sec = (Math.atan2(dy, dx) + Math.PI) / Math.PI * 7;      // 0 ~ 7 — 위쪽 반원을 일곱 장으로
+          const edge = Math.abs((sec % 1) - 0.5);                        // 꽃잎 가운데 0, 가장자리 0.5
+          if (rr > R1 * (1 - edge * 1.1)) continue;                      // 가장자리로 갈수록 짧다 — 끝이 뾰족해진다
+          p.set(x, y, edge > 0.36 ? pet[0] : (rr > R1 * 0.55 ? pet[2] : pet[1]));
+        }
+        const mw = Math.max(1, Math.round(bloom * 0.45));
+        for (let x = fx - mw; x <= fx + mw; x++) { p.set(x, top - 1, this.MAW); p.set(x, top - 2, ((x - fx) & 1) ? this.FANG : this.MAW); }
+      }
+      // 가시 — 외곽선 밖으로 삐죽 (외곽선을 두른 뒤에 찍는다). 폭군의 가시는 두 칸씩 뻗는다
+      const thorn = '#efe6c4', tip = '#fff8e0';
       return this.finish(p, flash, null, (q) => {
         for (let y = 1; y < q.h - 1; y++) for (let x = 1; x < q.w - 1; x++) {
           if (q.has(x, y) || ((x * 3 + y * 5) % 4) !== 0) continue;
-          if (q.has(x + 1, y) && !q.has(x - 1, y)) q.set(x, y, thorn);
-          else if (q.has(x - 1, y) && !q.has(x + 1, y)) q.set(x, y, thorn);
+          if (q.has(x + 1, y) && !q.has(x - 1, y)) { q.set(x, y, thorn); if (tyrant && !q.has(x - 2, y)) q.set(x - 1, y, tip); }
+          else if (q.has(x - 1, y) && !q.has(x + 1, y)) { q.set(x, y, thorn); if (tyrant && !q.has(x + 2, y)) q.set(x + 1, y, tip); }
         }
       });
     });
@@ -559,11 +640,13 @@ const Creatures = {
      찢어진 두건 같은 푸른 불꽃 속은 **텅 빈 어둠**이고, 그 안에서 눈 둘만 타오른다.
      (흰 얼굴을 그리면 아무리 다듬어도 귀여운 유령이 된다 — 얼굴이 없는 쪽이 훨씬 무섭다)
      아래로 갈가리 흩날리는 꼬리, 앞으로 뻗은 갈퀴 손 */
-  wisp(S, frame, flash) {
-    return this.get(['wisp', S, frame, flash ? 1 : 0].join(':'), () => {
-      const R = this.ramp('wisp', 22, 92);
+  // king — 서리 망령왕: 더 깊은 남빛 두건 위에 얼음 왕관, 이마에 세 번째 눈
+  wisp(S, frame, flash, king) {
+    return this.get(['wisp', S, frame, flash ? 1 : 0, king ? 1 : 0].join(':'), () => {
+      const R = king ? Art.ramp(220, 62, 6, 16, 88) : this.ramp('wisp', 22, 92);
       const w = Math.round(S * 0.86), h = S;
-      const p = new Pix(w + 2, h + 2), ox = 1, oy = 1;
+      const crown = king ? Math.max(3, Math.round(S * 0.2)) : 0;     // 얼음 왕관이 솟을 자리
+      const p = new Pix(w + 2, h + 2 + crown), ox = 1, oy = 1 + crown;
       const sway = [0, 1, 0, -1][frame % 4];
       const hr = w * 0.36, cx = ox + w / 2 + sway * 0.5, cy = oy + hr + 1.5;
       // 꼬리 — 갈가리 찢어진 네 갈래, 끝이 뾰족하다
@@ -615,6 +698,27 @@ const Creatures = {
         const jy = Math.round(cy + vry * 0.45);
         for (let x = Math.round(cx - vrx * 0.35); x <= cx + vrx * 0.35; x += 2) p.set(x, jy, '#2a5a7a');
       }
+      if (king) {
+        // 얼음 왕관 — 두건 위로 솟은 뾰족한 결정 다섯 (가운데가 가장 높다). 왼쪽 면은 희고 오른쪽 면은 어둡다
+        const ice = ['#2f6f9a', '#7fd4e8', '#e8fbff'];
+        const baseY = Math.round(cy - hr * 1.15);
+        for (const [f, hgt] of [[-0.95, 0.5], [-0.5, 0.78], [0, 1], [0.5, 0.78], [0.95, 0.5]]) {
+          const px = Math.round(cx + f * hr), len = Math.max(2, Math.round((crown + hr * 0.25) * hgt));
+          for (let j = 0; j < len; j++) {
+            const ww = (S >= 20 && j < len * 0.45) ? 1 : 0;           // 밑동은 세 칸, 위는 한 칸
+            for (let d = -ww; d <= ww; d++) p.set(px + d, baseY - j, d < 0 ? ice[2] : (d > 0 ? ice[0] : ice[1]));
+          }
+          p.set(px, baseY - len, ice[2]);
+        }
+        // 왕관 띠 — 결정 밑동을 잇는 한 줄
+        for (let x = Math.round(cx - hr); x <= cx + hr; x++) p.over(x, baseY + 1, ((x & 1) ? ice[2] : ice[1]));
+        // 눈이 더 크게 타고, 이마 한가운데에 세 번째 눈
+        if (S >= 20) {
+          p.set(e1 + 1, ey, eye); p.set(e2 - 1, ey, eye); p.set(e1 - 1, ey - 1, burn); p.set(e2 + 1, ey - 1, burn);
+          const ty3 = ey - Math.max(3, Math.round(vry * 0.5)), tx3 = Math.round(cx);
+          p.set(tx3, ty3, eye); p.set(tx3, ty3 + 1, burn); p.set(tx3 - 1, ty3, burn); p.set(tx3 + 1, ty3, burn);
+        }
+      }
       return this.finish(p, flash, flash ? null : '#123a56');
     });
   },
@@ -622,10 +726,12 @@ const Creatures = {
   /* ── 설인 → 뿔 달린 설인 ─────────────────────────────────
      정면. 어깨가 머리보다 높게 솟은 구부정한 덩치, 굽은 뿔, 무거운 눈썹 아래 붉은 눈,
      포효하는 아가리, 땅에 닿을 듯 긴 팔 끝의 발톱. 털끝이 윤곽을 깬다 */
-  yeti(W, H, frame, pose, flash) {
-    return this.get(['yeti', W, H, frame, pose, flash ? 1 : 0].join(':'), () => {
-      const R = this.ramp('yeti', 12, 76), F = Art.ramp(20, 24, 4, 12, 36);
-      const horn = Math.max(2, Math.round(H * 0.12));
+  /* chief — 설인 족장: 누런 털 대신 서리 앉은 흰 털, 뿔이 훨씬 길고 마디가 졌다, 뼈 목걸이와 붉은 전투 칠.
+     pose 'roar' 는 족장만 쓴다 — 빈손을 치켜들고 울부짖는다 ('wind' 는 눈덩이를 들고 있다) */
+  yeti(W, H, frame, pose, flash, chief) {
+    return this.get(['yeti', W, H, frame, pose, flash ? 1 : 0, chief ? 1 : 0].join(':'), () => {
+      const R = chief ? Art.ramp(214, 16, 6, 24, 94) : this.ramp('yeti', 12, 76), F = Art.ramp(20, 24, 4, 12, 36);
+      const horn = Math.max(2, Math.round(H * (chief ? 0.2 : 0.12)));
       const p = new Pix(W + 2, H + 2 + horn), ox = 1, oy = 1 + horn;
       const X = (f) => ox + f * W, Y = (f) => oy + f * H;
       const step = [0, 1, 0, -1][frame % 4];
@@ -638,7 +744,7 @@ const Creatures = {
       p.blob(X(0.5), Y(0.5), W * 0.38, H * 0.27, R, { ambient: 0.24 });
       p.blob(X(0.5), Y(0.3), W * 0.44, H * 0.16, R, { ambient: 0.26 });
       // 팔 — 평소엔 무릎 아래까지 늘어뜨리고, 던질 땐 머리 위로
-      const up = pose === 'wind';
+      const up = pose === 'wind' || pose === 'roar';
       for (const side of [-1, 1]) {
         const ax = X(0.5 + side * 0.4);
         if (up) p.blob(ax, Y(0.1), W * 0.1, H * 0.18, R, { ambient: 0.26 });
@@ -649,7 +755,7 @@ const Creatures = {
           for (let i = -1; i <= 1; i++) { p.set(cx + i, cy, this.FANG); if (W >= 20) p.set(cx + i, cy + 1, R[0]); }
         }
       }
-      if (up) p.blob(X(0.5), Y(-0.02) + 2, W * 0.17, W * 0.16, Terrain.R.snow, { ambient: 0.4 });
+      if (pose === 'wind') p.blob(X(0.5), Y(-0.02) + 2, W * 0.17, W * 0.16, Terrain.R.snow, { ambient: 0.4 });
       // 머리 — 어깨 사이에 낮게 박혔다
       const hx = X(0.5), hy = Y(0.3);
       p.blob(hx, hy, W * 0.18, H * 0.12, R, { ambient: 0.26 });
@@ -659,15 +765,21 @@ const Creatures = {
         if (p.has(x, y + 1) && !p.has(x, y - 1) && ((x * 7 + y * 3) % 3 === 0)) p.set(x, y, R[2]);
       }
       // 뿔 — 머리 양옆에서 바깥으로 뻗었다가 위로 굽는다 (밑동이 굵다)
-      const hornC = Art.ramp(36, 16, 3, 50, 86);
+      const hornC = chief ? Art.ramp(30, 34, 3, 20, 62) : Art.ramp(36, 16, 3, 50, 86);   // 족장의 뿔은 흰 털 위에서 보이게 검붉다
       for (const side of [-1, 1]) {
         const bx = hx + side * W * 0.13, by = hy - H * 0.05;
         for (let j = 0; j <= horn + 1; j++) {
           const k = j / (horn + 1);
-          const x = Math.round(bx + side * (W * 0.12 * Math.sin(k * 1.4))), y = Math.round(by - j);
+          const x = Math.round(bx + side * (W * (chief ? 0.17 : 0.12) * Math.sin(k * 1.4))), y = Math.round(by - j);
           p.set(x, y, hornC[side < 0 ? 2 : 1]);
           if (k < 0.5) p.set(x + side, y, hornC[0]);
           if (k < 0.25 && W >= 20) p.set(x - side, y, hornC[2]);
+          if (chief && W >= 28) {
+            // 족장의 뿔 — 밑동이 훨씬 굵고(네 칸) 끝으로 갈수록 가늘다, 세 칸마다 마디가 졌다
+            const thick = k < 0.3 ? 3 : (k < 0.6 ? 2 : (k < 0.85 ? 1 : 0));
+            for (let d = 1; d <= thick; d++) p.set(x + side * d, y, d === thick ? hornC[0] : hornC[1]);
+            if (j % 3 === 1) for (let d = 0; d <= thick; d++) p.set(x + side * d, y, hornC[0]);
+          }
         }
       }
       // 얼굴 — 어두운 가면, 무거운 눈썹, 붉은 눈, 포효하는 아가리
@@ -675,7 +787,19 @@ const Creatures = {
       for (let y = fy - 1; y <= fy + Math.max(3, Math.round(H * 0.1)); y++) for (let x = fx - fw; x <= fx + fw; x++) p.over(x, y, F[1]);
       for (let x = fx - fw; x <= fx + fw; x++) p.over(x, fy - 1, R[1]);            // 눈썹
       this.eyePair(p, fx - fw + 1, fx + fw - 1, fy, Math.max(16, W), '#ff4a2a', '#ff7a3a');
-      this.maw(p, fx - fw, fx + fw, fy + 2, W >= 22 ? 4 : 3, { gum: W >= 22 ? '#6a1a1a' : null });
+      this.maw(p, fx - fw, fx + fw, fy + 2, (W >= 22 ? 4 : 3) + (pose === 'roar' && W >= 22 ? 2 : 0), { gum: W >= 22 ? '#6a1a1a' : null });
+      if (chief && W >= 20) {
+        // 뼈 목걸이 — 가슴을 가로질러 늘어진 이빨 한 줄
+        const ny = Math.round(Y(0.44));
+        for (let x = Math.round(X(0.3)); x <= X(0.7); x += 2) {
+          const dip = Math.round(Math.sin((x - X(0.3)) / (W * 0.4) * Math.PI) * 2);
+          p.over(x, ny + dip, this.FANG); p.over(x, ny + dip + 1, '#b8ac90');
+        }
+        // 전투 칠 — 배에 붉은 사선 셋, 한쪽 눈을 가로지른 흉터
+        const pl = Math.max(3, Math.round(H * 0.09));
+        for (let i = 0; i < 3; i++) for (let j = 0; j < pl; j++) p.over(Math.round(X(0.37 + i * 0.1)) + (j >> 1), Math.round(Y(0.56)) + j, '#b03030');
+        p.over(fx - fw, fy - 2, '#b03030'); p.over(fx - fw + 1, fy - 1, '#7a2a2a'); p.over(fx - fw + 2, fy + 1, '#b03030');
+      }
       return this.finish(p, flash);
     });
   },
@@ -683,10 +807,11 @@ const Creatures = {
   /* ── 얼음 골렘 → 얼음 거인 ───────────────────────────────
      정면. 네모 덩어리 대신 **들쭉날쭉한 얼음 조각**을 겹쳐 쌓았다 — 어깨에서 결정이 솟고,
      머리는 어깨 사이에 파묻힌 채 가는 빛줄기로 노려본다. 가슴의 심에서 금이 사방으로 갈라져 빛이 샌다 */
-  golem(W, H, frame, pose, flash) {
-    return this.get(['golem', W, H, frame, pose, flash ? 1 : 0].join(':'), () => {
-      const R = this.ramp('golem', 14, 86);
-      const crest = Math.max(2, Math.round(H * 0.14));
+  // titan — 만년빙 거상: 맑은 얼음이 아니라 속까지 짙푸른 만년빙, 등 뒤 결정이 더 높이 솟고 머리에 얼음 왕관, 심이 보랏빛으로 탄다
+  golem(W, H, frame, pose, flash, titan) {
+    return this.get(['golem', W, H, frame, pose, flash ? 1 : 0, titan ? 1 : 0].join(':'), () => {
+      const R = titan ? Art.ramp(216, 54, 6, 11, 84) : this.ramp('golem', 14, 86);
+      const crest = Math.max(2, Math.round(H * (titan ? 0.22 : 0.14)));
       const p = new Pix(W + 2, H + 2 + crest), ox = 1, oy = 1 + crest;
       const X = (f) => ox + f * W, Y = (f) => oy + f * H;
       const step = [0, 1, 0, -1][frame % 4];
@@ -705,6 +830,14 @@ const Creatures = {
       shard([[0.2, 0.28], [0.27, -0.04], [0.36, 0.24]], 4);
       shard([[0.72, 0.26], [0.84, -0.14], [0.9, 0.36]], 2);
       shard([[0.64, 0.24], [0.74, -0.02], [0.8, 0.3]], 1);
+      if (titan) {
+        // 등 뒤로 더 높이 솟은 결정 둘, 머리 위의 뾰족한 왕관 셋
+        shard([[0.03, 0.3], [0.07, -0.2], [0.17, 0.2]], 3);
+        shard([[0.83, 0.24], [0.94, -0.21], [0.98, 0.32]], 0);
+        shard([[0.39, 0.12], [0.43, -0.07], [0.48, 0.12]], 5);
+        shard([[0.46, 0.12], [0.5, -0.16], [0.55, 0.12]], 4);
+        shard([[0.53, 0.12], [0.58, -0.05], [0.62, 0.12]], 2);
+      }
       // 팔 — 들어 올렸을 때와 늘어뜨렸을 때. 끝은 커다란 얼음 주먹
       const up = pose === 'slam';
       if (up) {
@@ -721,12 +854,16 @@ const Creatures = {
       // 눈 — 어두운 틈 속의 가는 빛줄기 (사선으로 노려본다)
       const ey = Math.round(Y(0.17));
       for (let x = Math.round(X(0.41)); x <= X(0.59); x++) { p.set(x, ey, '#0e2a3a'); p.set(x, ey + 1, '#0e2a3a'); }
-      p.set(Math.round(X(0.43)), ey, '#e8fbff'); p.set(Math.round(X(0.46)), ey + 1, '#e8fbff');
-      p.set(Math.round(X(0.57)), ey, '#e8fbff'); p.set(Math.round(X(0.54)), ey + 1, '#e8fbff');
+      const eyeC = titan ? '#f0d8ff' : '#e8fbff';
+      p.set(Math.round(X(0.43)), ey, eyeC); p.set(Math.round(X(0.46)), ey + 1, eyeC);
+      p.set(Math.round(X(0.57)), ey, eyeC); p.set(Math.round(X(0.54)), ey + 1, eyeC);
+      if (titan && W >= 24) { p.set(Math.round(X(0.43)) + 1, ey, '#ffffff'); p.set(Math.round(X(0.57)) - 1, ey, '#ffffff'); }
       // 가슴의 심 — 가장 밝고, 금이 사방으로 갈라져 빛이 샌다
-      const cx = Math.round(X(0.5)), cy = Math.round(Y(0.5)), cr = Math.max(1, Math.round(W * 0.07));
-      const glow = '#9fe8ff';
-      for (const [dx, dy] of [[-0.3, -0.18], [0.32, -0.2], [-0.24, 0.24], [0.26, 0.22], [0.02, -0.3]]) {
+      const cx = Math.round(X(0.5)), cy = Math.round(Y(0.5)), cr = Math.max(1, Math.round(W * (titan ? 0.1 : 0.07)));
+      const glow = titan ? '#d8b8ff' : '#9fe8ff';
+      const cracks = [[-0.3, -0.18], [0.32, -0.2], [-0.24, 0.24], [0.26, 0.22], [0.02, -0.3]];
+      if (titan) cracks.push([-0.36, 0.04], [0.38, 0.02], [0.04, 0.3], [-0.14, -0.3]);   // 거상은 금이 더 깊고 많다
+      for (const [dx, dy] of cracks) {
         this.line(p, cx, cy, Math.round(cx + dx * W), Math.round(cy + dy * H), glow);
       }
       for (let y = cy - cr - 1; y <= cy + cr + 1; y++) for (let x = cx - cr - 1; x <= cx + cr + 1; x++) {
@@ -734,6 +871,21 @@ const Creatures = {
         if (q <= cr) p.set(x, y, '#ffffff'); else if (q <= cr + 1) p.over(x, y, glow);
       }
       return this.finish(p, flash);
+    });
+  },
+
+  /* ── 얼음 결정 — 만년빙 거상이 떨구어 바닥에 박는 것 ──────────
+     각진 조각 셋이 한 무더기로 솟았다. lit 이면 깨지기 직전의 흰 빛 (깜빡이는 데 쓴다) */
+  iceCrystal(lit) {
+    return this.get('crystal:' + (lit ? 1 : 0), () => {
+      const R = lit ? Art.ramp(200, 30, 6, 62, 100) : Art.ramp(210, 56, 6, 20, 90);
+      const p = new Pix(13, 18);
+      this.poly(p, [[1, 16], [3, 7], [5, 16]], R[2]);       // 왼쪽 작은 조각
+      this.poly(p, [[8, 16], [10, 5], [12, 16]], R[1]);     // 오른쪽 조각
+      this.poly(p, [[3, 17], [6.5, 1], [7, 17]], R[5]);     // 가운데 큰 조각 — 빛 받는 면
+      this.poly(p, [[7, 17], [6.5, 1], [10, 17]], R[3]);    //                — 그늘진 면
+      p.set(6, 3, '#ffffff'); p.set(5, 8, '#ffffff'); p.over(3, 10, R[4]); p.over(10, 9, R[3]);
+      return this.finish(p, false);
     });
   },
 };

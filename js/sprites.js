@@ -913,6 +913,74 @@ const LOOT_SCALE = [
   '..oDDDDo..',
   '...oooo...',
 ];
+/* 사막·설원 보스 다섯의 전리품 — 보스마다 가장 눈에 띄던 것을 떼어 왔다.
+   여왕의 독침(끝에 독이 맺힌 검붉은 침) / 폭군의 꽃(이빨 난 핏빛 꽃) /
+   망령왕의 혼불(푸른 불꽃) / 족장의 뿔(마디진 뿔, 밑동에 흰 털) / 만년빙 심장(보랏빛 심이 든 얼음) */
+const LOOT_QUEEN_STINGER = [
+  '.......oo.',
+  '......oGGo',
+  '......oWGo',
+  '.....oWWo.',
+  '....oWWo..',
+  '...oRWWo..',
+  '..oRRRo...',
+  '.oRrRRo...',
+  '.oRRRRo...',
+  '..oRRo....',
+  '...oo.....',
+];
+const LOOT_TYRANT_BLOOM = [
+  '..oo...oo..',
+  '.oRRo.oRRo.',
+  'oRrRRoRRrRo',
+  'oRRRRWRRRRo',
+  '.oRRWKWRRo.',
+  'oRRRRWRRRRo',
+  'oRrRRoRRrRo',
+  '.oRRo.oRRo.',
+  '..oo.oGo...',
+  '.....oGo...',
+];
+const LOOT_WRAITH_FLAME = [
+  '....o....',
+  '...oMo...',
+  '...oMo.o.',
+  '.o.oMMoMo',
+  'oMoMnMMMo',
+  'oMMnnnMMo',
+  'oMnnWnnMo',
+  'oMnWWWnMo',
+  'oMnnWnnMo',
+  '.oMnnnMo.',
+  '..oMMMo..',
+  '...ooo...',
+];
+const LOOT_CHIEF_HORN = [
+  '.......oo.',
+  '......oHo.',
+  '.....oHHo.',
+  '....oHhHo.',
+  '...oHHHo..',
+  '..oHhHHo..',
+  '.oHHHHo...',
+  '.oHhHHo...',
+  'oFFHHHo...',
+  'oFFFFo....',
+  '.oooo.....',
+];
+const LOOT_GLACIER_HEART = [
+  '....ooo....',
+  '...oMnMo...',
+  '..oMnnnMo..',
+  '.oMnnVnnMo.',
+  'oMnnVWVnnMo',
+  'oMnVWWWVnMo',
+  'oMnnVWVnnMo',
+  '.oMnnVnnMo.',
+  '..oMnnnMo..',
+  '...oMnMo...',
+  '....ooo....',
+];
 
 /* 텔레포트 비석 (18x30) — 위로 갈수록 좁아지는 돌기둥. 가운데 룬(C)이 빛나고, 두 번째 그림은 룬이 어둡다.
    맵마다 시작점 옆에 하나씩 서 있고, 앞에서 F 를 누르면 다른 맵으로 옮겨간다. */
@@ -1123,6 +1191,12 @@ function buildSprites() {
     yetiPelt: makeSprite('loot_pelt', LOOT_PELT, { M: '#b89a74', n: '#f0e2cc' }),
     frostCore: makeSprite('loot_frostcore', LOOT_FROSTCORE, { M: '#4aa8c4', n: '#e8fbff' }),
     lordScale: makeSprite('loot_lordscale', LOOT_LORDSCALE, { D: '#b07a2a', R: '#ffb35c', d: '#ffe0a0' }),
+    // 사막·설원 보스 전리품
+    queenStinger: makeSprite('loot_queenstinger', LOOT_QUEEN_STINGER, { R: '#b8283c', r: '#ff9a8a', W: '#f2ead6', G: '#9dff4a' }),
+    tyrantBloom: makeSprite('loot_tyrantbloom', LOOT_TYRANT_BLOOM, { R: '#c0283a', r: '#ff8a9a', W: '#f2ead6', K: '#12060a', G: '#4a8a2a' }),
+    wraithFlame: makeSprite('loot_wraithflame', LOOT_WRAITH_FLAME, { M: '#2f86ad', n: '#9fe8ff', W: '#ffffff' }),
+    chiefHorn: makeSprite('loot_chiefhorn', LOOT_CHIEF_HORN, { H: '#8a5a34', h: '#4a2c1a', F: '#eef2f6' }),
+    glacierHeart: makeSprite('loot_glacierheart', LOOT_GLACIER_HEART, { M: '#2f6f9a', n: '#bfe8ff', V: '#d8b8ff', W: '#ffffff' }),
     // 연금술 약 — 포션 병에 약 색만 바꿔 담는다
     antidote: makeSprite('loot_antidote', POTION, { R: '#3fa347', r: '#7dff8a' }),
     tonic: makeSprite('loot_tonic', POTION, { R: '#2a8fa0', r: '#5ff0ff' }),

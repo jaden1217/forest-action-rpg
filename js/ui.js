@@ -562,6 +562,11 @@ const UI = {
       case 'wolf':     return Creatures.wolf(22, 16, 0, 'walk', false, true);    // 우두머리 늑대
       case 'mushroom': return Creatures.mushroom(15, 1, false, true);            // 늙은 버섯
       case 'sandworm': return Creatures.worm(10, 16, false, true);               // 모래의 군주
+      case 'scorpion': return Creatures.scorpion(22, 13, 0, 'walk', false, true);  // 여왕 전갈
+      case 'cactus':   return Creatures.cactusMob(11, 1, false, true);           // 가시 폭군
+      case 'wisp':     return Creatures.wisp(13, 0, false, true);                // 서리 망령왕
+      case 'yeti':     return Creatures.yeti(12, 14, 0, 'walk', false, true);    // 설인 족장
+      case 'golem':    return Creatures.golem(14, 14, 0, 'walk', false, true);   // 만년빙 거상
       default: return null;
     }
   },

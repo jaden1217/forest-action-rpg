@@ -85,8 +85,9 @@ const Quests = {
       } else {
         // 아직 안 가본 곳 — 이 맵의 동굴들과, 비석 건너편 맵
         const spots = [];
-        // 동굴은 번호만으로는 어느 맵 것인지 모른다 (숲 0번과 사막 0번이 다르다) — 맵도 같이 적는다
-        World.caves.forEach((c, i) => { if (c) spots.push({ kind: 'cave', map: World.mapId, index: i }); });
+        // 동굴은 번호만으로는 어느 맵 것인지 모른다 (숲 0번과 사막 0번이 다르다) — 맵도 같이 적는다.
+        // 보스 id 도 적는다 — 동굴 차례가 바뀌어도(사막에 동굴이 늘었을 때처럼) 같은 굴을 가리키게
+        World.caves.forEach((c, i) => { if (c) spots.push({ kind: 'cave', map: World.mapId, index: i, boss: World.spec.caves[i].boss }); });
         if (spec.portalTo) spots.push({ kind: 'map', id: spec.portalTo });
         if (!spots.length) continue;
         q = { type: 'explore', target: Util.choice(spots), need: 1, progress: 0 };
@@ -246,6 +247,18 @@ const Quests = {
   // 동굴 의뢰가 어느 맵 것인가 — 맵을 적기 전의 옛 의뢰는 숲 것이었다 (그때는 이름도 숲 기준으로 떴다)
   caveMap(t) { return t.map || 'forest'; },
 
+  /* 동굴 의뢰는 예전엔 번호만 적었다. 사막에 동굴이 늘면서 0번이 모래의 군주에서 여왕 전갈로 바뀌었다 —
+     번호만 믿으면 옛 '모래 구덩이 찾아가기'가 엉뚱한 굴을 가리킨다. 그래서 그때의 동굴 차례(OLD_CAVES)로
+     보스를 찾아 지금 번호로 옮겨 적는다. 이제는 보스 id 를 같이 적으므로 차례가 또 바뀌어도 그대로다 */
+  OLD_CAVES: { forest: ['slime', 'wolf', 'mushroom'], desert: ['sandlord'] },
+  migrateTarget(t) {
+    if (!t || t.kind !== 'cave') return t;
+    const map = this.caveMap(t), caves = (CONFIG.maps[map] || {}).caves || [];
+    const boss = t.boss || (this.OLD_CAVES[map] || [])[t.index];
+    const i = caves.findIndex(c => c.boss === boss);
+    return i < 0 ? null : { kind: 'cave', map: map, index: i, boss: boss };
+  },
+
   /* 화면 오른쪽에 늘 떠 있는 할 일 — 이 주차의 핵심이다.
      접속하자마자 "지금 뭘 하면 되는지"가 적혀 있어야 한다. */
   drawTracker(ctx, player) {
@@ -317,12 +330,13 @@ const Quests = {
       this.nextId = data.nextId || 1;
       for (const q of data.list) {
         if (!q || !q.type) continue;
-        const ok = (q.type === 'kill' && CONFIG.quests.monsterNames[q.target])
-          || (q.type === 'collect' && CONFIG.loot.items[q.target])
-          || (q.type === 'explore' && q.target);
+        const target = q.type === 'explore' ? this.migrateTarget(q.target) : q.target;
+        const ok = (q.type === 'kill' && CONFIG.quests.monsterNames[target])
+          || (q.type === 'collect' && CONFIG.loot.items[target])
+          || (q.type === 'explore' && target);
         if (!ok) continue;
         this.list.push({
-          id: q.id || this.nextId++, type: q.type, target: q.target,
+          id: q.id || this.nextId++, type: q.type, target: target,
           need: Math.max(1, q.need | 0), progress: Math.max(0, q.progress | 0),
           gold: Math.max(0, q.gold | 0), reward: Gear.sanitize(q.reward),
         });

@@ -744,6 +744,8 @@ class Player {
 
     dmg = Math.max(1, dmg);
     s.takeHit(dmg, push, crit, this, knockMult);
+    // VENOM FANG (극독) — 치명타가 독을 올린다. 단검은 세 번째 찌르기가 늘 급소라 꾸준히 걸린다
+    if (crit && !s.dead && this.has('venomFang')) Status.apply(s, 'poison', dmg * this.uniq('venomFang').mult, this);
     if (opts && opts.stun && !s.dead && !s.isBoss) s.stunTimer = Math.max(s.stunTimer || 0, opts.stun * (s.elite ? 0.5 : 1));
     this.sinceCombat = 0;   // 때리는 중에도 자연 회복은 멈춘다
     /* 장비에 붙은 FIERY / FROSTY / SHOCKING / VENOMOUS 가 확률로 상태이상을 건다.

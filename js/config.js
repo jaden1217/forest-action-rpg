@@ -486,7 +486,12 @@ const CONFIG = {
          거대 슬라임   → 부식(腐蝕)  찔린 자리가 녹아내리는 독침
          우두머리 늑대 → 혈랑(血狼)  피에 젖은 무리의 우두머리
          늙은 버섯     → 고사(枯死)  찍힌 것은 말라 죽는다
-         모래의 군주   → 유사(流沙)  발밑을 삼키는 모래 */
+         여왕 전갈     → 극독(劇毒)  스치기만 해도 독이 오른다
+         가시 폭군     → 형극(荊棘)  쥔 손까지 찌르는 가시밭의 칼
+         모래의 군주   → 유사(流沙)  발밑을 삼키는 모래
+         서리 망령왕   → 청염(靑焰)  차갑게 타는 푸른 불
+         설인 족장     → 설붕(雪崩)  한 번 휘두르면 눈사태가 따라온다
+         만년빙 거상   → 혹한(酷寒)  닿은 것은 다시 녹지 않는다 */
     legendColor: '#ffd93d',          // 이름표를 무지개로 못 쓰는 곳(창고 목록 등)에 쓰는 금색
     legendOrder: ['dagger', 'sword', 'axe'],
     legendLevelBonus: 10,
@@ -494,7 +499,12 @@ const CONFIG = {
       slime:    { name: '부식', unique: 'momentum' },
       wolf:     { name: '혈랑', unique: 'swiftFoot' },
       mushroom: { name: '고사', unique: 'executioner' },
+      queen:    { name: '극독', unique: 'venomFang' },
+      tyrant:   { name: '형극', unique: 'thorns' },
       sandlord: { name: '유사', unique: 'phantom' },
+      wraith:   { name: '청염', unique: 'overload' },
+      chief:    { name: '설붕', unique: 'secondWind' },
+      colossus: { name: '혹한', unique: 'aegis' },
     },
     /* 전설 무기의 이름표와 바닥 오라에 쓰는 무지개.
        hsl 로 매끈하게 돌리지 않고 일곱 색을 딱딱 끊어 쓴다 — 도트 그림에는 이쪽이 어울린다 */
@@ -588,7 +598,7 @@ const CONFIG = {
        - 몬스터 레벨: 가운데 levelRange[0] 에서 가장자리 levelRange[1] 까지 서서히 오른다
        - 몬스터 종류: typeWeights 세 지점(t = 0 / 0.5 / 1)의 값을 사이사이 보간한다
        - 초목: 멀수록 빽빽해지고 종류가 바뀐다
-       - 동굴(보스): 위험도 고리 위에 하나씩, 방향은 120도씩 벌려 세운다
+       - 동굴(보스): 맵마다 셋. 위험도 고리 위에 하나씩, 방향은 120도씩 벌려 세운다
      위험도는 맵 모양을 따르는 둥근 사각형 거리(4제곱 노름)라 가장자리 어디서나 1에 닿는다. */
   maps: {
     forest: {
@@ -665,8 +675,15 @@ const CONFIG = {
       boulders: [1.6, 3.0],
       shadeLevel: 2,               // 그늘 없음 (사막은 늘 볕이 든다)
 
+      /* 보스 동굴 셋 — 가까운 것부터 여왕 전갈 -> 가시 폭군 -> 모래의 군주.
+         **이 순서가 곧 '몇 번째 보스인가'다** (전설 무기: 첫째 단검, 둘째 검, 셋째 도끼).
+           slot  방향 칸 — 120도씩 벌린 셋 중 어느 쪽인가 (안 적으면 순서 그대로)
+           late  나중에 생긴 동굴 — 먼저 있던 동굴과 랜드마크를 다 놓은 뒤에 따로 자리를 잡는다.
+                 그래야 예전 저장의 사막(군주의 동굴·보물 상자 자리)이 한 칸도 바뀌지 않는다 */
       caves: [
-        { boss: 'sandlord', t: 0.82 },   // 사막의 유일한 동굴 — 모래의 군주
+        { boss: 'queen', t: 0.36, slot: 1, late: true },
+        { boss: 'tyrant', t: 0.60, slot: 2, late: true },
+        { boss: 'sandlord', t: 0.82, slot: 0 },
       ],
 
       bgm: { edges: [0.55, 2], tracks: ['desert', 'cave', 'cave'] },
@@ -708,7 +725,12 @@ const CONFIG = {
       boulders: [1.4, 2.6],
       shadeLevel: 0.72,            // 빽빽한 곳은 그늘진 눈 (푸르스름하게)
 
-      caves: [],                   // 설원에는 동굴이 없다 — 이곳의 보상은 서리심 장비다
+      // 보스 동굴 셋 — 서리 망령왕 -> 설인 족장 -> 만년빙 거상 (셋 다 나중에 생겼다. late 는 사막의 설명 참고)
+      caves: [
+        { boss: 'wraith', t: 0.38, late: true },
+        { boss: 'chief', t: 0.62, late: true },
+        { boss: 'colossus', t: 0.90, late: true },
+      ],
 
       bgm: { edges: [0.45, 0.8], tracks: ['desert', 'cave', 'cave'] },
       minimap: {
@@ -841,7 +863,7 @@ const CONFIG = {
   /* 관문 — 어느 맵에 들어가려면 무엇을 잡아야 하는가.
      '아무 보스나'로는 1단계만 잡고 넘어갈 수 있어서, 각 무대를 끝까지 보고 가게 했다.
        사막  숲에서 가장 센 보스(늙은 버섯 Lv30)
-       설원  사막의 유일한 보스(모래의 군주 Lv46)
+       설원  사막에서 가장 센 보스(모래의 군주 Lv46)
      숲은 시작하는 곳이라 조건이 없다. */
   gate: {
     requiredBoss: 'mushroom',    // (옛 이름 — 사막 열쇠. needs 가 비어 있을 때의 대비책)
@@ -1066,13 +1088,18 @@ const CONFIG = {
     respawnDelay: 300,      // 잡은 뒤 다시 도전할 수 있게 되기까지 (초) — 5분
   },
 
-  /* ── 보스 셋 — 동굴마다 하나 (forest.caves 의 boss 로 찾는다) ─────
+  /* ── 보스 아홉 — 맵마다 셋, 동굴마다 하나 (maps[*].caves 의 boss 로 찾는다) ─────
      일반 몬스터처럼 돌아다니지 않고 정해진 패턴을 번갈아 쓰며,
      모든 공격에 예고 동작이 있어서 보고 피할 수 있다.
      체력이 절반 아래로 내려가면 2페이즈 — 빨라지고 패턴이 독해진다.
 
-     레벨은 그 동굴 주변 몬스터보다 위로 잡았다 (가까운 동굴 12, 중간 20, 가장자리 30).
-     처치 보상은 포션 6개 확정 + 전리품(trophy) 하나 + 10% 확률로 그 보스의 전설 무기 (weapons.legends 참고). */
+     레벨은 그 동굴 주변 몬스터보다 위로 잡았다.
+       숲    거대 슬라임 12 · 우두머리 늑대 20 · 늙은 버섯 30
+       사막  여왕 전갈 36   · 가시 폭군 41     · 모래의 군주 46
+       설원  서리 망령왕 52 · 설인 족장 58     · 만년빙 거상 64
+     수치는 아홉 다 같은 자에 맞췄다 — **몸통 한 대에 같은 레벨 플레이어 체력의 20% 안팎,
+     같은 레벨 검 평타로 45~80대** (뒤로 갈수록 조금씩 길어진다). tools/balance.html 에서 확인한다.
+     처치 보상은 포션 확정 + 전리품(trophy) 하나 + 10~12% 확률로 그 보스의 전설 무기 (weapons.legends 참고). */
   bosses: {
     // 가까운 동굴 — 거대 슬라임: 느리지만 덩치와 분열로 밀어붙인다
     slime: {
@@ -1197,7 +1224,117 @@ const CONFIG = {
       },
     },
 
-    /* ── 사막의 유일한 보스 — 모래의 군주 (로드맵 12주차) ──
+    /* ── 사막 첫째 — 여왕 전갈 ──────────────────────────────
+       전갈의 수법("붙어 와서 꼬리로 찌르고 독을 올린다")을 보스 규모로 키운다.
+       방 안을 붙어 다니고, 꼬리는 몸보다 훨씬 멀리 닿는다 —
+       **어느 쪽으로 비킬지**를 묻는 싸움이다 (찌르기는 옆으로, 집게는 뒤로, 독 웅덩이는 밖으로). */
+    queen: {
+      type: 'scorpion', name: '여왕 전갈', lairName: '전갈 소굴',
+      level: 36,
+      hpMult: 8.8,            // 36레벨 전갈(1011)의 8.8배 — 같은 레벨 검으로 62대
+      atkMult: 0.72,          // 몸통 68 — 체력(340)의 20%
+      xpMult: 34,
+      scale: 2.4,
+      speed: 52,
+      detect: 400,
+      contactCooldown: 0.9,
+      reward: { chance: 0.12, potions: 7, trophy: 'queenStinger' },   // 사막 첫째: 단검 극독 L46
+
+      phase2At: 0.5,
+      phase2Speed: 1.3,
+      idleTime: [0.6, 1.2],
+      keepDistance: 44,       // 이 거리쯤까지 붙어 와서 틈을 본다
+
+      /* 꼬리 찌르기 — 겨눈 쪽으로 붉은 띠가 깔리고, 예고가 끝나는 순간 띠 전체를 한 번에 찌른다.
+         달려드는 돌진이 아니라 **꼬리가 뻗는 것**이라 띠 밖으로 한 발만 비키면 된다. 맞으면 독 */
+      sting: {
+        windup: 0.55, gapWindup: 0.32,   // 첫 찌르기 예고 / 연달아 찌를 때의 짧은 예고
+        reach: 108, width: 16,
+        count: [1, 2],        // 2페이즈에서는 방향을 고쳐 잡고 한 번 더
+        damageMult: 1.5,
+        recover: 0.55,        // 꼬리를 거두는 빈틈
+        weight: [36, 34],
+      },
+      /* 집게 휩쓸기 — 앞쪽 부채꼴을 쓸어 버린다. 옆으로는 못 피하고 뒤로 빠지거나 등 뒤로 돌아야 한다 */
+      pincer: {
+        windup: 0.6, radius: 64, half: 1.05,   // 반각 60도 — 앞쪽 120도
+        damageMult: 1.25,
+        recover: 0.45,
+        weight: [28, 28],
+      },
+      /* 독 뱉기 — 내 주변에 독 덩이가 떨어지고(표시가 먼저 뜬다) 그 자리에 **독 웅덩이**가 남는다.
+         웅덩이는 밟고 있는 동안 계속 갉아먹고 독을 올린다 — 방이 점점 좁아진다 */
+      venom: {
+        windup: 0.5, count: [3, 5], delay: 0.85, radius: 22, scatter: 84,
+        damageMult: 0.9,
+        pool: 5.5,            // 웅덩이가 남는 시간 (초)
+        poolTick: 0.5, poolMult: 0.3,
+        weight: [22, 26],
+      },
+      // 산란 — 전갈 새끼를 불러낸다
+      brood: {
+        windup: 0.6, count: [2, 3], levelBelow: 10,
+        weight: [14, 12],
+      },
+    },
+
+    /* ── 사막 둘째 — 가시 폭군 ──────────────────────────────
+       천 년 묵은 선인장. **한 발짝도 움직이지 않는다** — 대신 방 전체가 사거리다.
+       늙은 버섯도 붙박이지만 그쪽은 '어디에 서 있느냐'였고, 이쪽은 **'어떻게 돌아 들어가느냐'**다:
+       가시 소용돌이는 도는 방향을 따라 돌며 파고들고, 뿌리는 줄 사이에 서고, 붙어 있으면 터진다. */
+    tyrant: {
+      type: 'cactus', name: '가시 폭군', lairName: '가시 뜰',
+      level: 41,
+      hpMult: 5.9,            // 41레벨 선인장(1933)의 5.9배 — 같은 레벨 검으로 66대
+      atkMult: 0.72,          // 76 — 체력(380)의 20%
+      xpMult: 29,
+      scale: 3,
+      speed: 0,               // 뿌리내렸다
+      detect: 400,
+      contactCooldown: 0.8,
+      thornMult: 0.8,         // 몸에 닿으면 가시에 찔린다
+      reward: { chance: 0.12, potions: 7, trophy: 'tyrantBloom' },   // 사막 둘째: 검 형극 L51
+
+      phase2At: 0.5,
+      phase2Speed: 1.3,
+      idleTime: [0.7, 1.3],
+
+      /* 가시 소용돌이 — 몇 갈래의 가시 줄기가 **돌면서** 쏟아진다. 고리와 달리 틈이 계속 움직이므로
+         도는 방향으로 같이 돌거나 줄기 사이로 파고든다. 2페이즈에서는 도중에 도는 방향이 뒤집힌다 */
+      spiral: {
+        windup: 0.6, time: [2.0, 2.6], arms: [3, 4],
+        interval: 0.15,       // 이 간격으로 갈래마다 한 발씩
+        turn: 1.7,            // 도는 빠르기 (라디안/초)
+        speed: 84, life: 3.0,
+        damageMult: 0.75,
+        weight: [34, 32],
+      },
+      /* 뿌리 가시 — 땅속 뿌리가 몇 줄로 뻗어 나가며 차례로 솟는다. 표시가 줄지어 깔리고
+         몸에서 먼 쪽이 나중에 터진다. 줄과 줄 사이가 안전하다 */
+      roots: {
+        windup: 0.55, lines: [3, 5], spread: 0.52,
+        steps: 10, gap: 24, first: 34,   // 한 줄에 표시 몇 개, 간격, 첫 표시까지의 거리
+        delay: 0.6, stepDelay: 0.06,     // 첫 표시가 터지기까지 / 그 다음 표시마다 더 늦게
+        radius: 13,
+        damageMult: 1.3,
+        weight: [30, 30],
+      },
+      /* 가시 폭발 — 몸 둘레가 통째로 터진다. 붙어서 때리기만 하면 안 되게 하는 수.
+         2페이즈에서는 터지면서 사방으로 가시까지 날린다 */
+      burst: {
+        windup: 0.8, radius: 62,
+        damageMult: 1.6,
+        needles: [0, 14], speed: 96, life: 1.7, needleMult: 0.7,
+        weight: [22, 26],
+      },
+      // 싹 틔우기 — 선인장 새끼(포탑)를 주위에 심는다
+      sprout: {
+        windup: 0.6, count: [2, 3], levelBelow: 10,
+        weight: [14, 12],
+      },
+    },
+
+    /* ── 사막 셋째 — 모래의 군주 (로드맵 12주차). 설원 비석의 열쇠 ──
        사막에 보스가 없어서 관문이 숲-사막에서 끊겨 있었다.
        모래벌레의 수법("땅속으로 와서 발밑에서 솟구친다")을 보스 규모로 키운다.
        땅속에 있는 동안은 때릴 수 없으므로, 이 보스는 **때릴 틈을 기다리는** 싸움이다. */
@@ -1216,7 +1353,7 @@ const CONFIG = {
       speed: 96,              // 땅속에서는 빠르다 (밖에 나오면 거의 안 움직인다)
       detect: 400,
       contactCooldown: 1.0,
-      reward: { chance: 0.12, potions: 8, trophy: 'lordScale' },   // 사막 첫째: 단검 유사 L56
+      reward: { chance: 0.12, potions: 8, trophy: 'lordScale' },   // 사막 셋째: 도끼 유사 L56
 
       phase2At: 0.5,
       phase2Speed: 1.3,
@@ -1248,6 +1385,162 @@ const CONFIG = {
       call: {
         windup: 0.5, count: [3, 5], levelBelow: 8,
         weight: [16, 14],
+      },
+    },
+
+    /* ── 설원 첫째 — 서리 망령왕 ────────────────────────────
+       망령은 '벽 뒤에 숨는 게 안 통하는' 몬스터였다. 그 왕은 **달아나는 게 안 통한다** —
+       혼불은 쫓아오고, 숨결은 멀리 있을수록 빨리 훑고, 얼음 우리는 내가 선 자리를 조여 온다.
+       멀리서 버티는 것보다 붙어서 도는 쪽이 살길이다. */
+    wraith: {
+      type: 'wisp', name: '서리 망령왕', lairName: '얼음 묘실',
+      level: 52,
+      hpMult: 7.5,            // 52레벨 망령(2321)의 7.5배 — 같은 레벨 검으로 71대
+      atkMult: 0.42,          // 93 — 체력(468)의 20%
+      xpMult: 27,
+      scale: 2.6,
+      speed: 30,
+      detect: 400,
+      contactCooldown: 1.0,
+      freezeChance: 0.5,      // 몸에 닿으면 이 확률로 빙결
+      reward: { chance: 0.12, potions: 8, trophy: 'wraithFlame' },   // 설원 첫째: 단검 청염 L60
+
+      phase2At: 0.5,
+      phase2Speed: 1.3,
+      idleTime: [0.7, 1.3],
+      keepDistance: 80,
+
+      /* 혼불 — 나를 **쫓아오는** 불덩이. 걷는 것보다 조금 느려서 달아날 수는 있지만 한참 따라온다.
+         대시로 뚫고 지나가면 꺼진다. 닿으면 아프고 언다 */
+      orbs: {
+        windup: 0.6, count: [3, 5],
+        speed: 58, turn: 2.4,   // 방향을 트는 빠르기 (라디안/초) — 느려서 급히 꺾으면 따돌린다
+        life: 5.0, radius: 7,
+        damageMult: 0.9,
+        weight: [32, 30],
+      },
+      /* 서리 숨결 — 긴 빛줄기가 부채처럼 방을 훑는다. 시작 방향과 훑을 범위가 먼저 보인다.
+         줄기 끝은 걸음보다 빠르지만 **몸 가까이는 느리다** — 붙어서 같이 돌거나 대시로 가로지른다 */
+      beam: {
+        windup: 0.9, sweep: [1.7, 2.3], time: [1.5, 1.8],
+        length: 240, width: 12,
+        damageMult: 1.2,
+        weight: [28, 30],
+      },
+      /* 얼음 우리 — 내가 선 자리 둘레에 얼음 조각이 고리로 맺혔다가 한가운데로 쏟아진다.
+         맺혀 있는 동안 고리 밖으로 빠져나가야 한다 (조각 사이는 넓다) */
+      cage: {
+        windup: 0.55, shards: [10, 14], radius: 76,
+        hold: 0.75,           // 맺혀서 떠 있는 시간 — 이 안에 빠져나간다
+        speed: 108, life: 1.45,
+        damageMult: 0.85,
+        weight: [26, 28],
+      },
+      // 강령 — 서리 망령을 불러낸다
+      haunt: {
+        windup: 0.6, count: [2, 3], levelBelow: 10,
+        weight: [14, 12],
+      },
+    },
+
+    /* ── 설원 둘째 — 설인 족장 ──────────────────────────────
+       설인은 눈덩이로 '설 자리를 좁혀 오는' 몬스터였다. 족장은 그걸 방 전체로 한다 —
+       눈덩이를 연달아 던져 빙판을 깔고, 눈사태로 방을 통째로 쓸어 버린다.
+       **빙판을 어디에 남기게 할지**를 내가 골라야 눈사태 때 달릴 길이 남는다. */
+    chief: {
+      type: 'yeti', name: '설인 족장', lairName: '눈보라 굴',
+      level: 58,
+      hpMult: 3.0,            // 58레벨 설인(7164)의 3배 — 같은 레벨 검으로 74대
+      atkMult: 0.24,          // 105 — 체력(516)의 20%
+      xpMult: 16,
+      scale: 2.3,
+      speed: 40,
+      detect: 400,
+      contactCooldown: 1.0,
+      reward: { chance: 0.12, potions: 8, trophy: 'chiefHorn' },   // 설원 둘째: 검 설붕 L60
+
+      phase2At: 0.5,
+      phase2Speed: 1.3,
+      idleTime: [0.7, 1.3],
+      keepDistance: 92,       // 던지기 좋은 거리를 지킨다
+
+      /* 눈덩이 연사 — 포물선으로 연달아 던진다. 떨어질 자리마다 그림자가 먼저 깔리고,
+         떨어진 자리는 한동안 빙판이 된다 (밟으면 느려진다) */
+      barrage: {
+        windup: 0.6, count: [3, 5], gap: 0.34,
+        air: 1.0, radius: 26,
+        damageMult: 1.3,
+        slick: 6.5, slickSlow: 0.62,
+        weight: [34, 32],
+      },
+      /* 눈사태 — 방 천장에서 눈더미가 줄지어 쏟아져 내려온다. 붉게 칠해진 줄이 맞는 줄이고
+         **칠해지지 않은 줄이 살길**이다. 예고 동안 그 줄까지 달려가야 한다 */
+      avalanche: {
+        windup: 1.15, lanes: 12, safe: [3, 2],
+        speed: 175, reach: 15,    // 눈더미가 내려오는 빠르기 / 앞뒤 판정 폭
+        damageMult: 1.6,
+        weight: [26, 30],
+      },
+      /* 포효 — 몸 둘레를 얼리며 밀쳐 낸다. 피해는 작지만 얼어서 느려진 채 다음 수를 맞게 된다 */
+      roar: {
+        windup: 0.6, radius: 68,
+        damageMult: 0.9, push: 2.2,
+        weight: [24, 24],
+      },
+      // 부름 — 설인을 불러낸다 (눈덩이가 더 늘어난다)
+      call: {
+        windup: 0.7, count: [2, 2], levelBelow: 16,   // 42레벨 — 설원 들머리의 설인
+        weight: [16, 14],
+      },
+    },
+
+    /* ── 설원 셋째 — 만년빙 거상 (마지막 보스) ─────────────────
+       얼음 골렘의 '느리고 단단한 벽'을 끝까지 밀어붙인다. 걸음은 가장 느리지만
+       한 수 한 수가 방의 큰 덩어리를 차지한다 — 빠르게 피하는 싸움이 아니라
+       **어디가 언제 터지는지 읽고 미리 가 있는** 싸움이다. */
+    colossus: {
+      type: 'golem', name: '만년빙 거상', lairName: '빙하의 심장',
+      level: 64,
+      hpMult: 1.5,            // 64레벨 골렘(17865)의 1.5배 — 같은 레벨 검으로 82대 (마지막 보스라 가장 길다)
+      atkMult: 0.17,          // 112 — 체력(564)의 20%
+      xpMult: 12,
+      scale: 2.5,
+      speed: 20,
+      detect: 400,
+      contactCooldown: 1.1,
+      reward: { chance: 0.12, potions: 10, trophy: 'glacierHeart' },   // 설원 셋째: 도끼 혹한 L60
+
+      phase2At: 0.5,
+      phase2Speed: 1.25,
+      idleTime: [0.7, 1.3],
+
+      /* 지진 — 몸 둘레가 **안쪽부터 차례로** 터진다 (원판 → 그 바깥 고리 → 그 바깥 고리).
+         바깥으로 달아나면 고리를 따라가며 맞는다. 안쪽이 터진 다음 **안으로 들어가는 것**이 답이다 */
+      tremor: {
+        windup: 0.8, rings: [2, 3], band: 52, gap: 0.6,
+        damageMult: 1.5,
+        weight: [32, 30],
+      },
+      /* 빙극 — 몸에서 벽까지 얼음 가시가 십자로 솟는다. 한 줄은 늘 나를 겨눈다.
+         2페이즈에서는 반 칸 돌려 한 번 더 (十 다음에 X) */
+      spikes: {
+        windup: 0.8, width: 18, waves: [1, 2], waveGap: 0.8,
+        damageMult: 1.35,
+        weight: [28, 28],
+      },
+      /* 빙정 — 얼음 결정이 떨어져 박힌다 (떨어질 때 한 번 아프다). 박힌 결정은 잠시 뒤
+         **깨지면서 사방으로 파편을 날린다** — 결정 옆에 서 있으면 안 된다 */
+      crystals: {
+        windup: 0.6, count: [4, 6], delay: 0.9, radius: 18, scatter: 110,
+        damageMult: 1.1,
+        fuse: 2.6,            // 박힌 뒤 깨지기까지 (초)
+        shards: 6, speed: 100, life: 1.3, shardMult: 0.7,
+        weight: [26, 30],
+      },
+      // 소집 — 얼음 골렘을 깨운다 (단단해서 한두 마리면 충분하다)
+      rally: {
+        windup: 0.7, count: [1, 2], levelBelow: 22,   // 42레벨 — 설원 들머리의 골렘 (그래도 단단하다)
+        weight: [14, 12],
       },
     },
   },
@@ -1404,7 +1697,8 @@ const CONFIG = {
 
      수치가 아니라 **규칙을 바꾸는 한 줄**이어야 한다 — +10% 는 옵션이 할 일이고,
      여기서는 '포션을 마시면 무적', '치명타가 쿨다운을 깎는다' 같은 것만 둔다.
-     보스의 전설 무기(부식·혈랑·고사·유사)도 같은 목록에서 하나씩 가져간다 (weapons.legends). */
+     보스의 전설 무기 아홉 자루도 같은 목록에서 하나씩 가져간다 (weapons.legends).
+     독니는 전설 무기 '극독'에만 있다 — 장비에는 안 붙는다. */
   uniques: {
     executioner: { name: '처형자', text: '빈사의 적에게 피해 +50%',      ratio: 0.25, mult: 1.5 },
     thorns:      { name: '가시',      text: '맞으면 주위에 되돌려준다',      ratio: 0.6, radius: 34 },
@@ -1414,6 +1708,7 @@ const CONFIG = {
     momentum:    { name: '기세',    text: '치명타가 스킬 대기시간을 줄인다',   cut: 0.7 },
     overload:    { name: '과부하',    text: '스킬 피해 +25%',          mult: 1.25 },
     secondWind:  { name: '재기', text: '위급하면 포션을 알아서 마신다',      ratio: 0.3, cooldown: 30 },
+    venomFang:   { name: '독니', text: '치명타가 적을 중독시킨다',        mult: 2 },
   },
 
   /* ── 등급과 랜덤 옵션 (로드맵 2주차) ─────────────────────
@@ -1500,7 +1795,12 @@ const CONFIG = {
       slimeCore:  { name: '슬라임 핵',  value: 150, color: '#7ec8ff', trophy: true },
       alphaFang:  { name: '우두머리 송곳니',  value: 250, color: '#ff6b6b', trophy: true },
       elderSpore: { name: '늙은 포자', value: 400, color: '#c79ce8', trophy: true },
+      queenStinger: { name: '여왕의 독침', value: 500, color: '#9dff4a', trophy: true },   // 여왕 전갈
+      tyrantBloom:  { name: '폭군의 꽃',   value: 600, color: '#e04a5a', trophy: true },   // 가시 폭군
       lordScale:  { name: '군주 비늘',  value: 700, color: '#ffb35c', trophy: true },   // 모래의 군주
+      wraithFlame:  { name: '망령왕의 혼불', value: 900,  color: '#5fd8ff', trophy: true },   // 서리 망령왕
+      chiefHorn:    { name: '족장의 뿔',     value: 1100, color: '#f0e2cc', trophy: true },   // 설인 족장
+      glacierHeart: { name: '만년빙 심장',   value: 1400, color: '#bfe8ff', trophy: true },   // 만년빙 거상
       // 연금술로 빚는 약 — 전리품처럼 쌓이고 맡기고 팔 수 있지만, 인벤토리에서 마실 수 있다 (drink)
       antidote:   { name: '해독제', value: 8,  color: '#7dff8a', drink: 'antidote' },
       tonic:      { name: '강장제', value: 12, color: '#5ff0ff', drink: 'tonic' },
