@@ -834,7 +834,6 @@ const Village = {
     if (P.KeyS || P.ArrowDown) this.stashStep(player, 0, 1);
 
     // 마우스를 움직여 칸 위에 올리면 그 칸이 골라진다 (가만히 있으면 키보드 커서를 방해하지 않는다)
-    if (P.Mouse) this.stashTapPre = this.stashZone + this.stashCursor;   // 터치 — 닿는 순간 골라져 있던 칸을 다시 눌러야 옮긴다
     const m = Input.mouse, last = this.stashMouse || { x: -1, y: -1 };
     if (m.x !== last.x || m.y !== last.y) {
       this.stashMouse = { x: m.x, y: m.y };
@@ -854,9 +853,8 @@ const Village = {
       drop: (a, b) => this.dropStash(player, a, b),
       click: (c) => {
         if (!this.stashCellItem(player, c)) return;
-        const first = TouchPad.active && c.zone + c.index !== this.stashTapPre;
         this.stashZone = c.zone; this.stashCursor = c.index;
-        if (!first) this.transferStash(player);
+        this.transferStash(player);
       },
     });
     if (P.KeyF || P.Escape) { this.closeStash(); delete P.KeyF; }

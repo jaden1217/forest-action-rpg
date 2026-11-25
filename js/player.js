@@ -438,10 +438,6 @@ class Player {
       if (dx * dx + dy * dy > CONFIG.player.aimDeadzone * CONFIG.player.aimDeadzone) {
         this.aim = Math.atan2(dy, dx);
       }
-    } else if (typeof TouchPad !== 'undefined' && TouchPad.nearestEnemy(this, TouchPad.fightRange)) {
-      // 모바일 — 공격·스킬 버튼을 누른 동안은 가까운 적을 저절로 겨눈다
-      const e = TouchPad.nearestEnemy(this, TouchPad.fightRange);
-      this.aim = Math.atan2(e.y - this.y, e.x - this.x);
     } else if (ix || iy) {
       this.aim = Math.atan2(iy, ix);
     }

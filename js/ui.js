@@ -706,17 +706,10 @@ const UI = {
     this.drawText(ctx, '작은 도트 액션 롤플레잉', cx, cy - 12, '#7fa86a', true);
     // 세상이 멈춰 있으므로 깜빡임은 실제 시계로 돌린다
     if ((Date.now() % 1000) < 650) {
-      const touch = typeof TouchPad !== 'undefined' && TouchPad.active;   // 모바일은 키 대신 화면을 누른다
-      const how = touch ? '화면을 누르면 ' : '아무 키나 누르면 ';
-      this.drawText(ctx, how + (hasSave ? '이어서 합니다' : '시작합니다'), cx, cy + 10, '#ffe066', true);
+      this.drawText(ctx, hasSave ? '아무 키나 누르면 이어서 합니다' : '아무 키나 누르면 시작합니다', cx, cy + 10, '#ffe066', true);
     }
-    if (typeof TouchPad !== 'undefined' && TouchPad.active) {
-      this.drawText(ctx, '왼쪽 조이스틱 이동   오른쪽 버튼 공격·대시·스킬', cx, cy + 32, '#8fa383', true);
-      this.drawText(ctx, 'F 상호작용   창 안의 칸은 눌러서 고른다', cx, cy + 41, '#8fa383', true);
-    } else {
-      this.drawText(ctx, 'WASD 이동   스페이스 공격   시프트 대시', cx, cy + 32, '#8fa383', true);
-      this.drawText(ctx, 'F 상호작용   E 포션   I 가방   M 지도', cx, cy + 41, '#8fa383', true);
-    }
+    this.drawText(ctx, 'WASD 이동   스페이스 공격   시프트 대시', cx, cy + 32, '#8fa383', true);
+    this.drawText(ctx, 'F 상호작용   E 포션   I 가방   M 지도', cx, cy + 41, '#8fa383', true);
   },
 
   // 새 게임 확인 — 저장을 지우는 되돌릴 수 없는 동작이라 한 번 묻는다

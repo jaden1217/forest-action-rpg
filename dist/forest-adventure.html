@@ -2,9 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-<meta name="mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>숲의 모험</title>
 <style>
 * { box-sizing: border-box; }
@@ -155,73 +153,8 @@ html, body {
   font-weight: 600;
 }
 
-/* ── 모바일(터치) — js/touch.js 가 body 에 .touch 를 붙인다 ─────────────────
-   안내 글을 숨기고 게임 화면을 꽉 채운 뒤, 그 위에 조이스틱과 버튼을 반투명하게 겹친다 */
-body.touch { gap: 0; touch-action: none; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
-body.touch #controls, body.touch #savenote { display: none; }
-body.touch #stage { border: none; border-radius: 0; box-shadow: none; }
-
-#touch { position: fixed; inset: 0; pointer-events: none; z-index: 10; }
-#touch .t-btn {
-  pointer-events: auto;
-  position: absolute;
-  border-radius: 50%;
-  border: 2px solid rgba(216, 230, 207, .35);
-  background: rgba(16, 22, 14, .45);
-  color: #e8f2df;
-  font: 700 13px/1.05 "Malgun Gothic", "맑은 고딕", system-ui, sans-serif;
-  display: flex; flex-direction: column; align-items: center; justify-content: center;
-  padding: 0;
-  -webkit-tap-highlight-color: transparent;
-}
-#touch .t-btn.on { background: rgba(255, 224, 102, .4); border-color: #ffe066; }
-#touch .t-btn small { font-size: 8px; font-weight: 600; opacity: .85; margin-top: 2px; white-space: nowrap; }
-#touch .t-btn.locked { opacity: .35; }
-
-/* 조이스틱 — 왼쪽 아래 */
-#touch .t-stick {
-  pointer-events: auto;
-  position: absolute; left: calc(14px + env(safe-area-inset-left)); bottom: 14px;
-  width: 132px; height: 132px; border-radius: 50%;
-  background: rgba(16, 22, 14, .3); border: 2px solid rgba(216, 230, 207, .22);
-  display: flex; align-items: center; justify-content: center;
-}
-#touch .t-knob { width: 54px; height: 54px; border-radius: 50%; background: rgba(216, 230, 207, .45); pointer-events: none; }
-
-/* 오른쪽 아래 — 공격을 가운데 두고 둘레에 대시·스킬·포션·F */
-#touch .t-right { position: absolute; right: calc(14px + env(safe-area-inset-right)); bottom: 14px; width: 210px; height: 190px; }
-#touch .t-attack { width: 78px; height: 78px; right: 10px; bottom: 10px; font-size: 15px; border-color: rgba(255, 224, 102, .6); }
-#touch .t-dash   { width: 52px; height: 52px; right: 100px; bottom: 6px; }
-#touch .t-potion { width: 44px; height: 44px; right: 158px; bottom: 10px; color: #ffd93d; }
-#touch .t-f      { width: 44px; height: 44px; right: 158px; bottom: 62px; color: #5ff0ff; }
-#touch .t-skill  { width: 48px; height: 48px; font-size: 14px; }
-#touch .t-skill[data-skill="0"] { right: 96px; bottom: 62px; }
-#touch .t-skill[data-skill="1"] { right: 62px; bottom: 104px; }
-#touch .t-skill[data-skill="2"] { right: 10px; bottom: 96px; }
-#touch .t-skill[data-skill="3"] { right: 112px; bottom: 116px; }
-
-/* 왼쪽 위 — 가방·귀환·지도. 화면 왼쪽 여백에 세로로 (오른쪽 위는 의뢰 목록 자리다) */
-#touch .t-top { position: absolute; left: calc(14px + env(safe-area-inset-left)); top: 10px; display: flex; flex-direction: column; gap: 8px; }
-#touch .t-small { position: static; width: 46px; height: 46px; font-size: 12px; border-radius: 12px; }
-
-/* 창이 떠 있을 때 — 확인·닫기와 그 창에 맞는 것만 */
-#touch .t-close, #touch .t-drop, #touch .t-sellall { display: none; width: 56px; height: 56px; }
-#touch.menu .t-dash, #touch.menu .t-skill, #touch.menu .t-potion, #touch.menu .t-f, #touch.menu .t-top { display: none; }
-#touch.menu .t-close { display: flex; right: 100px; bottom: 16px; }
-#touch.menu.inv .t-drop { display: flex; right: 100px; bottom: 82px; color: #ff9a9a; }
-#touch.menu.sell .t-sellall { display: flex; right: 100px; bottom: 82px; color: #9be564; }
-
-/* 세로 화면 — 돌려 달라고 한다 */
-#touch .t-rotate {
-  display: none; pointer-events: auto;
-  position: absolute; inset: 0; background: #10140f; color: #d8e6cf;
-  font: 700 18px "Malgun Gothic", "맑은 고딕", system-ui, sans-serif;
-  align-items: center; justify-content: center; text-align: center; padding: 24px;
-}
-@media (orientation: portrait) { #touch .t-rotate { display: flex; } }
-
 </style>
-<!-- built 2026-11-25 07:51 by tools/build.js -->
+<!-- built 2026-11-25 08:23 by tools/build.js -->
 </head>
 <body>
   <div id="stage">
@@ -6170,251 +6103,6 @@ const Input = {
 
 </script>
   <script>
-// ── js/touch.js
-'use strict';
-
-/* 모바일 터치 조작 — 화면 위에 가상 조이스틱과 버튼을 띄운다.
-
-   손가락으로 누르는 기기(pointer: coarse)이거나, 한 번이라도 화면을 터치하면 켜진다.
-   마우스·키보드만 쓰는 PC 에서는 아무것도 바뀌지 않는다.
-
-   버튼은 **키보드 키를 흉내 낸다** (Input.down / Input.pressed 에 그 키를 넣는다).
-   그래서 게임 쪽은 키보드로 할 때와 똑같이 돌아가고, 새 조작을 따로 짤 필요가 없다.
-     왼쪽 아래   조이스틱 — WASD. 창이 떠 있으면 커서를 옮긴다 (누르고 있으면 반복)
-     오른쪽 아래 공격(스페이스) · 대시(시프트) · 스킬 Q R Z X · 포션(E) · F
-     오른쪽 위   가방(I) · 귀환(B) · 지도(M)
-     창이 떠 있을 때  공격 버튼이 '확인', 그 옆이 '닫기'(Esc). 가방이면 '버리기'(X), 상점 판매창이면 '전리품'(R)
-   창 안의 칸·탭은 손가락으로 누른다 (마우스 클릭처럼). 칸은 한 번 누르면 고르고, 고른 칸을 다시 누르면 쓴다.
-
-   조준 — 마우스가 없으므로 걸어가는 쪽을 본다. 다만 공격·스킬을 누른 동안은
-   가까운 적(fightRange 안)을 저절로 겨눈다. */
-
-const TouchPad = {
-  active: false,
-  fighting: 0,          // 공격·스킬을 누른 뒤 이만큼(초) 가까운 적을 저절로 겨눈다
-  fightRange: 90,
-  stick: null,          // { id, cx, cy } — 조이스틱을 잡고 있는 손가락
-  dirs: {},             // 지금 조이스틱이 누르고 있는 키 { KeyW: true, ... }
-  repeat: 0,            // 창 안에서 조이스틱을 계속 밀고 있을 때 다음 반복까지
-  els: {},
-
-  init(canvas) {
-    this.canvas = canvas;
-    const coarse = window.matchMedia && window.matchMedia('(pointer: coarse)').matches;
-    if (coarse) this.enable();
-    // 처음 터치하는 순간에도 켠다 (터치 화면이 달린 노트북 등)
-    window.addEventListener('touchstart', () => { if (!this.active) this.enable(); }, { passive: true, capture: true });
-  },
-
-  enable() {
-    if (this.active) return;
-    this.active = true;
-    document.body.classList.add('touch');
-    this.build();
-    this.bindCanvas();
-    if (typeof Game !== 'undefined' && Game.fitScreen) { Game.screenKey = null; Game.fitScreen(); }
-  },
-
-  /* ── 키 흉내 ─────────────────────────────────────────── */
-  press(code) {
-    if (!Input.down[code]) Input.pressed[code] = true;
-    Input.down[code] = true;
-  },
-  release(code) { Input.down[code] = false; },
-  tap(code) { Input.pressed[code] = true; },
-
-  /* ── 버튼 ──────────────────────────────────────────── */
-  build() {
-    const root = document.createElement('div');
-    root.id = 'touch';
-    root.innerHTML =
-      '<div class="t-stick"><div class="t-knob"></div></div>' +
-      '<div class="t-right">' +
-        '<button class="t-btn t-attack" data-key="Space">공격</button>' +
-        '<button class="t-btn t-dash" data-key="ShiftLeft">대시</button>' +
-        '<button class="t-btn t-skill" data-key="KeyQ" data-skill="0">Q</button>' +
-        '<button class="t-btn t-skill" data-key="KeyR" data-skill="1">R</button>' +
-        '<button class="t-btn t-skill" data-key="KeyZ" data-skill="2">Z</button>' +
-        '<button class="t-btn t-skill" data-key="KeyX" data-skill="3">X</button>' +
-        '<button class="t-btn t-potion" data-key="KeyE">포션</button>' +
-        '<button class="t-btn t-f" data-key="KeyF">F</button>' +
-        '<button class="t-btn t-close" data-key="close">닫기</button>' +
-        '<button class="t-btn t-drop" data-key="KeyX">버리기</button>' +
-        '<button class="t-btn t-sellall" data-key="KeyR">전리품</button>' +
-      '</div>' +
-      '<div class="t-top">' +
-        '<button class="t-btn t-small" data-key="KeyI">가방</button>' +
-        '<button class="t-btn t-small" data-key="KeyB">귀환</button>' +
-        '<button class="t-btn t-small" data-key="KeyM">지도</button>' +
-      '</div>' +
-      '<div class="t-rotate">화면을 가로로 돌려 주세요</div>';
-    document.body.appendChild(root);
-    this.root = root;
-    this.els.stick = root.querySelector('.t-stick');
-    this.els.knob = root.querySelector('.t-knob');
-    this.els.attack = root.querySelector('.t-attack');
-    this.els.skills = [...root.querySelectorAll('.t-skill')];
-
-    // 버튼 — 누르는 동안 그 키가 눌려 있다 (공격은 누르고 있으면 계속 휘두른다)
-    for (const b of root.querySelectorAll('.t-btn')) {
-      const key = b.dataset.key;
-      const down = (e) => {
-        e.preventDefault();
-        b.classList.add('on');
-        const code = key === 'close' ? (Game.showMap ? 'KeyM' : 'Escape') : key;
-        b.dataset.code = code;
-        this.press(code);
-        if (code === 'Space' || b.dataset.skill) this.fighting = 1.0;
-        this.fullscreen();
-      };
-      const up = (e) => {
-        e.preventDefault();
-        b.classList.remove('on');
-        if (b.dataset.code) this.release(b.dataset.code);
-      };
-      b.addEventListener('touchstart', down, { passive: false });
-      b.addEventListener('touchend', up, { passive: false });
-      b.addEventListener('touchcancel', up, { passive: false });
-      // 마우스로 눌러도 된다 (터치 화면 노트북·개발용)
-      b.addEventListener('mousedown', down);
-      b.addEventListener('mouseup', up);
-      b.addEventListener('mouseleave', up);
-    }
-
-    // 조이스틱 — 처음 닿은 자리가 가운데다 (손가락이 어디에 놓여도 된다)
-    const zone = this.els.stick;
-    zone.addEventListener('touchstart', (e) => {
-      e.preventDefault();
-      const t = e.changedTouches[0], r = zone.getBoundingClientRect();
-      this.stick = { id: t.identifier, cx: r.left + r.width / 2, cy: r.top + r.height / 2, r: r.width / 2 };
-      this.moveStick(t);
-      this.fullscreen();
-    }, { passive: false });
-    zone.addEventListener('touchmove', (e) => {
-      e.preventDefault();
-      for (const t of e.changedTouches) if (this.stick && t.identifier === this.stick.id) this.moveStick(t);
-    }, { passive: false });
-    const end = (e) => {
-      for (const t of e.changedTouches) if (this.stick && t.identifier === this.stick.id) { this.stick = null; this.setDirs({}); this.els.knob.style.transform = ''; }
-    };
-    zone.addEventListener('touchend', end);
-    zone.addEventListener('touchcancel', end);
-  },
-
-  moveStick(t) {
-    const s = this.stick;
-    let dx = t.clientX - s.cx, dy = t.clientY - s.cy;
-    const len = Math.hypot(dx, dy), max = s.r * 0.6;
-    if (len > max) { dx = dx / len * max; dy = dy / len * max; }
-    this.els.knob.style.transform = 'translate(' + dx + 'px,' + dy + 'px)';
-    // 8방향 — 가운데 근처는 멈춤. 대각선은 두 키를 함께 누른다
-    const nx = dx / max, ny = dy / max, dead = 0.38, dirs = {};
-    if (Math.hypot(nx, ny) > 0.3) {
-      if (nx > dead) dirs.KeyD = true;
-      if (nx < -dead) dirs.KeyA = true;
-      if (ny > dead) dirs.KeyS = true;
-      if (ny < -dead) dirs.KeyW = true;
-    }
-    this.setDirs(dirs);
-  },
-
-  setDirs(dirs) {
-    for (const k of ['KeyW', 'KeyA', 'KeyS', 'KeyD']) {
-      if (dirs[k] && !this.dirs[k]) { this.press(k); this.repeat = 0.4; }
-      if (!dirs[k] && this.dirs[k]) this.release(k);
-    }
-    this.dirs = dirs;
-  },
-
-  /* 창 안에서는 손가락이 마우스다 — 누른 자리로 마우스를 옮기고 클릭을 보낸다.
-     세상 안(창이 없을 때)에서는 손가락이 아무것도 하지 않는다 (조준은 저절로) */
-  bindCanvas() {
-    const c = this.canvas;
-    const at = (t) => {
-      const r = c.getBoundingClientRect();
-      Input.mouse.x = (t.clientX - r.left) / r.width * CONFIG.VIEW_W;
-      Input.mouse.y = (t.clientY - r.top) / r.height * CONFIG.VIEW_H;
-    };
-    const menu = () => typeof Game !== 'undefined' && (Game.title || Game.paused());
-    c.addEventListener('touchstart', (e) => {
-      e.preventDefault();
-      this.fullscreen();
-      if (!menu()) return;
-      at(e.changedTouches[0]);
-      if (!Input.down.Mouse) Input.pressed.Mouse = true;
-      Input.down.Mouse = true;
-    }, { passive: false });
-    c.addEventListener('touchmove', (e) => {
-      e.preventDefault();
-      if (menu()) at(e.changedTouches[0]);
-    }, { passive: false });
-    const end = (e) => {
-      if (Input.down.Mouse) Input.released.Mouse = true;
-      Input.down.Mouse = false;
-    };
-    c.addEventListener('touchend', end);
-    c.addEventListener('touchcancel', end);
-  },
-
-  // 처음 누를 때 전체 화면 + 가로 고정 (되는 브라우저만 — 안 되면 조용히 넘어간다)
-  fullscreen() {
-    if (this.triedFull) return;
-    this.triedFull = true;
-    try {
-      const el = document.documentElement;
-      const p = el.requestFullscreen ? el.requestFullscreen() : null;
-      const lock = () => { try { const o = screen.orientation; if (o && o.lock) o.lock('landscape').catch(() => {}); } catch (err) { /* 무시 */ } };
-      if (p && p.then) p.then(lock).catch(() => {}); else lock();
-    } catch (err) { /* 무시 */ }
-  },
-
-  /* ── 매 프레임 (Game.frame 맨 앞) ───────────────────────── */
-  update(dt) {
-    if (!this.active) return;
-    this.fighting = Math.max(0, this.fighting - dt);
-    if (Input.down.Space) this.fighting = 1.0;
-    const paused = Game.title || Game.paused();
-    // 창 안에서 조이스틱을 밀고 있으면 커서가 계속 움직인다
-    if (paused && Object.keys(this.dirs).length) {
-      this.repeat -= dt;
-      if (this.repeat <= 0) { this.repeat = 0.14; for (const k in this.dirs) Input.pressed[k] = true; }
-    }
-    // 보이는 버튼 — 창이 떠 있으면 확인·닫기와 그 창에 맞는 것만
-    const cls = this.root.classList;
-    cls.toggle('menu', paused);
-    cls.toggle('inv', !!Game.showInventory);
-    cls.toggle('sell', !!(Shop.open && Shop.tab === 'sell'));
-    this.els.attack.textContent = paused ? '확인' : '공격';
-    // 스킬 버튼 — 지금 든 무기의 스킬 이름, 잠긴 것은 흐리게
-    this.labelTimer = (this.labelTimer || 0) - dt;
-    if (this.labelTimer <= 0 && Game.player && Game.player.currentSkills) {
-      this.labelTimer = 0.5;
-      const list = Game.player.currentSkills();
-      this.els.skills.forEach((b, i) => {
-        const s = list[i];
-        if (!s) return;
-        const locked = Game.player.level < s.unlockLevel;
-        b.classList.toggle('locked', locked);
-        b.innerHTML = s.key + '<small>' + (locked ? s.unlockLevel + '레벨' : s.name) + '</small>';
-      });
-    }
-  },
-
-  // 가까운 적 — 공격·스킬을 누른 동안 저절로 겨눌 대상
-  nearestEnemy(p, range) {
-    if (!this.active || this.fighting <= 0 || !Game.enemies) return null;
-    let best = null, bd = range * range;
-    for (const e of Game.enemies) {
-      if (!e || e.dead || e.hidden || e.buried) continue;
-      const d = (e.x - p.x) * (e.x - p.x) + (e.y - p.y) * (e.y - p.y);
-      if (d < bd) { bd = d; best = e; }
-    }
-    return best;
-  },
-};
-
-</script>
-  <script>
 // ── js/fx.js
 'use strict';
 
@@ -8062,9 +7750,7 @@ const Minimap = {
   drawCorner(ctx, player, enemies) {
     if (!this.canvas) return;
     const bw = Math.min(this.VIEW_W, this.W), bh = Math.min(this.VIEW_H, this.H);
-    // 모바일은 오른쪽 아래를 버튼이 덮으므로 의뢰 목록 바로 아래로 올린다
-    const up = typeof TouchPad !== 'undefined' && TouchPad.active;
-    const x = CONFIG.VIEW_W - bw - 6, y = up ? 80 : CONFIG.VIEW_H - bh - 6;
+    const x = CONFIG.VIEW_W - bw - 6, y = CONFIG.VIEW_H - bh - 6;
 
     // 플레이어를 가운데 두되 맵 밖으로는 나가지 않게 자른다
     const sx = Util.clamp(Math.round(player.x / CONFIG.TILE - bw / 2), 0, this.W - bw);
@@ -8768,10 +8454,6 @@ class Player {
       if (dx * dx + dy * dy > CONFIG.player.aimDeadzone * CONFIG.player.aimDeadzone) {
         this.aim = Math.atan2(dy, dx);
       }
-    } else if (typeof TouchPad !== 'undefined' && TouchPad.nearestEnemy(this, TouchPad.fightRange)) {
-      // 모바일 — 공격·스킬 버튼을 누른 동안은 가까운 적을 저절로 겨눈다
-      const e = TouchPad.nearestEnemy(this, TouchPad.fightRange);
-      this.aim = Math.atan2(e.y - this.y, e.x - this.x);
     } else if (ix || iy) {
       this.aim = Math.atan2(iy, ix);
     }
@@ -15031,8 +14713,6 @@ const Inventory = {
     if (P.KeyW || P.ArrowUp) this.cursor = (this.cursor - cols + n) % n;
     if (P.KeyS || P.ArrowDown) this.cursor = (this.cursor + cols) % n;
 
-    // 손가락이 닿는 순간 골라져 있던 칸 — 터치는 '고른 칸을 다시 누르면 쓴다' (떼는 프레임엔 커서가 이미 옮겨져 있다)
-    if (P.Mouse) this.tapPre = this.cursor;
     // 마우스를 움직여 칸 위에 올리면 그 칸이 골라진다 (가만히 있으면 키보드 커서를 방해하지 않는다)
     const m = Input.mouse;
     if (m.x !== this.lastMouse.x || m.y !== this.lastMouse.y) {
@@ -15051,12 +14731,7 @@ const Inventory = {
       cellAt: (mx, my) => this.cellAt(player, mx, my),
       itemOf: (c) => { const s = this.cellItem(player, c); return s && s.kind !== 'potion' ? s : null; },
       drop: (a, b, mm) => this.dropOn(player, a, b, mm),
-      click: (c) => {
-        if (c.zone === 'weapon') return;
-        const i = this.cellIndex(player, c);
-        if (TouchPad.active && i !== this.tapPre) { this.cursor = i; return; }   // 터치 — 처음 누르면 고르기만
-        this.use(player, i);
-      },
+      click: (c) => { if (c.zone !== 'weapon') this.use(player, this.cellIndex(player, c)); },
     });
     if (P.KeyX) this.drop(player, this.cursor);
     if (P.KeyI || P.Tab || P.Escape) {
@@ -18518,7 +18193,6 @@ const Village = {
     if (P.KeyS || P.ArrowDown) this.stashStep(player, 0, 1);
 
     // 마우스를 움직여 칸 위에 올리면 그 칸이 골라진다 (가만히 있으면 키보드 커서를 방해하지 않는다)
-    if (P.Mouse) this.stashTapPre = this.stashZone + this.stashCursor;   // 터치 — 닿는 순간 골라져 있던 칸을 다시 눌러야 옮긴다
     const m = Input.mouse, last = this.stashMouse || { x: -1, y: -1 };
     if (m.x !== last.x || m.y !== last.y) {
       this.stashMouse = { x: m.x, y: m.y };
@@ -18538,9 +18212,8 @@ const Village = {
       drop: (a, b) => this.dropStash(player, a, b),
       click: (c) => {
         if (!this.stashCellItem(player, c)) return;
-        const first = TouchPad.active && c.zone + c.index !== this.stashTapPre;
         this.stashZone = c.zone; this.stashCursor = c.index;
-        if (!first) this.transferStash(player);
+        this.transferStash(player);
       },
     });
     if (P.KeyF || P.Escape) { this.closeStash(); delete P.KeyF; }
@@ -19996,17 +19669,10 @@ const UI = {
     this.drawText(ctx, '작은 도트 액션 롤플레잉', cx, cy - 12, '#7fa86a', true);
     // 세상이 멈춰 있으므로 깜빡임은 실제 시계로 돌린다
     if ((Date.now() % 1000) < 650) {
-      const touch = typeof TouchPad !== 'undefined' && TouchPad.active;   // 모바일은 키 대신 화면을 누른다
-      const how = touch ? '화면을 누르면 ' : '아무 키나 누르면 ';
-      this.drawText(ctx, how + (hasSave ? '이어서 합니다' : '시작합니다'), cx, cy + 10, '#ffe066', true);
+      this.drawText(ctx, hasSave ? '아무 키나 누르면 이어서 합니다' : '아무 키나 누르면 시작합니다', cx, cy + 10, '#ffe066', true);
     }
-    if (typeof TouchPad !== 'undefined' && TouchPad.active) {
-      this.drawText(ctx, '왼쪽 조이스틱 이동   오른쪽 버튼 공격·대시·스킬', cx, cy + 32, '#8fa383', true);
-      this.drawText(ctx, 'F 상호작용   창 안의 칸은 눌러서 고른다', cx, cy + 41, '#8fa383', true);
-    } else {
-      this.drawText(ctx, 'WASD 이동   스페이스 공격   시프트 대시', cx, cy + 32, '#8fa383', true);
-      this.drawText(ctx, 'F 상호작용   E 포션   I 가방   M 지도', cx, cy + 41, '#8fa383', true);
-    }
+    this.drawText(ctx, 'WASD 이동   스페이스 공격   시프트 대시', cx, cy + 32, '#8fa383', true);
+    this.drawText(ctx, 'F 상호작용   E 포션   I 가방   M 지도', cx, cy + 41, '#8fa383', true);
   },
 
   // 새 게임 확인 — 저장을 지우는 되돌릴 수 없는 동작이라 한 번 묻는다
@@ -20051,15 +19717,6 @@ const UI = {
    새 작업을 올릴 때 PATCH_NOTES 맨 앞에 한 항목을 추가하면 된다. */
 
 const PATCH_NOTES = [
-  {
-    date: '2026-11-25',
-    notes: [
-      '모바일에서도 플레이할 수 있다 — 왼쪽 조이스틱으로 걷고, 오른쪽 버튼으로 공격·대시·스킬·포션·F. 가방·귀환·지도는 왼쪽 위',
-      '모바일에서는 공격·스킬을 누르는 동안 가까운 적을 저절로 겨눈다',
-      '모바일에서 창이 뜨면 버튼이 확인·닫기로 바뀐다. 칸은 한 번 누르면 고르고, 고른 칸을 다시 누르면 쓴다. 조이스틱으로 커서도 옮긴다',
-      '모바일은 화면을 꽉 채우고, 처음 누르면 전체 화면으로 바뀐다 (되는 브라우저만). 세로로 들면 가로로 돌려 달라고 한다',
-    ],
-  },
   {
     date: '2026-11-18',
     notes: [
@@ -20578,7 +20235,6 @@ const Game = {
 
     buildSprites();
     Input.init(this.screen);
-    TouchPad.init(this.screen);   // 모바일 — 가상 조이스틱과 버튼 (손가락 기기에서만 켜진다)
     Sound.init();
     PatchNotes.init();
 
@@ -20605,10 +20261,8 @@ const Game = {
   fitScreen() {
     const dpr = window.devicePixelRatio || 1;
     // 아래 조작 안내·저장 문구가 실제로 차지하는 높이만큼 비운다
-    const below = ['controls', 'savenote'].reduce((s, id) => { const e = document.getElementById(id); return s + (e && e.offsetHeight ? e.offsetHeight + 14 : 0); }, 0);
-    // 모바일(터치)은 안내 글을 숨기고 화면을 꽉 채운다 — 버튼은 그 위에 겹쳐 뜬다
-    const touch = typeof TouchPad !== 'undefined' && TouchPad.active, mx = touch ? 0 : 24, my = touch ? 0 : 16;
-    const css = Math.min(3, (window.innerWidth - mx) / CONFIG.VIEW_W, (window.innerHeight - below - my) / CONFIG.VIEW_H);
+    const below = ['controls', 'savenote'].reduce((s, id) => { const e = document.getElementById(id); return s + (e ? e.offsetHeight + 14 : 0); }, 0);
+    const css = Math.min(3, (window.innerWidth - 24) / CONFIG.VIEW_W, (window.innerHeight - below - 16) / CONFIG.VIEW_H);
     let k = Math.max(1, css * dpr);                    // 한 도트가 기기 픽셀 몇 개인가
     if (Math.floor(k) / k >= 0.95) k = Math.floor(k);
     // 384x216 = 24 x (16x9) — 24분의 1 단위로 끊으면 가로·세로가 둘 다 정수 픽셀이 된다
@@ -21231,7 +20885,6 @@ const Game = {
 
     // 개발 중 에러 하나로 게임이 통째로 멈추지 않도록 감싼다 (에러는 콘솔에 남는다)
     try {
-      TouchPad.update(dt);   // 모바일 버튼 — 창에 맞춰 바꾸고, 조이스틱 반복 입력을 넣는다
       // 시작 화면 — 아무 키나 누르면 시작한다. 그 전까지는 세상이 멈춰 있다
       if (this.title) {
         if (Object.keys(Input.pressed).length) { this.title = false; }

@@ -48,7 +48,6 @@ const Game = {
 
     buildSprites();
     Input.init(this.screen);
-    TouchPad.init(this.screen);   // 모바일 — 가상 조이스틱과 버튼 (손가락 기기에서만 켜진다)
     Sound.init();
     PatchNotes.init();
 
@@ -75,10 +74,8 @@ const Game = {
   fitScreen() {
     const dpr = window.devicePixelRatio || 1;
     // 아래 조작 안내·저장 문구가 실제로 차지하는 높이만큼 비운다
-    const below = ['controls', 'savenote'].reduce((s, id) => { const e = document.getElementById(id); return s + (e && e.offsetHeight ? e.offsetHeight + 14 : 0); }, 0);
-    // 모바일(터치)은 안내 글을 숨기고 화면을 꽉 채운다 — 버튼은 그 위에 겹쳐 뜬다
-    const touch = typeof TouchPad !== 'undefined' && TouchPad.active, mx = touch ? 0 : 24, my = touch ? 0 : 16;
-    const css = Math.min(3, (window.innerWidth - mx) / CONFIG.VIEW_W, (window.innerHeight - below - my) / CONFIG.VIEW_H);
+    const below = ['controls', 'savenote'].reduce((s, id) => { const e = document.getElementById(id); return s + (e ? e.offsetHeight + 14 : 0); }, 0);
+    const css = Math.min(3, (window.innerWidth - 24) / CONFIG.VIEW_W, (window.innerHeight - below - 16) / CONFIG.VIEW_H);
     let k = Math.max(1, css * dpr);                    // 한 도트가 기기 픽셀 몇 개인가
     if (Math.floor(k) / k >= 0.95) k = Math.floor(k);
     // 384x216 = 24 x (16x9) — 24분의 1 단위로 끊으면 가로·세로가 둘 다 정수 픽셀이 된다
@@ -701,7 +698,6 @@ const Game = {
 
     // 개발 중 에러 하나로 게임이 통째로 멈추지 않도록 감싼다 (에러는 콘솔에 남는다)
     try {
-      TouchPad.update(dt);   // 모바일 버튼 — 창에 맞춰 바꾸고, 조이스틱 반복 입력을 넣는다
       // 시작 화면 — 아무 키나 누르면 시작한다. 그 전까지는 세상이 멈춰 있다
       if (this.title) {
         if (Object.keys(Input.pressed).length) { this.title = false; }
