@@ -221,7 +221,7 @@ body.touch #stage { border: none; border-radius: 0; box-shadow: none; }
 @media (orientation: portrait) { #touch .t-rotate { display: flex; } }
 
 </style>
-<!-- built 2026-11-25 07:50 by tools/build.js -->
+<!-- built 2026-11-25 07:51 by tools/build.js -->
 </head>
 <body>
   <div id="stage">
@@ -21224,7 +21224,9 @@ const Game = {
   frame(now) {
     let dt = (now - this.lastTime) / 1000;
     this.lastTime = now;
-    dt = Math.min(dt, 0.05);   // 탭을 다시 켰을 때 한 번에 확 튀지 않도록
+    // 탭을 다시 켰을 때 한 번에 확 튀지 않도록 — 그리고 0 아래로도 내려가지 않게
+    // (첫 프레임의 시각이 init 때 잰 시각보다 앞설 수 있다. 음수면 흔들림·히트스톱이 줄지 않고 커진다)
+    dt = Math.max(0, Math.min(dt, 0.05));
     this.frameDt = dt;         // 그리기 쪽 연출(나무 옅어지기)도 시간에 맞춰 움직이도록
 
     // 개발 중 에러 하나로 게임이 통째로 멈추지 않도록 감싼다 (에러는 콘솔에 남는다)
