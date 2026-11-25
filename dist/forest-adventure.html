@@ -229,7 +229,7 @@ body.touch #stage { border: none; border-radius: 0; box-shadow: none; }
 }
 
 </style>
-<!-- built 2026-11-25 08:31 by tools/build.js -->
+<!-- built 2026-11-25 08:38 by tools/build.js -->
 </head>
 <body>
   <div id="stage">
@@ -20074,6 +20074,7 @@ const PATCH_NOTES = [
       '모바일 손보기 — 가방·귀환·지도 버튼을 위쪽 가운데로 옮겼다 (좁은 폰에서 체력·레벨 표시를 덮었다). 낮은 화면에서는 조이스틱과 오른쪽 버튼이 조금 작아져 미니맵을 덜 가린다',
       '모바일 — 가방·창고를 연 뒤 첫 탭은 고르기만 한다 (열 때 골라져 있던 칸을 누르면 바로 입거나 마셔 버렸다)',
       '모바일 — 닫기 버튼으로 패치노트도 닫힌다. 시작 화면에서는 닫기 버튼을 숨긴다',
+      '지도를 연 채 가방을 누르면 가방이 지도 위에 겹쳐 열리고, 가방을 닫아도 지도가 남던 것을 고쳤다 — 가방을 열면 지도는 닫힌다',
     ],
   },
   {
@@ -21217,7 +21218,8 @@ const Game = {
     }
     if (this.showInventory) { Inventory.handleInput(this.player); return; }
     if (Input.pressed.KeyV) { Sound.toggle(); Sound.play('toggle'); this.soundFlash = 1.4; }
-    if (Input.inventoryPressed()) { this.showInventory = true; Inventory.message = ''; }
+    // 가방을 열면 지도는 닫는다 — 지도 위에 가방이 겹쳐 열리면 M 도 먹히지 않아 지도가 뒤에 남았다
+    if (Input.inventoryPressed()) { this.showInventory = true; this.showMap = false; Inventory.message = ''; }
     // 보스 방에서는 겉맵 지도를 펼칠 수 없다 (여기는 그 지도에 없는 곳이다)
     if (Input.mapPressed() && !this.inArena) this.showMap = !this.showMap;
     if (Input.newGamePressed()) this.confirmNewGame = true;

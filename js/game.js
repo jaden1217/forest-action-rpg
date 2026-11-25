@@ -671,7 +671,8 @@ const Game = {
     }
     if (this.showInventory) { Inventory.handleInput(this.player); return; }
     if (Input.pressed.KeyV) { Sound.toggle(); Sound.play('toggle'); this.soundFlash = 1.4; }
-    if (Input.inventoryPressed()) { this.showInventory = true; Inventory.message = ''; }
+    // 가방을 열면 지도는 닫는다 — 지도 위에 가방이 겹쳐 열리면 M 도 먹히지 않아 지도가 뒤에 남았다
+    if (Input.inventoryPressed()) { this.showInventory = true; this.showMap = false; Inventory.message = ''; }
     // 보스 방에서는 겉맵 지도를 펼칠 수 없다 (여기는 그 지도에 없는 곳이다)
     if (Input.mapPressed() && !this.inArena) this.showMap = !this.showMap;
     if (Input.newGamePressed()) this.confirmNewGame = true;
