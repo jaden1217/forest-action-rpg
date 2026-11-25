@@ -88,6 +88,8 @@ const TouchPad = {
       const down = (e) => {
         e.preventDefault();
         b.classList.add('on');
+        // 닫기 — 지도는 M 으로, 패치노트는 HTML 창이라 직접 닫는다 (Esc 키를 듣는 쪽이 Input 이 아니다)
+        if (key === 'close' && PatchNotes.open) { PatchNotes.close(); b.classList.add('on'); return; }
         const code = key === 'close' ? (Game.showMap ? 'KeyM' : 'Escape') : key;
         b.dataset.code = code;
         this.press(code);
@@ -209,6 +211,7 @@ const TouchPad = {
     // 보이는 버튼 — 창이 떠 있으면 확인·닫기와 그 창에 맞는 것만
     const cls = this.root.classList;
     cls.toggle('menu', paused);
+    cls.toggle('title', !!Game.title);
     cls.toggle('inv', !!Game.showInventory);
     cls.toggle('sell', !!(Shop.open && Shop.tab === 'sell'));
     this.els.attack.textContent = paused ? '확인' : '공격';

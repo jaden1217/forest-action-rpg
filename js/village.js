@@ -731,7 +731,7 @@ const Village = {
     Sound.play('shopOpen');
   },
 
-  closeStash() { this.stashOpen = false; Inventory.drag = null; Sound.play('shopClose'); },
+  closeStash() { this.stashTapped = false; this.stashOpen = false; Inventory.drag = null; Sound.play('shopClose'); },
 
   /* 창과 칸의 자리 — 그리기와 마우스 판정이 같은 값을 쓴다.
      가방은 인벤토리와 같은 5열(가장 커도 34칸 = 7줄), 창고는 7열 x 7줄이 보이고 커서를 따라 흐른다 */
@@ -834,7 +834,7 @@ const Village = {
     if (P.KeyS || P.ArrowDown) this.stashStep(player, 0, 1);
 
     // 마우스를 움직여 칸 위에 올리면 그 칸이 골라진다 (가만히 있으면 키보드 커서를 방해하지 않는다)
-    if (P.Mouse) this.stashTapPre = this.stashZone + this.stashCursor;   // 터치 — 닿는 순간 골라져 있던 칸을 다시 눌러야 옮긴다
+    if (P.Mouse) { this.stashTapPre = this.stashTapped ? this.stashZone + this.stashCursor : null; this.stashTapped = true; }   // 창을 연 뒤 첫 탭은 고르기만   // 터치 — 닿는 순간 골라져 있던 칸을 다시 눌러야 옮긴다
     const m = Input.mouse, last = this.stashMouse || { x: -1, y: -1 };
     if (m.x !== last.x || m.y !== last.y) {
       this.stashMouse = { x: m.x, y: m.y };

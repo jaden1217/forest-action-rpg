@@ -191,14 +191,16 @@ body.touch #stage { border: none; border-radius: 0; box-shadow: none; }
 #touch .t-skill[data-skill="2"] { right: 10px; bottom: 96px; }
 #touch .t-skill[data-skill="3"] { right: 112px; bottom: 116px; }
 
-/* 왼쪽 위 — 가방·귀환·지도. 화면 왼쪽 여백에 세로로 (오른쪽 위는 의뢰 목록 자리다) */
-#touch .t-top { position: absolute; left: calc(14px + env(safe-area-inset-left)); top: 10px; display: flex; flex-direction: column; gap: 8px; }
-#touch .t-small { position: static; width: 46px; height: 46px; font-size: 12px; border-radius: 12px; }
+/* 위쪽 — 가방·귀환·지도. 낮밤 시계 오른쪽, 골드·패치노트 왼쪽의 빈 자리에 한 줄로.
+   (왼쪽 위에 두면 여백이 좁은 폰에서 체력·레벨·포션 표시를 덮었고, 오른쪽 위는 의뢰 목록 자리다) */
+#touch .t-top { position: absolute; left: 50%; top: 6px; transform: translateX(64px); display: flex; gap: 6px; }
+#touch .t-small { position: static; width: 40px; height: 34px; font-size: 11px; border-radius: 9px; }
 
 /* 창이 떠 있을 때 — 확인·닫기와 그 창에 맞는 것만 */
 #touch .t-close, #touch .t-drop, #touch .t-sellall { display: none; width: 56px; height: 56px; }
 #touch.menu .t-dash, #touch.menu .t-skill, #touch.menu .t-potion, #touch.menu .t-f, #touch.menu .t-top { display: none; }
 #touch.menu .t-close { display: flex; right: 100px; bottom: 16px; }
+#touch.menu.title .t-close { display: none; }
 #touch.menu.inv .t-drop { display: flex; right: 100px; bottom: 82px; color: #ff9a9a; }
 #touch.menu.sell .t-sellall { display: flex; right: 100px; bottom: 82px; color: #9be564; }
 
@@ -210,3 +212,9 @@ body.touch #stage { border: none; border-radius: 0; box-shadow: none; }
   align-items: center; justify-content: center; text-align: center; padding: 24px;
 }
 @media (orientation: portrait) { #touch .t-rotate { display: flex; } }
+
+/* 낮은 화면(가로 폰 대부분) — 조이스틱과 오른쪽 버튼 묶음을 조금 줄인다. 미니맵·의뢰 글자와 덜 겹친다 */
+@media (max-height: 400px) {
+  #touch .t-stick { transform: scale(.85); transform-origin: left bottom; }
+  #touch .t-right { transform: scale(.85); transform-origin: right bottom; }
+}

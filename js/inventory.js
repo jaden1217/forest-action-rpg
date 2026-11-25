@@ -407,7 +407,8 @@ const Inventory = {
     if (P.KeyS || P.ArrowDown) this.cursor = (this.cursor + cols) % n;
 
     // 손가락이 닿는 순간 골라져 있던 칸 — 터치는 '고른 칸을 다시 누르면 쓴다' (떼는 프레임엔 커서가 이미 옮겨져 있다)
-    if (P.Mouse) this.tapPre = this.cursor;
+    // 창을 연 뒤 첫 탭은 고르기만 한다 — 열 때 이미 골라져 있던 칸을 처음 누르면 바로 입거나 마셔 버렸다
+    if (P.Mouse) { this.tapPre = this.tapped ? this.cursor : -1; this.tapped = true; }
     // 마우스를 움직여 칸 위에 올리면 그 칸이 골라진다 (가만히 있으면 키보드 커서를 방해하지 않는다)
     const m = Input.mouse;
     if (m.x !== this.lastMouse.x || m.y !== this.lastMouse.y) {
@@ -437,6 +438,7 @@ const Inventory = {
     if (P.KeyI || P.Tab || P.Escape) {
       Game.showInventory = false;
       this.drag = null;
+      this.tapped = false;
       delete P.KeyI; delete P.Tab;
     }
   },

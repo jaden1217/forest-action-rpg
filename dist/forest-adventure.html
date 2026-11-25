@@ -200,14 +200,16 @@ body.touch #stage { border: none; border-radius: 0; box-shadow: none; }
 #touch .t-skill[data-skill="2"] { right: 10px; bottom: 96px; }
 #touch .t-skill[data-skill="3"] { right: 112px; bottom: 116px; }
 
-/* 왼쪽 위 — 가방·귀환·지도. 화면 왼쪽 여백에 세로로 (오른쪽 위는 의뢰 목록 자리다) */
-#touch .t-top { position: absolute; left: calc(14px + env(safe-area-inset-left)); top: 10px; display: flex; flex-direction: column; gap: 8px; }
-#touch .t-small { position: static; width: 46px; height: 46px; font-size: 12px; border-radius: 12px; }
+/* 위쪽 — 가방·귀환·지도. 낮밤 시계 오른쪽, 골드·패치노트 왼쪽의 빈 자리에 한 줄로.
+   (왼쪽 위에 두면 여백이 좁은 폰에서 체력·레벨·포션 표시를 덮었고, 오른쪽 위는 의뢰 목록 자리다) */
+#touch .t-top { position: absolute; left: 50%; top: 6px; transform: translateX(64px); display: flex; gap: 6px; }
+#touch .t-small { position: static; width: 40px; height: 34px; font-size: 11px; border-radius: 9px; }
 
 /* 창이 떠 있을 때 — 확인·닫기와 그 창에 맞는 것만 */
 #touch .t-close, #touch .t-drop, #touch .t-sellall { display: none; width: 56px; height: 56px; }
 #touch.menu .t-dash, #touch.menu .t-skill, #touch.menu .t-potion, #touch.menu .t-f, #touch.menu .t-top { display: none; }
 #touch.menu .t-close { display: flex; right: 100px; bottom: 16px; }
+#touch.menu.title .t-close { display: none; }
 #touch.menu.inv .t-drop { display: flex; right: 100px; bottom: 82px; color: #ff9a9a; }
 #touch.menu.sell .t-sellall { display: flex; right: 100px; bottom: 82px; color: #9be564; }
 
@@ -220,8 +222,14 @@ body.touch #stage { border: none; border-radius: 0; box-shadow: none; }
 }
 @media (orientation: portrait) { #touch .t-rotate { display: flex; } }
 
+/* 낮은 화면(가로 폰 대부분) — 조이스틱과 오른쪽 버튼 묶음을 조금 줄인다. 미니맵·의뢰 글자와 덜 겹친다 */
+@media (max-height: 400px) {
+  #touch .t-stick { transform: scale(.85); transform-origin: left bottom; }
+  #touch .t-right { transform: scale(.85); transform-origin: right bottom; }
+}
+
 </style>
-<!-- built 2026-11-25 07:51 by tools/build.js -->
+<!-- built 2026-11-25 08:31 by tools/build.js -->
 </head>
 <body>
   <div id="stage">
@@ -6261,6 +6269,8 @@ const TouchPad = {
       const down = (e) => {
         e.preventDefault();
         b.classList.add('on');
+        // 닫기 — 지도는 M 으로, 패치노트는 HTML 창이라 직접 닫는다 (Esc 키를 듣는 쪽이 Input 이 아니다)
+        if (key === 'close' && PatchNotes.open) { PatchNotes.close(); b.classList.add('on'); return; }
         const code = key === 'close' ? (Game.showMap ? 'KeyM' : 'Escape') : key;
         b.dataset.code = code;
         this.press(code);
@@ -6382,6 +6392,7 @@ const TouchPad = {
     // 보이는 버튼 — 창이 떠 있으면 확인·닫기와 그 창에 맞는 것만
     const cls = this.root.classList;
     cls.toggle('menu', paused);
+    cls.toggle('title', !!Game.title);
     cls.toggle('inv', !!Game.showInventory);
     cls.toggle('sell', !!(Shop.open && Shop.tab === 'sell'));
     this.els.attack.textContent = paused ? '확인' : '공격';
@@ -15032,7 +15043,8 @@ const Inventory = {
     if (P.KeyS || P.ArrowDown) this.cursor = (this.cursor + cols) % n;
 
     // 손가락이 닿는 순간 골라져 있던 칸 — 터치는 '고른 칸을 다시 누르면 쓴다' (떼는 프레임엔 커서가 이미 옮겨져 있다)
-    if (P.Mouse) this.tapPre = this.cursor;
+    // 창을 연 뒤 첫 탭은 고르기만 한다 — 열 때 이미 골라져 있던 칸을 처음 누르면 바로 입거나 마셔 버렸다
+    if (P.Mouse) { this.tapPre = this.tapped ? this.cursor : -1; this.tapped = true; }
     // 마우스를 움직여 칸 위에 올리면 그 칸이 골라진다 (가만히 있으면 키보드 커서를 방해하지 않는다)
     const m = Input.mouse;
     if (m.x !== this.lastMouse.x || m.y !== this.lastMouse.y) {
@@ -15062,6 +15074,7 @@ const Inventory = {
     if (P.KeyI || P.Tab || P.Escape) {
       Game.showInventory = false;
       this.drag = null;
+      this.tapped = false;
       delete P.KeyI; delete P.Tab;
     }
   },
@@ -18415,7 +18428,7 @@ const Village = {
     Sound.play('shopOpen');
   },
 
-  closeStash() { this.stashOpen = false; Inventory.drag = null; Sound.play('shopClose'); },
+  closeStash() { this.stashTapped = false; this.stashOpen = false; Inventory.drag = null; Sound.play('shopClose'); },
 
   /* 창과 칸의 자리 — 그리기와 마우스 판정이 같은 값을 쓴다.
      가방은 인벤토리와 같은 5열(가장 커도 34칸 = 7줄), 창고는 7열 x 7줄이 보이고 커서를 따라 흐른다 */
@@ -18518,7 +18531,7 @@ const Village = {
     if (P.KeyS || P.ArrowDown) this.stashStep(player, 0, 1);
 
     // 마우스를 움직여 칸 위에 올리면 그 칸이 골라진다 (가만히 있으면 키보드 커서를 방해하지 않는다)
-    if (P.Mouse) this.stashTapPre = this.stashZone + this.stashCursor;   // 터치 — 닿는 순간 골라져 있던 칸을 다시 눌러야 옮긴다
+    if (P.Mouse) { this.stashTapPre = this.stashTapped ? this.stashZone + this.stashCursor : null; this.stashTapped = true; }   // 창을 연 뒤 첫 탭은 고르기만   // 터치 — 닿는 순간 골라져 있던 칸을 다시 눌러야 옮긴다
     const m = Input.mouse, last = this.stashMouse || { x: -1, y: -1 };
     if (m.x !== last.x || m.y !== last.y) {
       this.stashMouse = { x: m.x, y: m.y };
@@ -20058,6 +20071,9 @@ const PATCH_NOTES = [
       '모바일에서는 공격·스킬을 누르는 동안 가까운 적을 저절로 겨눈다',
       '모바일에서 창이 뜨면 버튼이 확인·닫기로 바뀐다. 칸은 한 번 누르면 고르고, 고른 칸을 다시 누르면 쓴다. 조이스틱으로 커서도 옮긴다',
       '모바일은 화면을 꽉 채우고, 처음 누르면 전체 화면으로 바뀐다 (되는 브라우저만). 세로로 들면 가로로 돌려 달라고 한다',
+      '모바일 손보기 — 가방·귀환·지도 버튼을 위쪽 가운데로 옮겼다 (좁은 폰에서 체력·레벨 표시를 덮었다). 낮은 화면에서는 조이스틱과 오른쪽 버튼이 조금 작아져 미니맵을 덜 가린다',
+      '모바일 — 가방·창고를 연 뒤 첫 탭은 고르기만 한다 (열 때 골라져 있던 칸을 누르면 바로 입거나 마셔 버렸다)',
+      '모바일 — 닫기 버튼으로 패치노트도 닫힌다. 시작 화면에서는 닫기 버튼을 숨긴다',
     ],
   },
   {
