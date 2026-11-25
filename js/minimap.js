@@ -74,7 +74,9 @@ const Minimap = {
   drawCorner(ctx, player, enemies) {
     if (!this.canvas) return;
     const bw = Math.min(this.VIEW_W, this.W), bh = Math.min(this.VIEW_H, this.H);
-    const x = CONFIG.VIEW_W - bw - 6, y = CONFIG.VIEW_H - bh - 6;
+    // 모바일은 오른쪽 아래를 버튼이 덮으므로 의뢰 목록 바로 아래로 올린다
+    const up = typeof TouchPad !== 'undefined' && TouchPad.active;
+    const x = CONFIG.VIEW_W - bw - 6, y = up ? 80 : CONFIG.VIEW_H - bh - 6;
 
     // 플레이어를 가운데 두되 맵 밖으로는 나가지 않게 자른다
     const sx = Util.clamp(Math.round(player.x / CONFIG.TILE - bw / 2), 0, this.W - bw);

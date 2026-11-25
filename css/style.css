@@ -145,3 +145,68 @@ html, body {
   padding: 1px 6px;
   font-weight: 600;
 }
+
+/* ── 모바일(터치) — js/touch.js 가 body 에 .touch 를 붙인다 ─────────────────
+   안내 글을 숨기고 게임 화면을 꽉 채운 뒤, 그 위에 조이스틱과 버튼을 반투명하게 겹친다 */
+body.touch { gap: 0; touch-action: none; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+body.touch #controls, body.touch #savenote { display: none; }
+body.touch #stage { border: none; border-radius: 0; box-shadow: none; }
+
+#touch { position: fixed; inset: 0; pointer-events: none; z-index: 10; }
+#touch .t-btn {
+  pointer-events: auto;
+  position: absolute;
+  border-radius: 50%;
+  border: 2px solid rgba(216, 230, 207, .35);
+  background: rgba(16, 22, 14, .45);
+  color: #e8f2df;
+  font: 700 13px/1.05 "Malgun Gothic", "맑은 고딕", system-ui, sans-serif;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  padding: 0;
+  -webkit-tap-highlight-color: transparent;
+}
+#touch .t-btn.on { background: rgba(255, 224, 102, .4); border-color: #ffe066; }
+#touch .t-btn small { font-size: 8px; font-weight: 600; opacity: .85; margin-top: 2px; white-space: nowrap; }
+#touch .t-btn.locked { opacity: .35; }
+
+/* 조이스틱 — 왼쪽 아래 */
+#touch .t-stick {
+  pointer-events: auto;
+  position: absolute; left: calc(14px + env(safe-area-inset-left)); bottom: 14px;
+  width: 132px; height: 132px; border-radius: 50%;
+  background: rgba(16, 22, 14, .3); border: 2px solid rgba(216, 230, 207, .22);
+  display: flex; align-items: center; justify-content: center;
+}
+#touch .t-knob { width: 54px; height: 54px; border-radius: 50%; background: rgba(216, 230, 207, .45); pointer-events: none; }
+
+/* 오른쪽 아래 — 공격을 가운데 두고 둘레에 대시·스킬·포션·F */
+#touch .t-right { position: absolute; right: calc(14px + env(safe-area-inset-right)); bottom: 14px; width: 210px; height: 190px; }
+#touch .t-attack { width: 78px; height: 78px; right: 10px; bottom: 10px; font-size: 15px; border-color: rgba(255, 224, 102, .6); }
+#touch .t-dash   { width: 52px; height: 52px; right: 100px; bottom: 6px; }
+#touch .t-potion { width: 44px; height: 44px; right: 158px; bottom: 10px; color: #ffd93d; }
+#touch .t-f      { width: 44px; height: 44px; right: 158px; bottom: 62px; color: #5ff0ff; }
+#touch .t-skill  { width: 48px; height: 48px; font-size: 14px; }
+#touch .t-skill[data-skill="0"] { right: 96px; bottom: 62px; }
+#touch .t-skill[data-skill="1"] { right: 62px; bottom: 104px; }
+#touch .t-skill[data-skill="2"] { right: 10px; bottom: 96px; }
+#touch .t-skill[data-skill="3"] { right: 112px; bottom: 116px; }
+
+/* 왼쪽 위 — 가방·귀환·지도. 화면 왼쪽 여백에 세로로 (오른쪽 위는 의뢰 목록 자리다) */
+#touch .t-top { position: absolute; left: calc(14px + env(safe-area-inset-left)); top: 10px; display: flex; flex-direction: column; gap: 8px; }
+#touch .t-small { position: static; width: 46px; height: 46px; font-size: 12px; border-radius: 12px; }
+
+/* 창이 떠 있을 때 — 확인·닫기와 그 창에 맞는 것만 */
+#touch .t-close, #touch .t-drop, #touch .t-sellall { display: none; width: 56px; height: 56px; }
+#touch.menu .t-dash, #touch.menu .t-skill, #touch.menu .t-potion, #touch.menu .t-f, #touch.menu .t-top { display: none; }
+#touch.menu .t-close { display: flex; right: 100px; bottom: 16px; }
+#touch.menu.inv .t-drop { display: flex; right: 100px; bottom: 82px; color: #ff9a9a; }
+#touch.menu.sell .t-sellall { display: flex; right: 100px; bottom: 82px; color: #9be564; }
+
+/* 세로 화면 — 돌려 달라고 한다 */
+#touch .t-rotate {
+  display: none; pointer-events: auto;
+  position: absolute; inset: 0; background: #10140f; color: #d8e6cf;
+  font: 700 18px "Malgun Gothic", "맑은 고딕", system-ui, sans-serif;
+  align-items: center; justify-content: center; text-align: center; padding: 24px;
+}
+@media (orientation: portrait) { #touch .t-rotate { display: flex; } }

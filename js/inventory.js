@@ -406,6 +406,8 @@ const Inventory = {
     if (P.KeyW || P.ArrowUp) this.cursor = (this.cursor - cols + n) % n;
     if (P.KeyS || P.ArrowDown) this.cursor = (this.cursor + cols) % n;
 
+    // 손가락이 닿는 순간 골라져 있던 칸 — 터치는 '고른 칸을 다시 누르면 쓴다' (떼는 프레임엔 커서가 이미 옮겨져 있다)
+    if (P.Mouse) this.tapPre = this.cursor;
     // 마우스를 움직여 칸 위에 올리면 그 칸이 골라진다 (가만히 있으면 키보드 커서를 방해하지 않는다)
     const m = Input.mouse;
     if (m.x !== this.lastMouse.x || m.y !== this.lastMouse.y) {
@@ -424,7 +426,12 @@ const Inventory = {
       cellAt: (mx, my) => this.cellAt(player, mx, my),
       itemOf: (c) => { const s = this.cellItem(player, c); return s && s.kind !== 'potion' ? s : null; },
       drop: (a, b, mm) => this.dropOn(player, a, b, mm),
-      click: (c) => { if (c.zone !== 'weapon') this.use(player, this.cellIndex(player, c)); },
+      click: (c) => {
+        if (c.zone === 'weapon') return;
+        const i = this.cellIndex(player, c);
+        if (TouchPad.active && i !== this.tapPre) { this.cursor = i; return; }   // 터치 — 처음 누르면 고르기만
+        this.use(player, i);
+      },
     });
     if (P.KeyX) this.drop(player, this.cursor);
     if (P.KeyI || P.Tab || P.Escape) {
