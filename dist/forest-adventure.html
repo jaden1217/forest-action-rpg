@@ -154,7 +154,7 @@ html, body {
 }
 
 </style>
-<!-- built 2026-11-25 08:23 by tools/build.js -->
+<!-- built 2026-11-25 08:37 by tools/build.js -->
 </head>
 <body>
   <div id="stage">
@@ -19718,6 +19718,12 @@ const UI = {
 
 const PATCH_NOTES = [
   {
+    date: '2026-11-25',
+    notes: [
+      '지도를 연 채 I 를 누르면 가방이 지도 위에 겹쳐 열리고, 가방을 닫아도 지도가 남던 것을 고쳤다 — 가방을 열면 지도는 닫힌다',
+    ],
+  },
+  {
     date: '2026-11-18',
     notes: [
       '사막과 설원에도 보스가 셋씩 — 새 보스 다섯과 동굴 다섯이 생겼다 (먼저 있던 동굴 넷은 제자리 그대로)',
@@ -20855,7 +20861,8 @@ const Game = {
     }
     if (this.showInventory) { Inventory.handleInput(this.player); return; }
     if (Input.pressed.KeyV) { Sound.toggle(); Sound.play('toggle'); this.soundFlash = 1.4; }
-    if (Input.inventoryPressed()) { this.showInventory = true; Inventory.message = ''; }
+    // 가방을 열면 지도는 닫는다 — 지도 위에 가방이 겹쳐 열리면 M 도 먹히지 않아 지도가 뒤에 남았다
+    if (Input.inventoryPressed()) { this.showInventory = true; this.showMap = false; Inventory.message = ''; }
     // 보스 방에서는 겉맵 지도를 펼칠 수 없다 (여기는 그 지도에 없는 곳이다)
     if (Input.mapPressed() && !this.inArena) this.showMap = !this.showMap;
     if (Input.newGamePressed()) this.confirmNewGame = true;
